@@ -956,11 +956,11 @@ function formValidate(k,v){
  if(['landlords','customers'].includes(k)&&v.alternate_phone&&!/^[0-9]{11}$/.test(v.alternate_phone))throw Error('الهاتف البديل يجب أن يكون 11 رقم');
  if(k==='landlords'&&(!/^[0-9]{11}$/.test(v.phone)||(v.national_id&&!/^[0-9]{12}$/.test(v.national_id))))throw Error('هاتف المالك 11 رقم، ورقم البطاقة عند إدخاله 12 رقم');
  if(k==='ad_sites'){
+  if(v.site_type==='rooftop'&&!v.rooftop_property_id)throw Error('موقع السطح لازم تربطه بعقار مسجل عند مالك');
   const classified=lookup('packages',v.package_id);
   if(!classified)throw Error('حدد باقة الموقع الإعلاني A أو B أو C أو D أو E');
   const prefix=codedSitePackage(v.code);
   if(prefix&&String(classified.code||'').trim().toUpperCase()!==prefix)throw Error('رمز القطعة '+v.code+' لا يطابق الباقة '+classified.code+' المحددة');
-  if(v.site_type==='rooftop'&&!v.rooftop_property_id)throw Error('موقع السطح لازم تربطه بعقار مسجل عند مالك');
  }
  if(k==='campaigns'){
   const pkg=lookup('packages',v.package_id);
