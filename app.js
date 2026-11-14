@@ -490,8 +490,9 @@ function contractCampaignSummary(v){
  const cam=lookup('campaigns',v.campaign_id);
  if(!cam)return '<div class="notice full">اختَر الحملة المسجلة أولاً. بعدها تظهر كل بيانات العقد تلقائياً دون إعادة اختيار المواقع أو الأسعار.</div>';
  const pack=lookup('packages',cam.package_id),customer=lookup('customers',cam.customer_id);
- const {sites,total,locations}=contractCampaignDetails(v.id?v:campaignContractData(cam));
- const date=cam.start_date;
+ const current=v.id?v:campaignContractData(cam);
+ const {sites,total,locations}=contractCampaignDetails(current);
+ const date=current.start_date||cam.start_date;
  const warnings=[];
  if(!date&&!v.id)warnings.push('تاريخ بدء الحملة غير محدد؛ افتح الحملة وأضف التاريخ قبل إصدار العقد.');
  if(!pack)warnings.push('الحملة ما بيها باقة مسجلة. حدّد الباقة في الحملة أولاً.');
@@ -504,11 +505,11 @@ function contractCampaignSummary(v){
   line('الباقة',pack?.name||v.package_name_snapshot)+
   line('عدد القطع المتفق عليها',total)+
   line('المواقع المعيّنة فعلياً',sites.length)+
-  line('مدة الحملة',cam.months+' أشهر')+
+  line('مدة الحملة',current.duration_months+' أشهر')+
   line('بداية الحملة',date||'غير محددة')+
-  line('نهاية الحملة',date?addDays(plusMonths(date,Number(cam.months)),-1):'غير محددة')+
-  line('القيمة الإجمالية',money(cam.price,cam.currency))+
-  (pack?.pricing_mode==='sqm_month'?line('مساحة الإعلان',String(Number(cam.requested_area_m2)>0?cam.requested_area_m2:campaignSiteArea(sites.map(x=>x.id)))+' م²'):'')+
+  line('نهاية الحملة',current.end_date||'غير محددة')+
+  line('القيمة الإجمالية',money(current.amount,current.currency))+
+  (pack?.pricing_mode==='sqm_month'?line('مساحة الإعلان',String(current.rented_area_m2??'—')+' م²'):'')+
   '</div><div class="contract-campaign-sites"><h4>القطع والمواقع التابعة لهذه الحملة</h4>'+
   (siteList||'<p>لم تسجّل قطع محددة على الحملة.</p>')+
   (locations?'<div class="contract-campaign-extra">مواقع إضافية مسجلة: '+E(locations)+'</div>':'')+
@@ -676,7 +677,7 @@ function modalHtml(){
   if(legacy){
    return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>عقد سابق — '+E(v.contract_number)+'</h2><button class="close" data-action="close">✕</button></div><div class="notice">هذا عقد قديم غير مربوط بحملة. بياناته محفوظة مثل ما كانت؛ العقود الجديدة تُنشأ فقط من الحملات.</div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">حفظ تعديلات العقد السابق</button></div></form>'+relatedDetails(k,v)+'</div></div>';
   }
-  const campaigns=s.data.campaigns.filter(cam=>!v.customer_id||cam.customer_id===v.customer_id||cam.id===v.campaign_id);
+  const campaigns=s.data.campaigns.filter(cam=>!s.modal.contractCustomerFilter||cam.customer_id===s.modal.contractCustomerFilter||cam.id===v.campaign_id);
   const chosen=lookup('campaigns',v.campaign_id);
   const campaignSelect=v.id?
    '<div class="notice"><b>الحملة المعتمدة:</b> '+E(v.campaign_title_snapshot||chosen?.title||'—')+' · <b>رقم العقد:</b> '+E(v.contract_number)+'</div>':
@@ -895,8 +896,7 @@ function bind(){
  if(linkedCampaign&&k==='customer_contracts')linkedCampaign.onchange=()=>{
   captureForm(form);
   const cam=lookup('campaigns',linkedCampaign.value);
-  v.campaign_id=linkedCampaign.value;
-  if(cam){v.customer_id=cam.customer_id;if(cam.package_id){const pkg=lookup('packages',cam.package_id);v.package_id=cam.package_id;v.contract_type=pkg?.package_type||'cabin';}v.amount=cam.price;v.currency=cam.currency;v.duration_months=cam.months;v.rented_area_m2=cam.requested_area_m2||null;v.end_date=addDays(plusMonths(v.start_date||today(),cam.months),-1);}
+  Object.assign(v,campaignContractData(cam));
   render();
  };
  if(pack&&k==='campaigns')pack.onchange=()=>{
@@ -1007,7 +1007,7 @@ function openForm(k,row){
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
  const drafts={};
  if(k==='packages')packageRates(data).forEach(rate=>{drafts[rate.months]=roundAmount(convert(rate.usd_price,'USD',data.currency||'USD'));});
- s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set()};
+ s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set(),contractCustomerFilter:k==='customer_contracts'&&!data.id?(row?.customer_id||null):null};
  s.formStep=0;render();
 }
 function captureForm(form){
@@ -1026,6 +1026,17 @@ function formValidate(k,v){
   if(!(Number(v.width_m)>0&&Number(v.height_m)>0))throw Error('أدخل طول وعرض أكبر من صفر بالمتر');
  }
  if(k==='customer_contracts'){
+  if(!v.id&&!v.campaign_id)throw Error('عقد الزبون الجديد يجب أن يُنشأ من حملة إعلانية محفوظة');
+  const campaign=lookup('campaigns',v.campaign_id);
+  if(v.campaign_id&&!campaign)throw Error('الحملة المرتبطة بالعقد غير موجودة');
+  if(campaign&&!v.id){
+   if(!campaign.start_date)throw Error('حدد تاريخ بدء الحملة أولاً حتى يتم تحديد مدة العقد');
+   const expected=campaignContractData(campaign);
+   for(const key of ['customer_id','package_id','contract_type','duration_months','site_id','currency','start_date','end_date','amount']){
+    if(String(v[key]??'')!==String(expected[key]??''))throw Error('بيانات العقد يجب أن تتطابق مع الحملة؛ لا تغيّر التفاصيل المنقولة منها');
+   }
+   if(String(v.rented_area_m2??'')!==String(expected.rented_area_m2??''))throw Error('مساحة العقد يجب أن تتطابق مع الحملة');
+  }
   const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id);
   if(!customer||!pkg)throw Error('اختر زبوناً وباقة إعلانية مسجلين');
   if((v.contract_type||pkg.package_type)!==pkg.package_type)throw Error('نوع عقد الزبون يجب أن يطابق نوع الباقة');
@@ -1106,6 +1117,7 @@ async function persist(k,o,id){
  if(s.demo){
   if(k==='leases'&&!id&&!o.contract_number)o.contract_number='RA-'+(1+Math.max(0,...s.data.leases.map(x=>Number((x.contract_number||'').replace('RA-',''))||0)));
   if(k==='customer_contracts'&&!id){
+   Object.assign(o,campaignContractData(lookup('campaigns',o.campaign_id)));
    o.contract_number='RC-'+(1+Math.max(0,...s.data.customer_contracts.map(x=>Number((x.contract_number||'').replace('RC-',''))||0)));
    const p=lookup('packages',o.package_id),cust=lookup('customers',o.customer_id),site=lookup('ad_sites',o.site_id);
    o.package_name_snapshot=p?.name||'—';
@@ -1158,6 +1170,13 @@ async function saveForm(form){
  }
  try{
   const normalized={...v};
+  if(k==='customer_contracts'&&!v.id){
+   const cam=lookup('campaigns',v.campaign_id);
+   if(!cam)throw Error('اختَر حملة إعلانية محفوظة قبل إنشاء عقد الزبون');
+   if(!cam.start_date)throw Error('حدد تاريخ بدء الإعلان داخل الحملة أولاً حتى تنتقل تواريخها للعقد');
+   Object.assign(normalized,campaignContractData(cam));
+   Object.assign(v,campaignContractData(cam));
+  }
   if(k==='campaign_payments'||k==='lease_installments'){
    const target=k==='campaign_payments'?lookup('campaigns',v.campaign_id)?.currency:lookup('leases',v.lease_id)?.currency;
    if(target){
