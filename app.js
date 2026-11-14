@@ -1240,6 +1240,8 @@ function bind(){
  if(entryCurrency)entryCurrency.onchange=()=>{
   const previous=v.entry_currency||fieldCurrency(k,v),next=entryCurrency.value;
   for(const name of ['amount','paid_amount']){
+   // The scheduled principal is in the lease's original currency and is immutable.
+   if(k==='lease_installments'&&name==='amount')continue;
    const input=form.elements.namedItem(name);
    if(input&&input.value!=='')input.value=String(roundAmount(convert(input.value,previous,next)));
   }
@@ -1475,7 +1477,7 @@ function formValidate(k,v){
  }
  if(k==='lease_installments'){
   if(!lookup('leases',v.lease_id))throw Error('اختر عقداً مسجلاً أولاً');
-  if(Number(v.amount)<0||Number(v.paid_amount)<0||Number(v.paid_amount)>Number(v.amount))throw Error('المسدد لا يجوز أن يتجاوز قيمة القسط');
+  if(!Number.isFinite(Number(v.amount))||!Number.isFinite(Number(v.paid_amount))||Number(v.amount)<0||Number(v.paid_amount)<0||Number(v.paid_amount)>Number(v.amount))throw Error('المسدد لا يجوز أن يتجاوز قيمة القسط');
  }
 }
 function clean(k,v){
@@ -1611,8 +1613,16 @@ async function saveForm(form){
    const target=k==='campaign_payments'?lookup('campaigns',v.campaign_id)?.currency:lookup('leases',v.lease_id)?.currency;
    if(target){
     const source=v.entry_currency||target;
-    normalized.amount=roundAmount(convert(v.amount,source,target));
-    if(k==='lease_installments')normalized.paid_amount=roundAmount(convert(v.paid_amount,source,target));
+    if(k==='lease_installments'){
+     const previous=lookup('lease_installments',v.id);
+     if(!previous)throw Error('سجّل القسط من عقده أولاً');
+     if(String(v.lease_id)!==String(previous.lease_id)||
+        String(v.due_date)!==String(previous.due_date)||
+        Number(v.amount)!==Number(previous.amount))throw Error('لا يجوز تغيير قيمة أو تاريخ القسط المجدول من نافذة التسديد');
+     normalized.amount=Number(previous.amount);
+     normalized.due_date=previous.due_date;
+     normalized.paid_amount=roundAmount(convert(v.paid_amount,source,target));
+    }else normalized.amount=roundAmount(convert(v.amount,source,target));
    }
   }
   formValidate(k,normalized);
