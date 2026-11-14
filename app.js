@@ -167,8 +167,8 @@ function render(){
 function optionText(k,x){return k==='landlords'?x.name:k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+')':k==='leases'?x.contract_number:k==='campaigns'?x.title:'—';}
 
 function fieldCurrency(k,v){
- if(k==='campaign_payments')return lookup('campaigns',v.campaign_id)?.currency||s.displayCurrency;
- if(k==='lease_installments')return lookup('leases',v.lease_id)?.currency||s.displayCurrency;
+ if(k==='campaign_payments')return v.entry_currency||lookup('campaigns',v.campaign_id)?.currency||s.displayCurrency;
+ if(k==='lease_installments')return v.entry_currency||lookup('leases',v.lease_id)?.currency||s.displayCurrency;
  return v.currency||s.displayCurrency;
 }
 function moneyHint(n,currency){
@@ -246,7 +246,7 @@ function modalHtml(){
   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(v.contract_number):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">✕</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الدفعات')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+v.id+'">معاينة / طباعة</button><button class="btn secondary" data-renew="'+v.id+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
  if(k==='lease_installments'||k==='campaign_payments'){
-  fields=[k==='lease_installments'?['lease_id','العقد','lookup:leases',true]:['campaign_id','الحملة','lookup:campaigns',true],...(k==='lease_installments'?[['due_date','تاريخ الاستحقاق','date',true]]:[['paid_at','تاريخ الدفع','date',true]]),['amount',k==='lease_installments'?'قيمة القسط':'قيمة الدفعة','number',true],...(k==='lease_installments'?[['paid_amount','المبلغ المسدد','number',true]]:[]),['notes','الملاحظات','textarea']];
+  fields=[k==='lease_installments'?['lease_id','العقد','lookup:leases',true]:['campaign_id','الحملة','lookup:campaigns',true],['entry_currency','عملة إدخال المبلغ','select',true,['IQD','USD']],...(k==='lease_installments'?[['due_date','تاريخ الاستحقاق','date',true]]:[['paid_at','تاريخ الدفع','date',true]]),['amount',k==='lease_installments'?'قيمة القسط':'قيمة الدفعة','number',true],...(k==='lease_installments'?[['paid_amount','المبلغ المسدد','number',true]]:[]),['notes','الملاحظات','textarea']];
  }
  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+ (v.id?'تعديل':'إضافة')+' — '+meta.title+'</h2><button class="close" data-action="close">✕</button></div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div>'+(k==='campaign_payments'||k==='lease_installments'?'<div class="notice" id="paymentParentInfo"></div>':'')+'<div class="actions"><button class="btn" type="submit">حفظ البيانات</button></div></form>'+(k==='landlords'&&v.card_image_path?'<button class="btn secondary mini" data-card="'+v.id+'">عرض صورة البطاقة المرفوعة</button>':'')+relatedDetails(k,v)+'</div></div>';
 }
@@ -355,6 +355,8 @@ function bind(){
 function openForm(k,row){
  const defaults={status:'inquiry',currency:s.displayCurrency,site_type:'roadside',default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
  let data={...defaults,...(row||{})};
+ if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
+ if(k==='lease_installments'&&data.lease_id)data.entry_currency=lookup('leases',data.lease_id)?.currency||s.displayCurrency;
  if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.price=pack.price;data.currency=pack.currency;data.months=pack.default_months;}}
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
  s.modal={kind:'edit',table:k,data,siteIds:[...ids],autoPrice:k==='campaigns'&&!data.id};
@@ -455,8 +457,17 @@ async function saveForm(form){
   s.formStep++;render();return;
  }
  try{
-  formValidate(k,v);
-  let o=clean(k,v);
+  const normalized={...v};
+  if(k==='campaign_payments'||k==='lease_installments'){
+   const target=k==='campaign_payments'?lookup('campaigns',v.campaign_id)?.currency:lookup('leases',v.lease_id)?.currency;
+   if(target){
+    const source=v.entry_currency||target;
+    normalized.amount=roundAmount(convert(v.amount,source,target));
+    if(k==='lease_installments')normalized.paid_amount=roundAmount(convert(v.paid_amount,source,target));
+   }
+  }
+  formValidate(k,normalized);
+  let o=clean(k,normalized);
   if(k==='leases'&&!v.id)o.contract_number='';
   if(k==='landlords'){
    let file=form.elements.card_image?.files?.[0];
