@@ -134,16 +134,37 @@ function render(){
  bind();
 }
 function optionText(k,x){return k==='landlords'?x.name:k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+')':k==='leases'?x.contract_number:k==='campaigns'?x.title:'—';}
-function fieldHtml(f,v,all){
- let [id,label,type,required,opts]=f, val=v?.[id]??'', req=required?'required':'';
- if(type==='file')return '<label class="field full"><span>'+label+' — PNG/JPEG/WebP، حتى 5MB</span><input name="'+id+'" type="file" accept="image/png,image/jpeg,image/webp"><span class="subtle">'+(v?.card_image_path?'صورة محفوظة خاصة — استخدم زر المعاينة لعرضها':'الصورة تُرفع إلى مساحة تخزين خاصة عند الحفظ')+'</span></label>';
- if(type==='textarea')return '<label class="field full"><span>'+label+'</span><textarea name="'+id+'">'+E(val)+'</textarea></label>';
- if(type.startsWith('lookup:')){let k=type.slice(7),records=s.data[k].filter(x=>id!=='property_id'||!all?.landlord_id||x.landlord_id===all.landlord_id);
- return '<label class="field"><span>'+label+'</span><select name="'+id+'" '+req+'><option value="">— اختر —</option>'+records.map(x=>'<option value="'+E(x.id)+'" '+(val===x.id?'selected':'')+'>'+E(optionText(k,x))+'</option>').join('')+'</select></label>';}
- if(type==='select')return '<label class="field"><span>'+label+'</span><select name="'+id+'" '+req+'>'+opts.map(x=>'<option value="'+x+'" '+(val===x?'selected':'')+'>'+E(labels[x]||x)+'</option>').join('')+'</select></label>';
- const extra=type==='number'?'min="0" step="any"':type==='tel'?'inputmode="numeric" pattern="[0-9]{11}" maxlength="11"':id==='national_id'&&s.modal.table==='customers'?'inputmode="numeric" pattern="[0-9]{12}" maxlength="12"':'';
- return '<label class="field"><span>'+label+'</span><input name="'+id+'" type="'+type+'" '+req+' '+extra+' value="'+E(val)+'"></label>';
+
+function fieldCurrency(k,v){
+ if(k==='campaign_payments')return lookup('campaigns',v.campaign_id)?.currency||s.displayCurrency;
+ if(k==='lease_installments')return lookup('leases',v.lease_id)?.currency||s.displayCurrency;
+ return v.currency||s.displayCurrency;
 }
+function moneyHint(n,currency){
+ if(n===''||n===null||n===undefined||!Number.isFinite(Number(n)))return 'سيظهر المبلغ المقابل هنا';
+ let other=currency==='USD'?'IQD':'USD';
+ return 'يعادل '+money(roundAmount(convert(n,currency,other)),other)+' • السعر: 1$ = '+fmt(s.settings.usd_iqd)+' د.ع';
+}
+function fieldHtml(f,v,all){
+ let [id,label,type,required,opts]=f, val=v?.[id]??'',req=required?'required':'',k=s.modal?.table;
+ if(type==='file')return '<label class="field full"><span>'+E(label)+' — PNG/JPEG/WebP حتى 5MB</span><input name="'+id+'" type="file" accept="image/png,image/jpeg,image/webp"><span class="subtle">'+(v?.card_image_path?'صورة محفوظة خاصة':'ترفع إلى مساحة خاصة بعد الحفظ')+'</span></label>';
+ if(type==='textarea')return '<label class="field full"><span>'+E(label)+'</span><textarea name="'+id+'">'+E(val)+'</textarea></label>';
+ if(type.startsWith('lookup:')){
+  let table=type.slice(7),rows=s.data[table].filter(x=>id!=='property_id'||!all?.landlord_id||x.landlord_id===all.landlord_id);
+  return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><select name="'+id+'" '+req+'><option value="">— اختر —</option>'+rows.map(x=>'<option value="'+E(x.id)+'" '+(val===x.id?'selected':'')+'>'+E(optionText(table,x))+'</option>').join('')+'</select></label>';
+ }
+ if(type==='select')return '<label class="field"><span>'+E(label)+'</span><select name="'+id+'" '+req+'>'+opts.map(x=>'<option value="'+x+'" '+(val===x?'selected':'')+'>'+E(labels[x]||x)+'</option>').join('')+'</select></label>';
+ let monetary=['price','rent_total','amount','paid_amount','initial_payment_amount'].includes(id);
+ let extra=type==='number'?'min="0" step="'+(['months','default_months','quantity','grace_days'].includes(id)?'1':'0.01')+'"':type==='tel'?'inputmode="numeric" pattern="[0-9]{11}" maxlength="11"':id==='national_id'?'inputmode="numeric" pattern="[0-9]{12}" maxlength="12"':'';
+ return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><input name="'+id+'" type="'+type+'" '+req+' '+extra+' value="'+E(val)+'">'+(monetary?'<small class="conversion-hint" data-money-hint="'+id+'">'+E(moneyHint(val,fieldCurrency(k,v)))+'</small>':'')+'</label>';
+}
+function selectedSiteCards(v){
+ const selected=s.modal?.siteIds||[];
+ const rows=s.data.ad_sites.filter(x=>x.active!==false||selected.includes(x.id));
+ if(!rows.length)return '<div class="notice full">لا توجد مواقع مسجلة بعد. أضف المواقع من قسم «المواقع الإعلانية» أولاً، ثم اربطها بهذه الحملة.</div>';
+ return '<div class="full"><strong>اختيار المواقع الإعلانية المرتبطة بالحملة</strong><p class="subtle">حدد موقعاً واحداً أو أكثر؛ كل موقع مرتبط بسجله ومعلوماته.</p><div class="site-picker">'+rows.map(x=>'<label class="site-option"><input type="checkbox" data-site-id="'+E(x.id)+'" '+(selected.includes(x.id)?'checked':'')+'><span><b>'+E(x.code)+' — '+E(x.name)+'</b><small>'+E(labels[x.site_type]||x.site_type)+' · '+E(x.governorate)+' · '+E(x.address)+(x.rooftop_property_id?' · '+E(nameOf('properties',x.rooftop_property_id)):'')+'</small></span></label>').join('')+'</div></div>';
+}
+
 function modalHtml(){
  let m=s.modal, k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return previewHtml(v);
  let fields=meta.fields;
