@@ -122,7 +122,7 @@
    page.y=AREA.top;
    const {ctx}=page;
    const onFirst=page.pageNumber===1;
-   print(ctx,onFirst?'عقد حجز مساحات إعلانية':'تابع عقد حجز المساحات الإعلانية',
+   print(ctx,payload.kind==='landlord'?'عقد استئجار سطح إعلاني':onFirst?'عقد حجز مساحات إعلانية':'تابع عقد حجز المساحات الإعلانية',
     AREA.right,page.y+15,onFirst?17:15,800,COLOR.navy);
    print(ctx,label(payload.number),AREA.left+10,page.y+15,11,800,COLOR.navy,'left');
    print(ctx,'رقم العقد',AREA.left+10,page.y-1,9,600,COLOR.muted,'left');
@@ -225,7 +225,7 @@
    const half=(w-10)/2;
    const sides=[
     {x:AREA.right-8,text:'توقيع ممثل الشركة'},
-    {x:AREA.left+half,text:'توقيع الزبون / ممثله'}
+    {x:AREA.left+half,text:payload.kind==='landlord'?'توقيع المالك / ممثله':'توقيع الزبون / ممثله'}
    ];
    for(const side of sides){
     print(page.ctx,side.text,side.x,page.y+4,11,700,COLOR.navy);
@@ -241,7 +241,7 @@
  }
 
  async function generate(payload){
-  if(!payload?.number)throw Error('احفظ عقد الزبون أولاً حتى تولّد PDF');
+  if(!payload?.number)throw Error('احفظ العقد أولاً حتى تولّد PDF');
   const [PDFLib,bytes]=await Promise.all([pdfLibrary(),templateBytes(),readyFont()]);
   const original=await PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
   if(original.getPageCount()!==1)throw Error('قالب العقد الأصلي لازم يكون صفحة واحدة');
@@ -250,12 +250,67 @@
    throw Error('أبعاد القالب اختلفت عن A4 الأصلي');
   const out=await PDFLib.PDFDocument.create();
   out.setTitle('عقد رأفت '+payload.number);
-  out.setSubject('عقد إعلان — '+label(payload.customerName));
+  out.setSubject(payload.kind==='landlord'?'عقد إيجار سطح — '+label(payload.landlordName):'عقد إعلان — '+label(payload.customerName));
   out.setCreator('Raafat Sys');
   // Measure the entire agreement first. Never create a second A4 page.
   // A small reduction of vertical gaps keeps common contracts comfortably legible.
   function renderContent(painter){
    painter.begin();
+   if(payload.kind==='landlord'){
+    painter.section('أطراف عقد استئجار السطح');
+    painter.fields([
+     {name:'الطرف الأول — المستأجر',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
+     {name:'الطرف الثاني — المالك',value:payload.landlordName}
+    ]);
+    painter.fields([
+     {name:'هاتف المالك',value:payload.landlordPhone},
+     {name:'عنوان المالك',value:payload.landlordAddress}
+    ]);
+    painter.fields([
+     {name:'ممثل الشركة',value:payload.companyRepresentative},
+     {name:'ممثل المالك',value:payload.landlordRepresentative}
+    ]);
+    painter.section('السطح والعقار المستأجر');
+    painter.field('اسم السطح / البناية',payload.propertyName);
+    painter.fields([
+     {name:'الطول × العرض',value:payload.dimensions},
+     {name:'المساحة الإجمالية',value:label(payload.area)+' م²'}
+    ]);
+    painter.fields([
+     {name:'عدد المساحات',value:payload.quantity},
+     {name:'المحافظة',value:payload.governorate}
+    ]);
+    painter.section('مدة العقد والمبالغ');
+    painter.fields([
+     {name:'تاريخ بداية الإيجار',value:payload.startDate},
+     {name:'تاريخ نهاية الإيجار',value:payload.endDate}
+    ]);
+    painter.fields([
+     {name:'دورية دفع الإيجار',value:payload.paymentFrequency},
+     {name:'فترة السماح',value:label(payload.graceDays)+' يوم'}
+    ]);
+    painter.fields([
+     {name:'الإيجار الإجمالي',value:amount(payload.rentTotal,payload.currency)},
+     {name:'المبلغ المقدم',value:amount(payload.advanceAmount,payload.currency)}
+    ]);
+    painter.field('المبلغ المتبقي بعد المقدم',amount(payload.remainingAfterAdvance,payload.currency));
+    painter.section('جدول أقساط الإيجار');
+    if(Array.isArray(payload.installments)&&payload.installments.length){
+     for(let i=0;i<payload.installments.length;i+=2){
+      painter.fields(payload.installments.slice(i,i+2).map((item,j)=>({
+       name:'القسط '+String(i+j+1).padStart(4,'0')+' — '+label(item.dueDate),
+       value:amount(item.amount,payload.currency)
+      })));
+     }
+    }else painter.block('الأقساط','لا توجد أقساط مجدولة لهذا العقد.');
+    if(payload.notes){
+     painter.section('الملاحظات والشروط المسجلة');
+     painter.block('ملاحظات عقد الإيجار',payload.notes);
+    }
+    painter.signature();
+    painter.end();
+    return;
+   }
    painter.section('أطراف العقد وبيانات التواصل');
    painter.fields([
     {name:'الطرف الأول',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
