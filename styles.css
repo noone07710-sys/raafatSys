@@ -78,3 +78,58 @@
 .tier-editor h3{font-size:16px;margin-bottom:4px}
 .tier-editor .formgrid{margin-top:14px}
 @media(max-width:650px){.package-catalog{grid-template-columns:1fr}.rate-line{grid-template-columns:repeat(4,minmax(0,1fr))}.rate-tile strong{font-size:11px}}
+
+
+/* Grouped navigation — customers and rooftop landlords remain distinct. */
+@media(min-width:921px){.sidebar{width:273px}}
+@media(min-width:651px) and (max-width:920px){.sidebar{width:242px}}
+.nav{gap:9px}
+.nav .nav-link{display:flex;align-items:center;gap:12px;width:100%;text-align:right;padding:11px 12px;color:#cbd9e6;font-size:13px;font-weight:650;line-height:1.65;transition:background-color .16s,color .16s}
+.nav .nav-link:hover{background:#243c50;color:#fff}
+.nav .nav-link.active{background:#214b57;color:#fff;box-shadow:inset -3px 0 #67ccbf}
+.nav-link-icon{width:22px;min-width:22px;text-align:center;font-size:17px;color:#8fbbc0}
+.nav .nav-link.active .nav-link-icon{color:#91ded2}
+.nav-group-list{display:flex;flex-direction:column;gap:9px;margin:6px 0 2px}
+.nav-group{border:1px solid #293f53;border-radius:15px;background:#172c40;overflow:hidden;transition:border-color .16s}
+.nav-group.has-active{border-color:#36596b}
+.nav .nav-group-toggle{display:flex;align-items:center;gap:11px;width:100%;border:0;border-radius:13px;padding:13px 11px;text-align:right;background:transparent;color:#e3ecf5}
+.nav .nav-group-toggle:hover,.nav .nav-group-toggle.expanded{background:#203c50;color:#fff}
+.nav-group-icon{display:flex;justify-content:center;align-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:10px;background:#284455;color:#b5d9d6;font-size:19px}
+.nav-group-copy{display:flex;flex-direction:column;align-items:flex-start;gap:2px;flex:1;min-width:0}
+.nav-group-copy strong{font-size:13px;line-height:1.45;font-weight:800}
+.nav-group-copy small{font-size:10px;line-height:1.6;color:#8ea8bb;font-weight:500}
+.nav-group-chevron{font-size:20px;color:#8ca9ba;transition:transform .17s ease;line-height:1}
+.nav .nav-group-toggle.expanded .nav-group-chevron{transform:rotate(180deg);color:#8edbcf}
+.nav-group-items{padding:4px 8px 10px 8px;border-top:1px solid #2b475a;display:flex;flex-direction:column;gap:2px}
+.nav-group-items[hidden]{display:none!important}
+.nav .nav-group-items .nav-link{font-size:12px;padding:9px 10px;border-radius:9px}
+.nav .nav-group-items .nav-link .nav-link-icon{font-size:14px;min-width:19px;width:19px}
+.nav .nav-group-items .nav-link.active{background:#24515b}
+.nav-utility{display:flex;flex-direction:column;gap:4px;border-top:1px solid #304254;padding-top:13px;margin-top:5px}
+.nav-utility-label{padding:0 12px 5px;color:#8299aa;font-size:10px;font-weight:800}
+.nav button:focus-visible{outline:2px solid #84dbcb;outline-offset:2px}
+@media(max-width:650px){
+ .sidebar{width:100%;max-height:none;overflow:visible}
+ .nav{flex-direction:column;overflow:visible;gap:7px}
+ .nav .nav-link{white-space:normal;font-size:12px;padding:10px 12px}
+ .nav-group-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:3px 0}
+ .nav-group{min-width:0}
+ .nav .nav-group-toggle{padding:10px 8px;gap:6px;min-height:65px}
+ .nav-group-icon{flex-basis:29px;width:29px;height:29px;font-size:16px}
+ .nav-group-copy strong{font-size:11px}
+ .nav-group-copy small{font-size:9px}
+ .nav-group-chevron{font-size:15px}
+ .nav-group-items{padding:4px 5px 7px}
+ .nav .nav-group-items .nav-link{font-size:11px;padding:8px 6px;gap:6px}
+ .nav-utility{flex-direction:row;flex-wrap:wrap;gap:5px;margin-top:2px;padding-top:8px}
+ .nav-utility-label{width:100%;padding-bottom:0}
+ .nav-utility .nav-link{width:auto;flex:1;min-width:115px}
+}
+@media(max-width:385px){
+ .nav-group-list{grid-template-columns:1fr}
+ .nav .nav-group-toggle{min-height:auto}
+ .nav-group-copy strong{font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){
+ .nav-group,.nav-group-chevron,.nav .nav-link{transition:none}
+}
