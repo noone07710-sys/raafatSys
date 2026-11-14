@@ -87,6 +87,12 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  assert.ok(calls.canvasTexts.some(x=>x.includes('مكتبة حبر')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('A080')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('4,200')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('الشروط')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('توقيع')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('صفحة 2')),'pagination should show page numbers');
+ assert.ok(!calls.canvasTexts.some(x=>x.includes('123456789012')),'identity-card values must never be written anywhere on a PDF page');
+ assert.ok(!calls.canvasTexts.some(x=>x.includes('البطاقة')||x.includes('الرقم الوطني')),'identity-card labels must never appear on the PDF');
  assert.ok(calls.templateFetches.some(x=>x==='https://example.test/raafatSys/customer-contract-template.pdf'));
 });
 
@@ -127,6 +133,7 @@ test('live saved-contract data drives PDF fields without replacing original comp
  const payload=app.customerContractPdfPayload(contract);
  assert.equal(payload.number,'RC-0007');
  assert.equal(payload.customerName,'اسم الزبون عند التعاقد');
+ assert.equal(Object.hasOwn(payload,'customerNationalId'),false,'national ID is excluded from the PDF payload entirely');
  assert.equal(payload.campaignTitle,'عنوان الحملة عند التعاقد');
  assert.equal(payload.packageName,'الباقة E');
  assert.equal(payload.area,'20');
@@ -141,5 +148,6 @@ test('live saved-contract data drives PDF fields without replacing original comp
  assert.ok(!Object.hasOwn(payload,'companyLogo'),'settings branding must never replace original PDF artwork');
  assert.match(app.customerContractPreview(contract),/data-pdf-mode="download"/);
  assert.match(app.customerContractPreview(contract),/data-pdf-mode="preview"/);
+ assert.doesNotMatch(app.customerContractPreview(contract),/الرقم الوطني|رقم البطاقة الموحدة/,'the HTML contract preview must never display an ID number');
  assert.doesNotMatch(app.customerContractPreview(contract),/data-action="print"/);
 });
