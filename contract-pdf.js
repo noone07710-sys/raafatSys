@@ -255,53 +255,59 @@
   // Measure the entire agreement first. Never create a second A4 page.
   // A small reduction of vertical gaps keeps common contracts comfortably legible.
   function renderContent(painter){
-  painter.begin();
+   painter.begin();
+   painter.section('أطراف العقد وبيانات التواصل');
+   painter.fields([
+    {name:'الطرف الأول',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
+    {name:'الطرف الثاني — الزبون',value:payload.customerName}
+   ]);
+   painter.fields([
+    {name:'هاتف الزبون',value:payload.customerPhone},
+    {name:'ممثل الزبون',value:payload.customerRepresentative}
+   ]);
+   if(payload.companyRepresentative&&payload.companyRepresentative!=='—')
+    painter.field('ممثل الشركة',payload.companyRepresentative);
 
-  painter.section('أطراف العقد');
-  painter.fields([{name:'الشركة — الطرف الأول',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
-   {name:'الزبون — الطرف الثاني',value:payload.customerName}]);
-  painter.fields([{name:'هاتف الزبون',value:payload.customerPhone},
-   {name:'ممثل الشركة',value:payload.companyRepresentative}]);
-  painter.field('ممثل الزبون',payload.customerRepresentative);
+   painter.section('بيانات الحملة الإعلانية');
+   painter.fields([
+    {name:'اسم الحملة',value:payload.campaignTitle},
+    {name:'الباقة الإعلانية',value:payload.packageName}
+   ]);
+   painter.fields([
+    {name:'عدد القطع',value:payload.quantity},
+    {name:'مدة الحجز',value:label(payload.months)+' أشهر'}
+   ]);
+   painter.fields([
+    {name:'تاريخ البداية',value:payload.startDate},
+    {name:'تاريخ النهاية',value:payload.endDate}
+   ]);
+   painter.fields([
+    {name:'قياسات الإعلان',value:payload.dimensions},
+    {name:'المساحة م²',value:payload.area}
+   ]);
+   painter.field('القيمة الإجمالية المتفق عليها',amount(payload.amount,payload.currency));
 
-  painter.section('بيانات الحملة');
-  painter.field('اسم الحملة',payload.campaignTitle);
-  painter.fields([{name:'الباقة الإعلانية',value:payload.packageName},
-   {name:'عدد القطع الإعلانية',value:payload.quantity}]);
-  painter.fields([{name:'تاريخ البداية',value:payload.startDate},
-   {name:'تاريخ النهاية',value:payload.endDate}]);
-  painter.fields([{name:'مدة العقد',value:label(payload.months)+' أشهر'},
-   {name:'قياسات الإعلان',value:payload.dimensions}]);
-  if(String(payload.area??'').trim()&&payload.area!=='—')
-   painter.field('المساحة الإعلانية',label(payload.area)+' م²');
-  painter.field('القيمة الإجمالية المتفق عليها',amount(payload.amount,payload.currency));
+   painter.section('القطع والمواقع الإعلانية');
+   if(Array.isArray(payload.sites)&&payload.sites.length){
+    for(let i=0;i<payload.sites.length;i+=2){
+     const items=payload.sites.slice(i,i+2).map(site=>({
+      name:label(site.code,'—')+' — '+label(site.name,'موقع إعلاني'),
+      value:[site.governorate,site.address].filter(Boolean).join('، ')||'—'
+     }));
+     painter.fields(items);
+    }
+   }else painter.block('المواقع','لا توجد قطع محددة بالرموز ضمن سجل العقد.');
+   if(payload.additionalLocations)painter.block('مواقع إضافية',payload.additionalLocations);
 
-  painter.section('القطع والمواقع الإعلانية');
-  if(Array.isArray(payload.sites)&&payload.sites.length){
-   payload.sites.forEach((site,i)=>painter.site(site,i));
-  }else{
-   painter.block('المواقع المحددة','لا توجد قطع محددة بالرموز ضمن سجل العقد.');
+   painter.section('المواصفات والشروط والملاحظات');
+   if(payload.specifications)painter.block('مواصفات الإعلان',payload.specifications);
+   if(payload.campaignNotes)painter.block('ملاحظات الحملة',payload.campaignNotes);
+   painter.block('الشروط المتفق عليها',payload.terms||'لم تُسجّل شروط إضافية ضمن العقد.');
+   if(payload.notes)painter.block('ملاحظات العقد',payload.notes);
+   painter.signature();
+   painter.end();
   }
-  if(payload.additionalLocations)
-   painter.block('مواقع إضافية',payload.additionalLocations);
 
-  if(payload.specifications){
-   painter.section('مواصفات الإعلان');
-   painter.block('المواصفات المسجلة',payload.specifications);
-  }
-  if(payload.campaignNotes){
-   painter.section('ملاحظات الحملة');
-   painter.block('ملاحظات الحملة المسجلة',payload.campaignNotes);
-  }
-  painter.section('الشروط المتفق عليها');
-  painter.block('الشروط المسجلة في العقد',payload.terms||'لم تُسجّل شروط إضافية ضمن العقد.');
-  if(payload.notes){
-   painter.section('ملاحظات إضافية');
-   painter.block('ملاحظات العقد',payload.notes);
-  }
-  painter.signature();
-  painter.end();
-  }
   const measurement=pageCanvas(size);
   const measurePainter=createPainter(size,()=>({...measurement,pageNumber:1}),payload);
   renderContent(measurePainter);
