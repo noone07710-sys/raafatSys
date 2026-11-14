@@ -165,6 +165,39 @@ function selectedSiteCards(v){
  return '<div class="full"><strong>اختيار المواقع الإعلانية المرتبطة بالحملة</strong><p class="subtle">حدد موقعاً واحداً أو أكثر؛ كل موقع مرتبط بسجله ومعلوماته.</p><div class="site-picker">'+rows.map(x=>'<label class="site-option"><input type="checkbox" data-site-id="'+E(x.id)+'" '+(selected.includes(x.id)?'checked':'')+'><span><b>'+E(x.code)+' — '+E(x.name)+'</b><small>'+E(labels[x.site_type]||x.site_type)+' · '+E(x.governorate)+' · '+E(x.address)+(x.rooftop_property_id?' · '+E(nameOf('properties',x.rooftop_property_id)):'')+'</small></span></label>').join('')+'</div></div>';
 }
 
+
+function relatedDetails(k,v){
+ if(!v?.id)return '';
+ const list=(label,rows,table,title)=>rows.length?'<div class="related-group"><strong>'+E(label)+' <span class="pill">'+rows.length+'</span></strong>'+rows.map(x=>'<div class="related-item"><span>'+E(title(x))+'</span><button type="button" class="linkbtn" data-edit="'+table+':'+x.id+'">فتح</button></div>').join('')+'</div>':'';
+ let parts='';
+ if(k==='customers'){
+  parts+=list('حملات هذا العميل',s.data.campaigns.filter(x=>x.customer_id===v.id),'campaigns',x=>x.title+' — '+money(x.price,x.currency));
+  parts+='<button type="button" class="btn secondary mini" data-new-linked="campaigns|customer_id|'+v.id+'">+ حملة لهذا العميل</button>';
+ }
+ if(k==='landlords'){
+  parts+=list('عقارات المالك',s.data.properties.filter(x=>x.landlord_id===v.id),'properties',x=>x.title+' / '+x.dimensions);
+  parts+=list('عقود المالك',s.data.leases.filter(x=>x.landlord_id===v.id),'leases',x=>x.contract_number+' — '+money(x.rent_total,x.currency));
+  parts+='<button type="button" class="btn secondary mini" data-new-linked="properties|landlord_id|'+v.id+'">+ إضافة عقار للمالك</button>';
+ }
+ if(k==='properties'){
+  parts+=list('مواقع هذا العقار',s.data.ad_sites.filter(x=>x.rooftop_property_id===v.id),'ad_sites',x=>x.code+' — '+x.name);
+  parts+=list('عقود هذا العقار',s.data.leases.filter(x=>x.property_id===v.id),'leases',x=>x.contract_number);
+  parts+='<button type="button" class="btn secondary mini" data-new-linked="leases|property_id|'+v.id+'">+ عقد للعقار</button>';
+ }
+ if(k==='packages')parts+=list('حملات الباقة',s.data.campaigns.filter(x=>x.package_id===v.id),'campaigns',x=>x.title);
+ if(k==='ad_sites')parts+=list('حملات هذا الموقع',s.data.campaign_sites.filter(x=>x.site_id===v.id).map(x=>lookup('campaigns',x.campaign_id)).filter(Boolean),'campaigns',x=>x.title);
+ if(k==='campaigns'){
+  parts+=list('دفعات الحملة',s.data.campaign_payments.filter(x=>x.campaign_id===v.id),'campaign_payments',x=>x.paid_at+' — '+money(x.amount,v.currency));
+  parts+='<div class="notice">المدفوع: '+E(money(campaignPaid(v.id),v.currency))+' · المتبقي: '+E(money(campaignBalance(v),v.currency))+'</div>';
+  parts+='<button type="button" class="btn secondary mini" data-new-linked="campaign_payments|campaign_id|'+v.id+'">+ تسجيل دفعة للحملة</button>';
+ }
+ if(k==='leases'){
+  parts+=list('استحقاقات العقد',s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date)),'lease_installments',x=>x.due_date+' — '+money(x.paid_amount,v.currency)+' / '+money(x.amount,v.currency));
+  parts+='<div class="notice">المتبقي في الأقساط: '+E(money(leaseBalance(v),v.currency))+'</div>';
+ }
+ return parts?'<div class="related-panel"><h3>السجلات المرتبطة</h3>'+parts+'</div>':'';
+}
+
 function modalHtml(){
  let m=s.modal, k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return previewHtml(v);
  let fields=meta.fields;
