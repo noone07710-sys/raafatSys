@@ -184,6 +184,7 @@ function moneyHint(n,currency){
 }
 function fieldHtml(f,v,all){
  let [id,label,type,required,opts]=f, val=v?.[id]??'',req=required?'required':'',k=s.modal?.table;
+ if(type==='computed')return '<label class="field"><span>'+E(label)+'</span><output class="computed-area" data-area-output>'+E(fmt(Number(v?.width_m||0)*Number(v?.height_m||0)))+' م²</output><small class="subtle">تُحسب تلقائياً: الطول × العرض</small></label>';
  if(type==='file')return '<label class="field full"><span>'+E(label)+' — PNG/JPEG/WebP حتى 5MB</span><input name="'+id+'" type="file" accept="image/png,image/jpeg,image/webp"><span class="subtle">'+(v?.card_image_path?'صورة محفوظة خاصة':'ترفع إلى مساحة خاصة بعد الحفظ')+'</span></label>';
  if(type==='textarea')return '<label class="field full"><span>'+E(label)+'</span><textarea name="'+id+'">'+E(val)+'</textarea></label>';
  if(type.startsWith('lookup:')){
@@ -388,9 +389,15 @@ function openForm(k,row){
  let data={...defaults,...(row||{})};
  if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
  if(k==='lease_installments'&&data.lease_id)data.entry_currency=lookup('leases',data.lease_id)?.currency||s.displayCurrency;
+ if(k==='campaigns'&&!data.package_id&&data.customer_id){data.package_id=lookup('customers',data.customer_id)?.preferred_package_id||'';}
  if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.price=pack.price;data.currency=pack.currency;data.months=pack.default_months;}}
+ if(k==='customer_contracts'){
+  if(!data.package_id&&data.customer_id)data.package_id=lookup('customers',data.customer_id)?.preferred_package_id||'';
+  if(data.package_id&&!data.id){const p=lookup('packages',data.package_id);if(p){data.contract_type=p.package_type;data.amount=p.price;data.currency=p.currency;}}
+  if(!data.end_date&&data.start_date&&data.package_id){const p=lookup('packages',data.package_id);if(p)data.end_date=addDays(plusMonths(data.start_date,p.default_months||1),-1);}
+ }
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
- s.modal={kind:'edit',table:k,data,siteIds:[...ids],autoPrice:k==='campaigns'&&!data.id};
+ s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:[],autoPrice:k==='campaigns'&&!data.id};
  s.formStep=0;render();
 }
 function captureForm(form){
@@ -401,7 +408,21 @@ function captureForm(form){
  if(siteInputs.length)s.modal.siteIds=siteInputs.filter(el=>el.checked).map(el=>el.dataset.siteId);
 }
 function formValidate(k,v){
- if(k==='customers'&&(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id)))throw Error('الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
+ if(k==='customers'){
+  if(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id))throw Error('الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
+  if(!v.preferred_package_id||!lookup('packages',v.preferred_package_id))throw Error('حدد باقة إعلانية مسجلة للزبون');
+ }
+ if(k==='packages'||k==='properties'){
+  if(!(Number(v.width_m)>0&&Number(v.height_m)>0))throw Error('أدخل طول وعرض أكبر من صفر بالمتر');
+ }
+ if(k==='customer_contracts'){
+  const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id);
+  if(!customer||!pkg)throw Error('اختر زبوناً وباقة إعلانية مسجلين');
+  if((v.contract_type||pkg.package_type)!==pkg.package_type)throw Error('نوع عقد الزبون يجب أن يطابق نوع الباقة');
+  if(v.end_date<v.start_date||!v.start_date||!v.end_date)throw Error('تأكد من تواريخ عقد الزبون');
+  if(!(Number(v.amount)>=0))throw Error('مبلغ عقد الزبون غير صالح');
+  if(v.campaign_id){const cam=lookup('campaigns',v.campaign_id);if(!cam||cam.customer_id!==v.customer_id||(cam.package_id&&cam.package_id!==v.package_id))throw Error('الحملة المختارة يجب أن تكون لنفس الزبون والباقة');}
+ }
  if(['landlords','customers'].includes(k)&&v.alternate_phone&&!/^[0-9]{11}$/.test(v.alternate_phone))throw Error('الهاتف البديل يجب أن يكون 11 رقم');
  if(k==='landlords'&&(!/^[0-9]{11}$/.test(v.phone)||(v.national_id&&!/^[0-9]{12}$/.test(v.national_id))))throw Error('هاتف المالك 11 رقم، ورقم البطاقة عند إدخاله 12 رقم');
  if(k==='ad_sites'&&v.site_type==='rooftop'&&!v.rooftop_property_id)throw Error('موقع السطح لازم تربطه بعقار مسجل عند مالك');
@@ -437,8 +458,9 @@ function formValidate(k,v){
  }
 }
 function clean(k,v){
- let fields=k==='campaign_payments'?['campaign_id','paid_at','amount','notes']:k==='lease_installments'?['lease_id','due_date','amount','paid_amount','notes']:defs[k].fields.filter(x=>x[2]!=='file').map(x=>x[0]);
+ let fields=k==='campaign_payments'?['campaign_id','paid_at','amount','notes']:k==='lease_installments'?['lease_id','due_date','amount','paid_amount','notes']:defs[k].fields.filter(x=>!['file','computed'].includes(x[2])).map(x=>x[0]);
  if(k==='leases')fields.push('renewed_from');
+
  let o={};
  fields.forEach(f=>{if(v[f]!==undefined){
   let val=v[f];
@@ -447,6 +469,8 @@ function clean(k,v){
   o[f]=val;
  }});
  if(k==='landlords'&&v.card_image_path)o.card_image_path=v.card_image_path;
+ if(k==='properties'&&v.width_m&&v.height_m)o.dimensions=v.width_m+' × '+v.height_m+' m';
+ if(k==='customer_contracts')o.contract_type=lookup('packages',v.package_id)?.package_type||v.contract_type||'cabin';
  return o;
 }
 
