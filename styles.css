@@ -378,3 +378,11 @@
  .nav-link-icon .ui-icon{width:17px;height:17px}
 }
 @media(prefers-reduced-motion:reduce){.nav-group-chevron .ui-icon{transition:none}}
+
+
+/* E package pricing is read-only and derived from linked rooftop property dimensions. */
+.campaign-auto-area{display:flex;flex-direction:column;gap:6px;margin:12px 0 4px;padding:13px 15px;border-radius:11px;background:#fff;border:1px solid #d0e5e8;line-height:1.8}
+.campaign-auto-area strong{display:block;font-size:14px;color:#185d6b}
+.campaign-auto-area small{display:block;font-size:11px;color:#526e7f;line-height:1.9}
+.campaign-auto-area .campaign-area-error{color:#b53a44;font-weight:800}
+@media(max-width:650px){.campaign-auto-area{padding:11px 12px}}
