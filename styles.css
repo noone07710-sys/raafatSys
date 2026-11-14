@@ -386,3 +386,79 @@
 .campaign-auto-area small{display:block;font-size:11px;color:#526e7f;line-height:1.9}
 .campaign-auto-area .campaign-area-error{color:#b53a44;font-weight:800}
 @media(max-width:650px){.campaign-auto-area{padding:11px 12px}}
+
+
+/* Readable landlord installment accounts, grouped by owner and contract. */
+.lease-ledger-page{max-width:1450px;margin-inline:auto;min-width:0}
+.lease-ledger-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.lease-ledger-stat{background:#fff;border:1px solid #dce7ed;border-radius:14px;padding:17px;display:flex;flex-direction:column;gap:9px;min-width:0}
+.lease-ledger-stat small{color:#708798;font-size:11px}
+.lease-ledger-stat strong{font-size:18px;line-height:1.5;color:#233f52;overflow-wrap:anywhere}
+.lease-ledger-stat.advance strong,.lease-ledger-stat.paid strong{color:#238477}
+.lease-ledger-stat.outstanding strong{color:#a26827}
+.lease-ledger-list{display:flex;flex-direction:column;gap:13px;margin-bottom:18px}
+.lease-ledger-card{background:#fff;border:1px solid #dde6ec;border-radius:16px;padding:18px 20px;min-width:0;box-shadow:0 6px 26px #182f3b09}
+.lease-ledger-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.lease-ledger-head h3{font-size:17px;font-weight:800;margin:0 0 5px;color:#1c3b4d}
+.lease-ledger-head p{font-size:12px;font-weight:700;margin:0 0 5px;color:#556b7c;line-height:1.8}
+.lease-ledger-head small{color:#8497a3;font-size:11px}
+.lease-ledger-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.lease-ledger-metrics>div{min-width:0;background:#f6f9fa;border:1px solid #e7edf1;border-radius:10px;padding:12px 13px;display:flex;flex-direction:column;gap:6px}
+.lease-ledger-metrics small{color:#708899;font-size:11px}
+.lease-ledger-metrics strong{font-size:14px;font-weight:800;color:#253f50;overflow-wrap:anywhere}
+.lease-ledger-metrics>div:last-child strong{color:#a26d2a}
+.lease-ledger-lower{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-top:15px}
+.lease-ledger-details{flex:1 1 450px;min-width:0;border:1px solid #e0e9ed;border-radius:11px;overflow:hidden}
+.lease-ledger-details>summary{padding:12px 15px;font-size:13px;color:#2b5d67;background:#f4f8f9;cursor:pointer;font-weight:800}
+.lease-ledger-installments{padding:7px 12px}
+.lease-ledger-installment{display:grid;grid-template-columns:90px 140px minmax(200px,1fr) 96px auto;gap:10px;align-items:center;border-bottom:1px solid #edf2f4;padding:12px 0;min-width:0}
+.lease-ledger-installment:last-child{border-bottom:0}
+.lease-ledger-ordinal{font-size:12px;color:#294a5b;font-weight:800;white-space:nowrap}
+.lease-ledger-date{font-size:11px;color:#687f91}
+.lease-ledger-amounts{min-width:0;display:flex;flex-direction:column;gap:4px;font-size:11px;color:#526b7b}
+.lease-ledger-amounts>span{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.lease-ledger-amounts strong{font-size:12px}
+.lease-ledger-status{font-size:10px;font-weight:750;text-align:center;border-radius:99px;padding:6px 8px}
+.lease-ledger-status.paid{color:#23785c;background:#e6f5ed}
+.lease-ledger-status.late{color:#a54740;background:#fff0ec}
+.lease-ledger-status.pending{color:#667f92;background:#eef4f7}
+.lease-ledger-installment .btn{font-size:10px;padding:8px 10px;white-space:normal}
+.lease-ledger-modal-owner{padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:#eff7f8;border-radius:11px;margin-bottom:13px}
+.lease-ledger-modal-owner b{color:#234a5c;font-size:15px}
+.lease-ledger-modal-owner small{color:#607d8b;font-size:11px}
+.lease-ledger-modal .lease-ledger-metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:17px}
+.lease-plan-preview{border:1px solid #d8e7eb;border-radius:12px;background:#f6fafb;padding:15px;min-width:0}
+.lease-plan-preview>strong{display:block;color:#1d5662;margin-bottom:10px;font-size:14px}
+.lease-plan-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;font-size:12px}
+.lease-plan-values>span{padding:8px;border:1px solid #e4edef;background:#fff;border-radius:8px}
+.lease-plan-values b{color:#1a6e79}
+.lease-plan-dates{display:flex;flex-direction:column;gap:5px;font-size:11px;margin-top:12px}
+.lease-plan-dates span{color:#526e7f}
+.lease-plan-preview>small{display:block;color:#638391;margin-top:12px;line-height:1.8;font-size:11px}
+.campaign-payment-history-row{grid-template-columns:62px 110px 120px minmax(0,1fr) auto}
+.campaign-payment-history-index{width:auto;min-width:55px;white-space:nowrap;padding:0 6px;font-size:10px}
+.campaign-payment-metrics b .amount,.campaign-payment-modal-balances b .amount{display:block}
+.campaign-payment-metrics b .original-amount,.campaign-payment-modal-balances b .original-amount{display:block;text-align:right;font-size:10px;font-weight:500;line-height:1.4}
+@media(max-width:1150px){
+ .lease-ledger-installment{grid-template-columns:90px 120px minmax(170px,1fr) auto}
+ .lease-ledger-installment .btn{grid-column:1/-1;justify-self:start}
+ .lease-ledger-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:850px){
+ .lease-ledger-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .lease-ledger-installment{grid-template-columns:1fr 1fr}
+ .lease-ledger-amounts{grid-column:1/-1}
+ .lease-ledger-installment .btn{grid-column:1/-1}
+ .lease-ledger-status{justify-self:end}
+ .campaign-payment-history-row{grid-template-columns:62px 95px 108px minmax(0,1fr)}
+}
+@media(max-width:650px){
+ .lease-ledger-summary{grid-template-columns:1fr}
+ .lease-ledger-stat{padding:12px 14px;gap:4px}
+ .lease-ledger-card{padding:13px 11px}
+ .lease-ledger-modal .lease-ledger-metrics{grid-template-columns:1fr}
+ .lease-plan-values{grid-template-columns:1fr}
+ .lease-ledger-installment{grid-template-columns:1fr 1fr;gap:8px}
+ .lease-ledger-installment .btn{width:100%}
+ .campaign-payment-history-row{grid-template-columns:62px minmax(0,1fr) auto}
+}
