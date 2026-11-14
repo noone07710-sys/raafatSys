@@ -1259,7 +1259,7 @@ function openForm(k,row){
   const inferred=codedSitePackage(data.code);
   if(inferred)data.package_id=s.data.packages.find(p=>String(p.code||'').trim().toUpperCase()===inferred)?.id||'';
  }
- if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.currency=pack.currency;data.months=pack.default_months;const initial=quoteCampaign(data,data.siteIds||[]);data.price=initial?initial.total:0;}}
+ if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.currency=row?.currency||pack.currency;data.months=Number(row?.months)>0?Number(row.months):pack.default_months;const initial=quoteCampaign(data,data.siteIds||[]);data.price=initial?initial.total:0;}}
  if(k==='customer_contracts'&&!data.id){
   const campaign=lookup('campaigns',data.campaign_id);
   if(campaign)Object.assign(data,campaignContractData(campaign));
