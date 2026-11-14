@@ -99,23 +99,34 @@ test('real admin settings save uses private authorized write and public media UR
  const uploads=[],updates=[];
  files.logo={name:'brand.webp',type:'image/webp',size:2000};
  env.s.client={
-  storage:{from(bucket){
-   assert.equal(bucket,'raafat-branding');
-   return {
-    async upload(path,file,options){uploads.push({path,file,options});return {error:null}},
-    getPublicUrl(path){return {data:{publicUrl:'https://assets.example.test/'+path}}},
-    async remove(paths){return {data:paths,error:null}}
+  storage:{
+   from(bucket){
+    assert.equal(bucket,'raafat-branding');
+    return {
+     async upload(path,file,options){uploads.push({path,file,options});return {error:null}},
+     getPublicUrl(path){return {data:{publicUrl:'https://assets.example.test/'+path}}},
+     async remove(paths){return {data:paths,error:null}}
+    };
    }
-  }},
+  },
   from(table){
    assert.equal(table,'settings');
-   return {update(record){
-    updates.push(record);
-    return {eq(field,id){
-     assert.equal(field,'id');assert.equal(id,1);
-     return {select(){return {single:async()=>({data:{id:1,...record},error:null})}}}
-    }}
-   }
+   return {
+    update(record){
+     updates.push(record);
+     return {
+      eq(field,id){
+       assert.equal(field,'id');
+       assert.equal(id,1);
+       return {
+        select(){
+         return {single:async()=>({data:{id:1,...record},error:null})};
+        }
+       };
+      }
+     };
+    }
+   };
   }
  };
  values.company_name='شركة مدارة';
