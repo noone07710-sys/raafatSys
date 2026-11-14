@@ -376,6 +376,8 @@ function bind(){
   render();
  });
  document.querySelectorAll('[data-roof-field]').forEach(input=>input.addEventListener('input',()=>updateAreaOutputs($('#recordForm'))));
+ const cardFileInput=document.querySelector('input[name="card_image"]');
+ if(cardFileInput)cardFileInput.addEventListener('change',e=>{s.modal.cardFile=e.target.files?.[0]||null;});
  if($('#globalCurrency'))$('#globalCurrency').onchange=e=>{
   if($('#recordForm'))captureForm($('#recordForm'));
   s.displayCurrency=e.target.value;
@@ -581,7 +583,18 @@ function clean(k,v){
 }
 
 async function persist(k,o,id){
- if(s.demo){if(k==='leases'&&!id&&!o.contract_number)o.contract_number='RA-'+(1+Math.max(0,...s.data.leases.map(x=>Number((x.contract_number||'').replace('RA-',''))||0)));let record={...o,id:id||uid(),created_at:today()};let idx=s.data[k].findIndex(x=>x.id===id);if(idx>=0)s.data[k][idx]={...s.data[k][idx],...record};else s.data[k].unshift(record);return record;}
+ if(s.demo){
+  if(k==='leases'&&!id&&!o.contract_number)o.contract_number='RA-'+(1+Math.max(0,...s.data.leases.map(x=>Number((x.contract_number||'').replace('RA-',''))||0)));
+  if(k==='customer_contracts'&&!id){
+   o.contract_number='RC-'+(1+Math.max(0,...s.data.customer_contracts.map(x=>Number((x.contract_number||'').replace('RC-',''))||0)));
+   const p=lookup('packages',o.package_id),cust=lookup('customers',o.customer_id),site=lookup('ad_sites',o.site_id);
+   o.package_name_snapshot=p?.name||'—';
+   o.package_dimensions_snapshot=p?.width_m+' × '+p?.height_m+' m';
+   o.package_specifications_snapshot=p?.specifications||'';
+   o.customer_name_snapshot=cust?.name||'—';
+   o.site_name_snapshot=site?.name||null;
+  }
+  let record={...o,id:id||uid(),created_at:today()};let idx=s.data[k].findIndex(x=>x.id===id);if(idx>=0)s.data[k][idx]={...s.data[k][idx],...record};else s.data[k].unshift(record);return record;}
  const request=id?s.client.from(k).update(o).eq('id',id).select().single():s.client.from(k).insert(o).select().single();let {data,error}=await request;if(error)throw error;return data;
 }
 function plusMonths(date,months){let d=new Date(date+'T12:00:00Z'),day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+months);let max=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();d.setUTCDate(Math.min(day,max));return d.toISOString().slice(0,10)}
@@ -611,7 +624,9 @@ async function syncCampaignSites(campaignId,siteIds){
 async function saveForm(form){
  if(!s.modal)return;
  const m=s.modal,k=m.table;
- captureForm(form);let v=m.data;
+ captureForm(form);
+ if(k==='landlords')captureRoofDrafts();
+ let v=m.data;
  if(k==='campaigns'&&s.formStep<4){
   if(s.formStep===1&&!m.siteIds?.length&&!String(v.locations||'').trim()){
    toast('حدد موقعاً من القائمة أو أدخل موقعاً إضافياً قبل المتابعة',true);return;
@@ -629,10 +644,16 @@ async function saveForm(form){
    }
   }
   formValidate(k,normalized);
+  if(k==='landlords'){
+   if(!v.id&&!m.roofs.length)throw Error('سجّل على الأقل سطحاً واحداً للمالك مع قياسه');
+   for(const roof of m.roofs){
+    if(!roof.title?.trim()||!(Number(roof.width_m)>0)||!(Number(roof.height_m)>0)||!(Number(roof.quantity||1)>0))throw Error('أدخل اسم وطول وعرض كل سطح من الأسطح المضافة بشكل صحيح');
+   }
+  }
   let o=clean(k,normalized);
   if(k==='leases'&&!v.id)o.contract_number='';
   if(k==='landlords'){
-   let file=form.elements.card_image?.files?.[0];
+   let file=form.elements.card_image?.files?.[0]||m.cardFile;
    if(file){
     if(s.demo)throw Error('رفع صورة البطاقة غير متاح في وضع المعاينة');
     if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5242880)throw Error('صورة البطاقة يجب أن تكون PNG أو JPEG أو WebP وبحد أقصى 5MB');
@@ -644,6 +665,22 @@ async function saveForm(form){
   }
   const wasNew=!v.id;
   const saved=await persist(k,o,v.id);
+  if(k==='landlords'){
+   m.data.id=saved.id;
+   for(const roof of m.roofs){
+    if(roof.saved)continue;
+    await persist('properties',{
+     landlord_id:saved.id,
+     title:roof.title.trim(),
+     width_m:Number(roof.width_m),
+     height_m:Number(roof.height_m),
+     dimensions:roof.width_m+' × '+roof.height_m+' m',
+     quantity:Number(roof.quantity||1),
+     notes:roof.notes||null
+    });
+    roof.saved=true;
+   }
+  }
   if(k==='campaigns'){
    // The parent record is saved first to get its id; all site records point to that id.
    // Keep the existing record open on partial failure to prevent accidental duplicate creation.
