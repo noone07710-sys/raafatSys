@@ -6,22 +6,32 @@ const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
-const keys=['customers','packages','landlords','properties','leases','lease_installments','campaigns','campaign_payments'];
+const keys=['customers','packages','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments'];
 const defs={
  customers:{title:'العملاء',icon:'♟',fields:[['name','اسم العميل','text',true],['phone','رقم الهاتف الأساسي (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة (12 رقم)','text',true],['rental_address','عنوان الاستئجار','text',true],['status','الحالة','select',true,['active','inactive','inquiry']],['notes','الملاحظات','textarea']]},
  packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['default_months','عدد الأشهر الافتراضي','number',true],['price','سعر الباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
  landlords:{title:'مالكو المواقع — الأسطح',icon:'▣',fields:[['name','اسم المالك','text',true],['phone','الهاتف (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة','text'],['governorate','المحافظة','text',true],['residential_address','عنوان السكن','text',true],['landmark','أقرب نقطة دالة','text'],['notes','الملاحظات','textarea'],['card_image','صورة البطاقة الموحدة','file']]},
  properties:{title:'عقارات ومساحات الأسطح',icon:'▤',fields:[['landlord_id','صاحب العقار','lookup:landlords',true],['title','اسم العقار / عنوانه','text',true],['dimensions','القياس / المساحة','text',true],['quantity','العدد','number',true],['notes','الملاحظات','textarea']]},
  leases:{title:'عقود إيجار الأسطح',icon:'▧',fields:[['landlord_id','اسم المالك','lookup:landlords',true],['property_id','عقار المالك','lookup:properties',true],['rent_total','إجمالي الإيجار المتفق عليه','number',true],['currency','عملة العقد','select',true,['IQD','USD']],['start_date','تاريخ البداية','date',true],['end_date','تاريخ النهاية','date',true],['grace_days','فترة السماح بالأيام','number',true],['payment_frequency','دورية الدفع','select',true,['annual','semiannual']],['company_representative','ممثل الشركة','text'],['landlord_representative','ممثل المالك','text'],['notes','الملاحظات','textarea']]},
+ ad_sites:{title:'المواقع الإعلانية',icon:'⌖',fields:[['code','رمز الموقع','text',true],['name','اسم الموقع','text',true],['site_type','نوع الموقع','select',true,['roadside','rooftop','building','other']],['governorate','المحافظة','text',true],['address','الموقع والعنوان','text',true],['rooftop_property_id','العقار المرتبط (إذا كان سطحاً)','lookup:properties'],['notes','الملاحظات','textarea']]},
  campaigns:{title:'المشاريع والحملات',icon:'✦',fields:[['customer_id','العميل','lookup:customers',true],['title','اسم الحملة','text',true],['package_id','الباقة الإعلانية','lookup:packages'],['months','عدد الأشهر','number',true],['locations','المواقع الإعلانية (أسماء أو رموز المواقع)','textarea'],['price','السعر الإجمالي','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','الملاحظات','textarea']]},
  lease_installments:{title:'دفعات عقود الإيجار',icon:'◉',fields:[]},
- campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]}
+ campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
+ campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]}
 };
-const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي'};
-const s={client:null,session:null,staff:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى'};
+const s={client:null,session:null,staff:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 const lookup=(table,id)=>s.data[table].find(x=>x.id===id);
 const nameOf=(table,id)=>lookup(table,id)?.name||lookup(table,id)?.title||'—';
 const convert=(v,from,to)=>from===to?Number(v):Number(v)*(from==='USD'?Number(s.settings.usd_iqd):1/Number(s.settings.usd_iqd));
+const roundAmount=(n)=>Math.round((Number(n)+Number.EPSILON)*100)/100;
+const equivalent=(n,source,to=s.displayCurrency)=>roundAmount(convert(n,source,to));
+const displayMoney=(n,source)=>'<strong class="amount">'+E(money(equivalent(n,source),s.displayCurrency))+'</strong>'+(s.displayCurrency!==source?'<small class="original-amount">الأصل: '+E(money(n,source))+'</small>':'');
+const originalCurrency=(k,v)=>v?.currency||((k==='lease_installments')?lookup('leases',v?.lease_id)?.currency:(k==='campaign_payments')?lookup('campaigns',v?.campaign_id)?.currency:null)||'IQD';
+const linkedSites=(campaignId)=>s.data.campaign_sites.filter(x=>x.campaign_id===campaignId).map(x=>lookup('ad_sites',x.site_id)).filter(Boolean);
+const campaignPaid=(id)=>s.data.campaign_payments.filter(x=>x.campaign_id===id).reduce((a,b)=>a+Number(b.amount||0),0);
+const campaignBalance=(v)=>Math.max(0,roundAmount(Number(v.price||0)-campaignPaid(v.id)));
+const leaseBalance=(v)=>s.data.lease_installments.filter(x=>x.lease_id===v.id).reduce((a,x)=>a+Math.max(0,Number(x.amount)-Number(x.paid_amount)),0);
 function toast(text,bad=false){let x=document.createElement('div');x.className=bad?'error toast':'notice toast';x.textContent=text;document.body.append(x);Object.assign(x.style,{position:'fixed',bottom:'20px',left:'20px',zIndex:20,maxWidth:'min(90vw,500px)',boxShadow:'0 5px 30px #1113'});setTimeout(()=>x.remove(),4500)}
 async function load(){
  if(s.demo)return render();
@@ -58,34 +68,45 @@ async function bootstrap(){
 }
 function authPage(){return '<div class="welcome"><div class="authbox"><h1>رأفت <span style="color:#167683">Sys.</span></h1><p class="muted">نظام الإدارة المتكامل للدعاية والإعلان</p><p class="subtle">ربط قاعدة البيانات الخاصة بالشركة وتسجيل دخول الموظفين</p>'+ (s.error?'<div class="error">'+E(s.error)+'</div>':'')+
  '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
-function nav(){return [['dashboard','الرئيسية','◫'],['customers','العملاء','♟'],['campaigns','المشاريع والحملات','✦'],['packages','الباقات الإعلانية','◈'],['landlords','مالكو الأسطح','▣'],['properties','العقارات والمساحات','▤'],['leases','عقود الإيجار','▧'],['campaign_payments','دفعات الحملات','◉'],['lease_installments','دفعات الإيجار','◉'],['reports','التقارير','▥'],['settings','الإعدادات','⚙']].map(([id,label,icon])=>'<button data-nav="'+id+'" class="'+(id===s.view?'active':'')+'">'+icon+' &nbsp;'+label+'</button>').join('')}
-function shell(content){return '<div class="shell"><aside class="sidebar"><div class="brand">رأفت <span style="color:#8fd6c8">SYS</span><small>الدعاية والإعلان والتجارة العامة</small></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>نظام إدارة شركة رأفت</small></div><div class="inline"><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. اربط Supabase قبل إدخال أي بيانات فعلية.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>'}
+function nav(){return [['dashboard','الرئيسية','◫'],['customers','العملاء','♟'],['campaigns','المشاريع والحملات','✦'],['packages','الباقات الإعلانية','◈'],['ad_sites','المواقع الإعلانية','⌖'],['landlords','مالكو الأسطح','▣'],['properties','العقارات والمساحات','▤'],['leases','عقود الإيجار','▧'],['campaign_payments','دفعات الحملات','◉'],['lease_installments','دفعات الإيجار','◉'],['reports','التقارير','▥'],['settings','الإعدادات','⚙']].map(([id,label,icon])=>'<button data-nav="'+id+'" class="'+(id===s.view?'active':'')+'">'+icon+' &nbsp;'+label+'</button>').join('')}
+function shell(content){
+ return '<div class="shell"><aside class="sidebar"><div class="brand">رأفت <span style="color:#8fd6c8">SYS</span><small>الدعاية والإعلان والتجارة العامة</small></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>نظام إدارة شركة رأفت</small></div><div class="inline"><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
+}
 const visibleTable=(k)=>s.data[k]||[];
 function dashboard(){
- let due=s.data.lease_installments.filter(x=>x.paid_amount<x.amount&&x.due_date<=today()).length;
- let paid=s.data.campaign_payments.reduce((a,x)=>a+convert(x.amount,lookup('campaigns',x.campaign_id)?.currency||'IQD','IQD'),0);
- return '<div class="cards">'+[['العملاء',s.data.customers.length],['الحملات',s.data.campaigns.length],['عقود الإيجار',s.data.leases.length],['أقساط مستحقة',due]].map(([t,n])=>'<div class="box stat"><small>'+t+'</small><b>'+fmt(n)+'</b></div>').join('')+'</div><div class="box"><h2>ملخص النشاط</h2><div class="summary"><div><small>العملاء الفعالون</small><b>'+s.data.customers.filter(x=>x.status==='active').length+'</b></div><div><small>مالكو الأسطح</small><b>'+s.data.landlords.length+'</b></div><div><small>إجمالي دفعات الحملات (معادل بالدينار بسعر الصرف الحالي)</small><b>'+money(paid,'IQD')+'</b></div><div><small>سعر الدولار الحالي (يدوي)</small><b>'+fmt(s.settings.usd_iqd)+' د.ع</b></div></div><p class="subtle" style="margin-top:15px">القيم المحوّلة تقديرية وفق سعر الصرف الحالي، وليست بديلاً عن مبالغ العقود المحفوظة.</p></div>';
+ let due=s.data.lease_installments.filter(x=>Number(x.paid_amount)<Number(x.amount)&&x.due_date<=today()).length;
+ let paid=s.data.campaign_payments.reduce((a,x)=>a+convert(x.amount,originalCurrency('campaign_payments',x),s.displayCurrency),0);
+ const active=s.data.customers.filter(x=>x.status==='active').length;
+ return '<div class="cards">'+[['العملاء',s.data.customers.length],['الحملات',s.data.campaigns.length],['المواقع الإعلانية',s.data.ad_sites.length],['أقساط مستحقة',due]].map(([t,n])=>'<div class="box stat"><small>'+t+'</small><b>'+fmt(n)+'</b></div>').join('')+'</div><div class="box"><h2>ملخص النشاط المرتبط</h2><div class="summary"><div><small>العملاء الفعالون</small><b>'+active+'</b></div><div><small>مالكو الأسطح / العقارات</small><b>'+s.data.landlords.length+' / '+s.data.properties.length+'</b></div><div><small>إجمالي دفعات الحملات المحوّل</small><b>'+E(money(paid,s.displayCurrency))+'</b></div><div><small>سعر الدولار المحدد في الإعدادات</small><b>'+fmt(s.settings.usd_iqd)+' د.ع</b></div></div><p class="subtle" style="margin-top:15px">جميع مبالغ العرض تتبدّل فوراً من قائمة العملة بالأعلى؛ المبالغ الأصلية للعقود والدفعات لا تتغير.</p></div>';
 }
 const columns={
- customers:[['name','العميل'],['phone','الهاتف'],['rental_address','العنوان'],['status','الحالة']],
+ customers:[['name','العميل'],['phone','الهاتف'],['rental_address','العنوان'],['status','الحالة'],['campaign_count','الحملات']],
  packages:[['code','الرمز'],['name','الباقة'],['default_months','الأشهر'],['price','السعر']],
- landlords:[['name','المالك'],['phone','الهاتف'],['governorate','المحافظة'],['residential_address','السكن']],
+ landlords:[['name','المالك'],['phone','الهاتف'],['governorate','المحافظة'],['properties_count','العقارات']],
  properties:[['title','العقار'],['landlord_id','المالك'],['dimensions','القياس'],['quantity','العدد']],
- leases:[['contract_number','رقم العقد'],['landlord_id','المالك'],['property_id','العقار'],['rent_total','الإيجار'],['end_date','النهاية']],
- campaigns:[['title','الحملة'],['customer_id','العميل'],['package_id','الباقة'],['price','السعر'],['months','الأشهر']],
+ ad_sites:[['code','الرمز'],['name','الموقع'],['site_type','النوع'],['governorate','المحافظة'],['rooftop_property_id','العقار المرتبط']],
+ leases:[['contract_number','رقم العقد'],['landlord_id','المالك'],['property_id','العقار'],['rent_total','الإيجار'],['lease_balance','المتبقي'],['end_date','النهاية']],
+ campaigns:[['title','الحملة'],['customer_id','العميل'],['package_id','الباقة'],['sites','المواقع'],['price','السعر'],['campaign_balance','المتبقي']],
  campaign_payments:[['campaign_id','الحملة'],['paid_at','التاريخ'],['amount','الدفعة']],
  lease_installments:[['lease_id','العقد'],['due_date','تاريخ الاستحقاق'],['amount','المبلغ'],['paid_amount','المدفوع']]
 };
 function showVal(k,row,f){
  let v=row[f];
  if(f==='status')return '<span class="pill '+E(v)+'">'+E(labels[v]||v)+'</span>';
+ if(f==='site_type')return E(labels[v]||v);
+ if(f==='campaign_count')return fmt(s.data.campaigns.filter(x=>x.customer_id===row.id).length);
+ if(f==='properties_count')return fmt(s.data.properties.filter(x=>x.landlord_id===row.id).length);
+ if(f==='sites')return E(linkedSites(row.id).map(x=>x.code+' — '+x.name).join('، ')||row.locations||'—');
+ if(f==='campaign_balance')return displayMoney(campaignBalance(row),row.currency);
+ if(f==='lease_balance')return displayMoney(leaseBalance(row),row.currency);
  if(f==='landlord_id')return E(nameOf('landlords',v));
  if(f==='customer_id')return E(nameOf('customers',v));
  if(f==='property_id')return E(nameOf('properties',v));
+ if(f==='rooftop_property_id')return E(v?nameOf('properties',v):'—');
  if(f==='package_id')return E(nameOf('packages',v));
  if(f==='campaign_id')return E(nameOf('campaigns',v));
  if(f==='lease_id')return E(lookup('leases',v)?.contract_number||'—');
- if(f==='price'||f==='rent_total'||f==='amount'||f==='paid_amount')return E(money(v,row.currency||lookup('campaigns',row.campaign_id)?.currency||lookup('leases',row.lease_id)?.currency||'IQD'));
+ if(['price','rent_total','amount','paid_amount'].includes(f))return displayMoney(v,originalCurrency(k,row));
  return E(v);
 }
 function listing(k){
