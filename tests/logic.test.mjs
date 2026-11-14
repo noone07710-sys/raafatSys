@@ -37,7 +37,7 @@ test('Raafat Sys linked financial and currency rules',async()=>{
   campaign_id:'campaign1',paid_at:'2026-11-14',amount:280
  });
  await generateInstallments({id:'lease1',rent_total:1200,payment_frequency:'annual',start_date:'2026-01-01',end_date:'2027-12-31',grace_days:10});
- const installments=s.data.lease_installments.filter(x=>x.lease_id==='lease1');
+ const installments=s.data.lease_installments.filter(x=>x.lease_id==='lease1').sort((a,b)=>a.due_date.localeCompare(b.due_date));
  assert.equal(installments.length,2);
  assert.equal(installments.reduce((total,i)=>total+i.amount,0),1200);
  assert.equal(installments[0].due_date,'2026-01-11');
