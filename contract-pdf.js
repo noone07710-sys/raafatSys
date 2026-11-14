@@ -113,7 +113,11 @@
    ctx.strokeStyle=color;ctx.lineWidth=.75;
    ctx.beginPath();ctx.moveTo(AREA.left,y);ctx.lineTo(AREA.right,y);ctx.stroke();
   };
+  function drawPageNumber(sheet){
+   print(sheet.ctx,'صفحة '+sheet.pageNumber,AREA.left+7,safeBottom+11,8.3,500,COLOR.muted,'left');
+  }
   function begin(){
+   if(page)drawPageNumber(page);
    page=makePage();
    page.y=AREA.top;
    const {ctx}=page;
@@ -231,7 +235,7 @@
   }
   function end(){
    if(!page)begin();
-   print(page.ctx,'صفحة '+page.pageNumber,AREA.left+7,safeBottom+11,8.3,500,COLOR.muted,'left');
+   drawPageNumber(page);
   }
   return {begin,section,fields,field,block,site,signature,end,get current(){return page}};
  }
