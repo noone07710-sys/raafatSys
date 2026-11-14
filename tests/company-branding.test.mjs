@@ -15,17 +15,17 @@ function createHarness({demo=true,admin=true}={}){
   body:{append(){}}
  };
  const files={};
- const url={
-  createObjectURL(){return 'blob:logo-preview'},
-  revokeObjectURL(){},
- };
+ class FakeURL extends URL {
+  static createObjectURL(){return 'blob:logo-preview'}
+  static revokeObjectURL(){}
+ }
  const FakeFormData=class {
   constructor(form){this.values=form.values}
   get(k){return this.values[k]??null}
  };
  const env=new Function('localStorage','document','crypto','createClient','window','FormData','URL','setTimeout',
   code+'\nreturn {s,render,settings,saveSettings,companyValue,companyLogoUrl,companyLogoHtml,companyDocumentHeader,customerContractPreview,previewHtml,seededDemoPackages,seededDemoRates};'
- )({getItem:()=>null,setItem:()=>{}},doc,{randomUUID:()=> 'unique-image-2026'},()=>{}, {},FakeFormData,url,()=>{});
+ )({getItem:()=>null,setItem:()=>{}},doc,{randomUUID:()=> 'unique-image-2026'},()=>{}, {},FakeFormData,FakeURL,()=>{});
  const {s}=env;
  s.demo=demo;
  s.staff={role:admin?'admin':'staff',active:true};
