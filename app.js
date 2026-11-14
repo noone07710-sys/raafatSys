@@ -1247,6 +1247,22 @@ function bind(){
   }
   captureForm(form);v.entry_currency=next;updateMoneyHints();
  };
+ if(k==='leases'){
+  for(const field of ['rent_total','advance_amount','start_date','end_date','payment_frequency','grace_days','currency']){
+   const el=form.elements.namedItem(field);
+   if(el)el.addEventListener('input',()=>{
+    captureForm(form);
+    const preview=form.querySelector('.lease-plan-preview');
+    if(preview)preview.outerHTML=leasePlanSummary(v);
+   });
+   if(el&&['start_date','end_date','payment_frequency','currency'].includes(field))
+    el.addEventListener('change',()=>{
+     captureForm(form);
+     const preview=form.querySelector('.lease-plan-preview');
+     if(preview)preview.outerHTML=leasePlanSummary(v);
+    });
+  }
+ }
  const owner=form.elements.namedItem('landlord_id');
  if(owner&&k==='leases')owner.onchange=()=>{captureForm(form);v.landlord_id=owner.value;v.property_id='';render()};
  const client=form.elements.namedItem('customer_id');
@@ -1590,6 +1606,7 @@ async function saveForm(form){
  }
  try{
   const normalized={...v};
+  if(k==='leases')normalized.advance_amount=v.advance_amount===''||v.advance_amount==null?0:Number(v.advance_amount);
   if(k==='campaigns'){
    const pkg=lookup('packages',v.package_id);
    if(pkg?.pricing_mode==='sqm_month'){
