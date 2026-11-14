@@ -7,6 +7,26 @@ const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
 const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts'];
+
+// Province choices are canonical Arabic governorate names (including Halabja, 2025).
+// Legacy saved names are displayed as a one-time existing option, not discarded.
+const IRAQ_GOVERNORATES=[
+ 'بغداد','البصرة','نينوى','أربيل','السليمانية','دهوك','حلبجة',
+ 'كركوك','ديالى','صلاح الدين','الأنبار','بابل','كربلاء',
+ 'النجف','واسط','ميسان','ذي قار','المثنى','القادسية'
+];
+function governorateField(id,label,value='',required=false){
+ const current=String(value||'').trim();
+ const choices=IRAQ_GOVERNORATES.map(name=>
+  '<option value="'+E(name)+'"'+(name===current?' selected':'')+'>'+
+  E(name==='القادسية'?'القادسية (الديوانية)':name)+'</option>').join('');
+ const legacy=current&&!IRAQ_GOVERNORATES.includes(current)?
+  '<option value="'+E(current)+'" selected>القيمة المحفوظة سابقاً: '+E(current)+'</option>':'';
+ return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><select name="'+E(id)+'"'+(required?' required':'')+'>'+
+  '<option value=""'+(!current?' selected':'')+'>— اختر المحافظة العراقية —</option>'+
+  legacy+choices+'</select></label>';
+}
+
 const defs={
  customers:{title:'العملاء',icon:'♟',fields:[['name','اسم العميل','text',true],['phone','رقم الهاتف الأساسي (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة (12 رقم)','text',true],['rental_address','عنوان الاستئجار','text',true],['status','الحالة','select',true,['active','inactive','inquiry']],['notes','الملاحظات','textarea']]},
  packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['package_type','نوع الباقة','select',true,['cabin','rooftop']],['pricing_mode','طريقة التسعير','select',true,['fixed_term','sqm_month']],['width_m','العرض بالمتر','number',true],['height_m','الطول بالمتر','number',true],['area_m2','المساحة الإجمالية م²','computed'],['sides','عدد الأوجه','number',true],['specifications','مواصفات الباقة','textarea'],['default_months','عدد الأشهر الافتراضي','number',true],['price','السعر الافتراضي للباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
@@ -411,6 +431,79 @@ function campaignPaymentOverview(){
  '</div>';
 }
 
+
+function customerCascadeStats(customerId){
+ const campaigns=s.data.campaigns.filter(row=>row.customer_id===customerId);
+ const ids=new Set(campaigns.map(row=>row.id));
+ return {
+  campaigns:campaigns.length,
+  contracts:s.data.customer_contracts.filter(row=>row.customer_id===customerId).length,
+  payments:s.data.campaign_payments.filter(row=>ids.has(row.campaign_id)).length,
+  siteLinks:s.data.campaign_sites.filter(row=>ids.has(row.campaign_id)).length
+ };
+}
+function openCustomerDelete(customerId){
+ if(s.staff?.role!=='admin')return toast('الحذف النهائي متاح للمدير فقط',true);
+ const customer=lookup('customers',customerId);
+ if(!customer)return toast('هذا الزبون غير موجود',true);
+ s.modal={kind:'deleteCustomer',table:'customers',data:customer};
+ render();
+}
+function customerDeleteDialog(customer){
+ const count=customerCascadeStats(customer.id);
+ return '<div class="overlay"><div class="modal customer-delete-modal" role="dialog" aria-modal="true" aria-labelledby="deleteCustomerTitle">'+
+ '<div class="modalhead"><h2 id="deleteCustomerTitle">حذف الزبون وجميع سجلاته</h2>'+
+ '<button type="button" class="close" data-action="close" aria-label="إلغاء الحذف">✕</button></div>'+
+ '<div class="customer-delete-warning"><strong>تنبيه: عملية حذف نهائي لا يمكن التراجع عنها</strong>'+
+ '<p>أنت على وشك حذف الزبون <b>'+E(customer.name)+'</b> وجميع سجلاته الإعلانية والمالية المرتبطة به. لن تتأثر اللوحات الأصلية أو الباقات أو مالكو الأسطح وعقودهم.</p></div>'+
+ '<div class="customer-delete-stats">'+[
+  ['الحملات',count.campaigns],['عقود الزبون',count.contracts],
+  ['دفعات الحملات',count.payments],['ارتباطات القطع',count.siteLinks]
+ ].map(([name,number])=>'<div><small>'+E(name)+'</small><strong>'+number+'</strong></div>').join('')+'</div>'+
+ '<form id="deleteCustomerForm"><input type="hidden" name="customer_id" value="'+E(customer.id)+'">'+
+ '<label class="field"><span>للتأكيد، اكتب كلمة <strong>حذف</strong></span>'+
+ '<input id="deleteCustomerConfirmation" name="confirm" placeholder="اكتب حذف للتأكيد" autocomplete="off" required></label>'+
+ '<div class="actions"><button type="button" class="btn secondary" data-action="close">إلغاء</button>'+
+ '<button type="submit" class="btn danger customer-delete-confirm" id="deleteCustomerSubmit" disabled>حذف الزبون وكل سجلاته نهائياً</button></div>'+
+ '</form></div></div>';
+}
+async function deleteCustomerConfirmed(form){
+ if(s.deletingCustomer)return;
+ if(s.staff?.role!=='admin')return toast('ليس لديك صلاحية الحذف',true);
+ const customer=s.modal?.kind==='deleteCustomer'?s.modal.data:null;
+ if(!customer)return;
+ const fields=new FormData(form);
+ if(fields.get('confirm')!=='حذف'||fields.get('customer_id')!==customer.id){
+  toast('اكتب حذف حرفياً لتأكيد العملية',true);return;
+ }
+ s.deletingCustomer=true;
+ const submit=$('#deleteCustomerSubmit');
+ if(submit)submit.disabled=true;
+ try{
+  if(s.demo){
+   const ids=new Set(s.data.campaigns.filter(row=>row.customer_id===customer.id).map(row=>row.id));
+   s.data.customer_contracts=s.data.customer_contracts.filter(row=>row.customer_id!==customer.id);
+   s.data.campaign_payments=s.data.campaign_payments.filter(row=>!ids.has(row.campaign_id));
+   s.data.campaign_sites=s.data.campaign_sites.filter(row=>!ids.has(row.campaign_id));
+   s.data.campaigns=s.data.campaigns.filter(row=>row.customer_id!==customer.id);
+   s.data.customers=s.data.customers.filter(row=>row.id!==customer.id);
+  }else{
+   if(!s.client||!s.session)throw Error('سجّل دخولك بحساب المدير أولاً');
+   const {data,error}=await s.client.rpc('raafat_delete_customer_cascade',{p_customer_id:customer.id});
+   if(error)throw error;
+   if(data?.deleted_customers!==1)throw Error('لم يؤكد الخادم حذف الزبون');
+  }
+  s.modal=null;s.search='';s.filter='all';s.view='customers';
+  if(s.demo)render();else await load();
+  toast('تم حذف الزبون وحملاته وعقوده ودفعاته وروابط قطعه بنجاح');
+ }catch(error){
+  toast('تعذّر حذف الزبون: '+(error.message||String(error)),true);
+ }finally{
+  s.deletingCustomer=false;
+  if($('#deleteCustomerSubmit'))$('#deleteCustomerSubmit').disabled=false;
+ }
+}
+
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
  const rows=visibleTable(k).filter(x=>{
@@ -420,7 +513,7 @@ function listing(k){
   return match&&(k!=='customers'||s.filter==='all'||x.status===s.filter);
  });
  let labelsBy={lease_installments:'إضافة دفعة يدوية',campaign_payments:'تسجيل دفعة'};
- return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="بحث في السجلات..." value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">+ '+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">تفاصيل / تعديل</button>'+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">+ حملة</button>':'')+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'">🖨 طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
+ return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="بحث في السجلات..." value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">+ '+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">تفاصيل / تعديل</button>'+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">+ حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">حذف الزبون</button>':''):'')+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'">🖨 طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
 }
 
 function reports(){
@@ -436,6 +529,7 @@ function settings(){
  const editable=s.demo||s.staff?.role==='admin';
  const val=key=>E(s.settings?.[key]??COMPANY_DEFAULTS[key]??'');
  const field=(name,label,type='text',placeholder='',required=false)=>
+  name==='company_governorate'?governorateField(name,label,s.settings?.[name],required):
   '<label class="field"><span>'+label+(required?' *':'')+'</span><input name="'+name+'" type="'+type+'" maxlength="250" '+(required?'required':'')+' value="'+val(name)+'" placeholder="'+E(placeholder)+'"></label>';
  const logo=companyLogoUrl();
  return '<div class="settings-page">'+
@@ -608,6 +702,7 @@ function fieldHtml(f,v,all){
  if(k==='campaigns'&&id==='quantity'&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month')return '';
  if(k==='campaigns'&&id==='requested_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
  if(k==='campaigns'&&id==='months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة الإعلان بالأشهر</span><select name="months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
+ if(id==='governorate')return governorateField(id,label,val,required);
  if(type==='computed')return '<label class="field"><span>'+E(label)+'</span><output class="computed-area" data-area-output>'+E(fmt(Number(v?.width_m||0)*Number(v?.height_m||0)))+' م²</output><small class="subtle">تُحسب تلقائياً: الطول × العرض</small></label>';
  if(k==='customer_contracts'&&id==='contract_type'){const type=lookup('packages',v.package_id)?.package_type||v.contract_type||'cabin';return '<label class="field"><span>نوع العقد من الباقة الإعلانية</span><output class="computed-area">'+E(labels[type]||type)+'</output><input type="hidden" name="contract_type" value="'+E(type)+'"></label>';}
  if(type==='file')return '<label class="field full"><span>'+E(label)+' — PNG/JPEG/WebP حتى 5MB</span><input name="'+id+'" type="file" accept="image/png,image/jpeg,image/webp"><span class="subtle">'+(v?.card_image_path?'صورة محفوظة خاصة':'ترفع إلى مساحة خاصة بعد الحفظ')+'</span></label>';
@@ -651,7 +746,7 @@ function relatedDetails(k,v){
  if(k==='customers'){
   parts+=list('حملات هذا العميل',s.data.campaigns.filter(x=>x.customer_id===v.id),'campaigns',x=>x.title+' — '+displayMoneyText(x.price,x.currency));
   parts+=list('عقود هذا الزبون',s.data.customer_contracts.filter(x=>x.customer_id===v.id),'customer_contracts',x=>x.contract_number+' — '+(labels[x.contract_type]||x.contract_type));
-  parts+='<div class="inline"><button type="button" class="btn secondary mini" data-new-linked="campaigns|customer_id|'+v.id+'">+ إنشاء حملة واختيار نوع الإعلان</button><button type="button" class="btn secondary mini" data-new-linked="customer_contracts|customer_id|'+v.id+'">+ عقد زبون</button></div>';
+  parts+='<div class="inline"><button type="button" class="btn secondary mini" data-new-linked="campaigns|customer_id|'+v.id+'">+ إنشاء حملة واختيار نوع الإعلان</button><button type="button" class="btn secondary mini" data-new-linked="customer_contracts|customer_id|'+v.id+'">+ عقد زبون</button>'+(s.staff?.role==='admin'?'<button type="button" class="btn danger mini" data-delete-customer="'+E(v.id)+'">حذف الزبون وجميع سجلاته</button>':'')+'</div>';
  }
  if(k==='landlords'){
   parts+=list('الأسطح وأبعاد كل واحد',s.data.properties.filter(x=>x.landlord_id===v.id),'properties',x=>x.title+' / '+(x.width_m&&x.height_m?fmt(x.width_m)+' × '+fmt(x.height_m)+' م = '+fmt(x.area_m2)+' م²':x.dimensions));
@@ -719,6 +814,7 @@ function updateAreaOutputs(form){
 
 function modalHtml(){
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
+ if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  let fields=meta.fields;
  if(k==='campaigns'){
   const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity','requested_area_m2']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
@@ -855,6 +951,12 @@ function bind(){
  bindNav();
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
+ document.querySelectorAll('[data-delete-customer]').forEach(x=>x.onclick=()=>openCustomerDelete(x.dataset.deleteCustomer));
+ if($('#deleteCustomerForm')){
+  const form=$('#deleteCustomerForm'),entry=$('#deleteCustomerConfirmation'),button=$('#deleteCustomerSubmit');
+  if(entry&&button)entry.oninput=()=>{button.disabled=entry.value.trim()!=='حذف'||Boolean(s.deletingCustomer)};
+  form.onsubmit=event=>{event.preventDefault();deleteCustomerConfirmed(form)};
+ }
  document.querySelectorAll('[data-new-linked]').forEach(x=>x.onclick=()=>{let [k,field,id]=x.dataset.newLinked.split('|');let data={[field]:id};if(field==='property_id')data.landlord_id=lookup('properties',id)?.landlord_id;if(field==='campaign_id'){
    const parent=lookup('campaigns',id);
    if(k==='campaign_payments')data.amount='';
