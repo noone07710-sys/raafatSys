@@ -230,27 +230,96 @@ function previewHtml(v){
  let rows=s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date));
  return '<div class="overlay"><div class="modal"><div class="modalhead noprint"><h2>معاينة العقد</h2><button class="close" data-action="close">✕</button></div><article class="contract"><h2 style="text-align:center">شركة رأفت للدعاية والإعلان والتجارة العامة</h2><h3 style="text-align:center">عقد إيجار أسطح — '+E(v.contract_number)+'</h3><div class="summary"><div><small>اسم المالك</small>'+E(l)+'</div><div><small>العقار</small>'+E(p)+'</div><div><small>بداية العقد</small>'+E(v.start_date)+'</div><div><small>نهاية العقد</small>'+E(v.end_date)+'</div><div><small>الأجرة الإجمالية</small>'+E(money(v.rent_total,v.currency))+'</div><div><small>الدورية</small>'+E(labels[v.payment_frequency])+'</div><div><small>فترة السماح</small>'+E(v.grace_days)+' يوم</div><div><small>ممثل الشركة / المالك</small>'+E(v.company_representative||'—')+' / '+E(v.landlord_representative||'—')+'</div></div><p style="margin-top:18px">ملاحظات وشروط: '+E(v.notes||'لا توجد')+'</p><h3>جدول الدفعات</h3><table><thead><tr><th>تاريخ الاستحقاق</th><th>المبلغ</th><th>المدفوع</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+E(x.due_date)+'</td><td>'+E(money(x.amount,v.currency))+'</td><td>'+E(money(x.paid_amount,v.currency))+'</td></tr>').join('')+'</tbody></table><div style="display:flex;justify-content:space-between;margin-top:55px"><span>توقيع ممثل الشركة: ___________</span><span>توقيع ممثل المالك: ___________</span></div><p class="subtle" style="margin-top:25px">هذه معاينة للبيانات المسجلة وليست بديلاً عن نص عقد قانوني معتمد.</p></article><div class="actions noprint"><button class="btn" data-action="print">طباعة العقد</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
 }
+
+function updateMoneyHints(){
+ const form=$('#recordForm');if(!form||!s.modal)return;
+ const k=s.modal.table,v={...s.modal.data};
+ if(form.elements.currency)v.currency=form.elements.currency.value;
+ if(form.elements.campaign_id)v.campaign_id=form.elements.campaign_id.value;
+ if(form.elements.lease_id)v.lease_id=form.elements.lease_id.value;
+ const currency=fieldCurrency(k,v);
+ document.querySelectorAll('[data-money-hint]').forEach(span=>{
+  const inp=form.elements.namedItem(span.dataset.moneyHint);
+  if(inp)span.textContent=moneyHint(inp.value,currency);
+ });
+ const info=$('#paymentParentInfo');
+ if(info){
+  if(k==='campaign_payments'){
+   const parent=lookup('campaigns',v.campaign_id);
+   const paidOthers=s.data.campaign_payments.filter(x=>x.campaign_id===v.campaign_id&&x.id!==v.id).reduce((a,x)=>a+Number(x.amount),0);
+   info.textContent=parent?'الحملة: '+parent.title+' | العميل: '+nameOf('customers',parent.customer_id)+' | العملة الأصلية: '+(labels[parent.currency]||parent.currency)+' | المتاح لهذه الدفعة: '+money(Math.max(0,Number(parent.price)-paidOthers),parent.currency):'اختر الحملة أولاً لعرض العميل والمبلغ المتبقي وعملة الدفع.';
+  }else{
+   const parent=lookup('leases',v.lease_id);
+   info.textContent=parent?'العقد: '+parent.contract_number+' | المالك: '+nameOf('landlords',parent.landlord_id)+' | العملة: '+(labels[parent.currency]||parent.currency)+' | إجمالي العقد: '+money(parent.rent_total,parent.currency):'اختر عقد الإيجار أولاً.';
+  }
+ }
+}
 function bind(){
  document.querySelectorAll('[data-nav]').forEach(x=>x.onclick=()=>{s.view=x.dataset.nav;s.search='';s.filter='all';s.modal=null;render()});
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
+ document.querySelectorAll('[data-new-linked]').forEach(x=>x.onclick=()=>{let [k,field,id]=x.dataset.newLinked.split('|');let data={[field]:id};if(field==='property_id')data.landlord_id=lookup('properties',id)?.landlord_id;if(field==='campaign_id')data.amount=campaignBalance(lookup('campaigns',id));if(field==='site_id')data.siteIds=[id];openForm(k,data)});
  document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',data:lookup('leases',x.dataset.preview)};render()});
  document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total})});
  document.querySelectorAll('[data-card]').forEach(x=>x.onclick=()=>showCard(lookup('landlords',x.dataset.card)));
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>actions(x.dataset.action));
+ if($('#globalCurrency'))$('#globalCurrency').onchange=e=>{
+  if($('#recordForm'))captureForm($('#recordForm'));
+  s.displayCurrency=e.target.value;
+  localStorage.setItem('raafat-display-currency',s.displayCurrency);
+  render();
+ };
  if($('#search'))$('#search').oninput=e=>{let pos=e.target.selectionStart;s.search=e.target.value;const parent=e.target.closest('.content');parent.innerHTML=listing(s.view);bind();let n=$('#search');n.focus();n.setSelectionRange(pos,pos)};
  if($('#statusfilter'))$('#statusfilter').onchange=e=>{s.filter=e.target.value;render()};
  if($('#connectForm'))$('#connectForm').onsubmit=e=>{e.preventDefault();connect()};
  if($('#recordForm'))$('#recordForm').onsubmit=e=>{e.preventDefault();saveForm(e.target)};
  if($('#settingsForm'))$('#settingsForm').onsubmit=e=>{e.preventDefault();saveSettings(e.target)};
- if($('#recordForm')&&s.modal?.table==='leases'){
- let owner=$('[name=landlord_id]');if(owner)owner.onchange=()=>{captureForm($('#recordForm'));s.modal.data.landlord_id=owner.value;s.modal.data.property_id='';render()};
+ const form=$('#recordForm'),v=s.modal?.data,k=s.modal?.table;
+ if(!form)return;
+ document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId)});
+ for(const name of ['price','rent_total','amount','paid_amount','initial_payment_amount']){
+  let input=form.elements.namedItem(name);if(input)input.addEventListener('input',()=>{if(name==='price'&&k==='campaigns')s.modal.autoPrice=false;updateMoneyHints()});
  }
- if($('#recordForm')&&s.modal?.table==='campaigns'){
-  let cust=$('[name=customer_id]');if(cust)cust.onchange=()=>{s.modal.data.customer_id=cust.value;render()};
-  let pack=$('[name=package_id]');if(pack)pack.onchange=()=>{let p=lookup('packages',pack.value);if(p){s.modal.data.package_id=p.id;s.modal.data.months=p.default_months;s.modal.data.price=p.price;s.modal.data.currency=p.currency}};
- }
+ const currency=form.elements.namedItem('currency');
+ if(currency)currency.onchange=()=>{
+  const previous=v.currency||s.displayCurrency,next=currency.value;
+  for(const name of ['price','rent_total','amount','paid_amount','initial_payment_amount']){
+   let input=form.elements.namedItem(name);
+   if(input&&input.value!=='')input.value=String(roundAmount(convert(input.value,previous,next)));
+  }
+  captureForm(form);s.modal.data.currency=next;updateMoneyHints();
+ };
+ const owner=form.elements.namedItem('landlord_id');
+ if(owner&&k==='leases')owner.onchange=()=>{captureForm(form);v.landlord_id=owner.value;v.property_id='';render()};
+ const client=form.elements.namedItem('customer_id');
+ if(client&&k==='campaigns')client.onchange=()=>{captureForm(form);v.customer_id=client.value;render()};
+ const pack=form.elements.namedItem('package_id');
+ if(pack&&k==='campaigns')pack.onchange=()=>{
+  captureForm(form);const p=lookup('packages',pack.value);
+  v.package_id=pack.value;
+  if(p){v.months=p.default_months;v.price=p.price;v.currency=p.currency;s.modal.autoPrice=true;}
+  render();
+ };
+ const months=form.elements.namedItem('months');
+ if(months&&k==='campaigns')months.oninput=()=>{
+  if(s.modal.autoPrice){
+   let p=lookup('packages',v.package_id),price=form.elements.namedItem('price');
+   if(p&&price)price.value=String(roundAmount(convert(p.price,p.currency,currency?.value||v.currency)*Number(months.value||0)/Number(p.default_months||1)));
+  }
+  updateMoneyHints();
+ };
+ const parentCampaign=form.elements.namedItem('campaign_id');
+ if(parentCampaign&&k==='campaign_payments')parentCampaign.onchange=()=>{
+  captureForm(form);v.campaign_id=parentCampaign.value;
+  const camp=lookup('campaigns',parentCampaign.value);
+  if(camp&&!v.id)v.amount=campaignBalance(camp);
+  render();
+ };
+ const parentLease=form.elements.namedItem('lease_id');
+ if(parentLease&&k==='lease_installments')parentLease.onchange=()=>{captureForm(form);v.lease_id=parentLease.value;render()};
+ updateMoneyHints();
 }
+
 function openForm(k,row){let defaults={status:'inquiry',currency:'IQD',default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};s.modal={kind:'edit',table:k,data:{...defaults,...(row||{})}};s.formStep=0;render()}
 function captureForm(form){if(!s.modal)return;let data=new FormData(form);for(let [k,v] of data.entries()){if(!(v instanceof File))s.modal.data[k]=v}}
 function formValidate(k,v){if(k==='customers'&&(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id)))throw Error('رقم الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
