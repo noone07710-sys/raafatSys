@@ -498,7 +498,12 @@ function bind(){
   if(el)el.addEventListener('input',()=>updateAreaOutputs(form));
  }
  updateAreaOutputs(form);
- document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId)});
+ document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{
+  captureForm(form);
+  s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId);
+  refreshCampaignQuote();
+  render();
+ });
  for(const name of ['price','rent_total','amount','paid_amount','initial_payment_amount']){
   let input=form.elements.namedItem(name);if(input)input.addEventListener('input',()=>{if(name==='price'&&k==='campaigns')s.modal.autoPrice=false;updateMoneyHints()});
  }
@@ -527,7 +532,7 @@ function bind(){
   captureForm(form);
   v.customer_id=client.value;
   const pkg=lookup('packages',lookup('customers',client.value)?.preferred_package_id);
-  if(pkg&&!v.id){v.package_id=pkg.id;v.price=pkg.price;v.currency=pkg.currency;v.months=pkg.default_months;s.modal.autoPrice=true;}
+  if(pkg&&!v.id){v.package_id=pkg.id;v.currency=pkg.currency;v.months=pkg.default_months;s.modal.autoPrice=true;refreshCampaignQuote();}
   render();
  };
  if(client&&k==='customer_contracts')client.onchange=()=>{
@@ -554,15 +559,49 @@ function bind(){
  if(pack&&k==='campaigns')pack.onchange=()=>{
   captureForm(form);const p=lookup('packages',pack.value);
   v.package_id=pack.value;
-  if(p){v.months=p.default_months;v.price=p.price;v.currency=p.currency;s.modal.autoPrice=true;}
+  if(p){v.months=p.default_months;v.currency=p.currency;s.modal.autoPrice=true;refreshCampaignQuote();}
   render();
  };
  const months=form.elements.namedItem('months');
- if(months&&k==='campaigns')months.oninput=()=>{
-  if(s.modal.autoPrice){
-   let p=lookup('packages',v.package_id),price=form.elements.namedItem('price');
-   if(p&&price)price.value=String(roundAmount(convert(p.price,p.currency,currency?.value||v.currency)*Number(months.value||0)/Number(p.default_months||1)));
+ if(months&&k==='campaigns')months.onchange=()=>{
+  captureForm(form);v.months=Number(months.value);refreshCampaignQuote();render();
+ };
+ const quantity=form.elements.namedItem('quantity'),area=form.elements.namedItem('requested_area_m2');
+ for(const input of [quantity,area].filter(Boolean))input.oninput=()=>{
+  captureForm(form);refreshCampaignQuote();
+  const existing=form.querySelector('.notice.full');
+  if(existing&&existing.textContent.includes('سعر'))existing.outerHTML=packagePricingInfo(v);
+ };
+ const pricingMode=form.elements.namedItem('pricing_mode');
+ if(pricingMode&&k==='packages')pricingMode.onchange=()=>{
+  captureForm(form);v.pricing_mode=pricingMode.value;
+  if(v.pricing_mode==='sqm_month'){v.package_type='rooftop';v.width_m=null;v.height_m=null;}
+  render();
+ };
+ const defaultMonths=form.elements.namedItem('default_months');
+ if(defaultMonths&&k==='packages')defaultMonths.onchange=()=>{
+  captureForm(form);v.default_months=Number(defaultMonths.value);
+  if(s.modal.rateDraft[v.default_months]!==undefined)v.price=s.modal.rateDraft[v.default_months];
+  render();
+ };
+ document.querySelectorAll('[data-package-rate-month]').forEach(input=>input.oninput=()=>{
+  const month=Number(input.dataset.packageRateMonth);
+  s.modal.rateDraft[month]=input.value;
+  s.modal.rateChanged.add(month);
+  const hint=document.querySelector('[data-rate-hint="'+month+'"]');
+  if(hint)hint.textContent=moneyHint(input.value,form.elements.namedItem('currency')?.value||v.currency||'USD');
+  if(month===Number(form.elements.namedItem('default_months')?.value||v.default_months)){
+   const base=form.elements.namedItem('price');
+   if(base)base.value=input.value;
   }
+ });
+ const basePrice=form.elements.namedItem('price');
+ if(basePrice&&k==='packages')basePrice.oninput=()=>{
+  const month=Number(form.elements.namedItem('default_months')?.value||v.default_months);
+  s.modal.rateDraft[month]=basePrice.value;
+  s.modal.rateChanged.add(month);
+  const target=form.querySelector('[data-package-rate-month="'+month+'"]');
+  if(target)target.value=basePrice.value;
   updateMoneyHints();
  };
  const parentCampaign=form.elements.namedItem('campaign_id');
@@ -739,6 +778,7 @@ async function saveForm(form){
  if(k==='landlords')captureRoofDrafts();
  let v=m.data;
  if(k==='campaigns'&&s.formStep<4){
+  refreshCampaignQuote();
   if(s.formStep===1&&!m.siteIds?.length&&!String(v.locations||'').trim()){
    toast('حدد موقعاً من القائمة أو أدخل موقعاً إضافياً قبل المتابعة',true);return;
   }
