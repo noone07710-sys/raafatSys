@@ -104,6 +104,9 @@ test('booked client billboard blocks landlord deletion, and non-admin sees no ac
  s.data.campaign_sites=[];
  s.data.customer_contracts[0].site_id='site-a';
  assert.equal(app.landlordDeleteStats('a').booked,1);
+ s.data.customer_contracts[0].site_id=null;
+ s.data.customer_contracts[0].campaign_sites_snapshot=[{id:'site-a',code:'E01'}];
+ assert.equal(app.landlordDeleteStats('a').booked,1,'historical client contract board snapshots must block destructive site deletion');
  s.staff={role:'staff'};s.modal=null;app.render();
  assert.doesNotMatch(root.innerHTML,/data-delete-landlord/);
 });
