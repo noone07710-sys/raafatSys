@@ -244,3 +244,85 @@
  .contract-campaign-info{break-inside:avoid}
  .contract-preview-board{break-inside:avoid}
 }
+
+
+/* Campaign receipts: each campaign is a single, easy-to-audit payment account. */
+.campaign-payments-page{max-width:1450px;margin-inline:auto;min-width:0}
+.campaign-payments-intro{padding:3px 0 17px}
+.campaign-payments-intro h2{margin:0 0 7px;font-size:21px;color:#233b4b}
+.campaign-payments-intro p{margin:0;color:#788a99;font-size:12px;line-height:1.9}
+.campaign-payments-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin-bottom:20px}
+.campaign-payments-summary{min-width:0;padding:19px 20px;border:1px solid #dce7ed;background:#fff;border-radius:15px;display:flex;flex-direction:column;gap:10px;box-shadow:0 6px 25px #172d3b08}
+.campaign-payments-summary small{color:#768995;font-weight:650;font-size:12px}
+.campaign-payments-summary strong{font-size:22px;color:#254052;font-weight:800;overflow-wrap:anywhere;direction:ltr;text-align:right}
+.campaign-payments-summary.received strong{color:#1f8277}
+.campaign-payments-summary.remaining strong{color:#aa7033}
+.campaign-payments-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:7px 0 14px}
+.campaign-payments-toolbar .search{width:min(420px,100%);min-width:0;max-width:100%}
+.campaign-payments-count{font-size:12px;color:#708699;font-weight:600}
+.campaign-payment-list{display:flex;flex-direction:column;gap:13px}
+.campaign-payment-card{min-width:0;border:1px solid #dce7ed;background:#fff;border-radius:17px;padding:18px 20px;box-shadow:0 6px 26px #142e3b08}
+.campaign-payment-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.campaign-payment-heading{display:flex;flex-direction:column;gap:6px;min-width:0}
+.campaign-payment-heading>strong{font-size:17px;color:#203c4c;overflow-wrap:anywhere}
+.campaign-payment-heading>small{color:#768b9b;font-size:11px;line-height:1.8;overflow-wrap:anywhere}
+.campaign-payment-status{font-size:11px;font-weight:750;border-radius:99px;padding:7px 12px;white-space:nowrap}
+.campaign-payment-status.settled{background:#e6f5ed;color:#23785c}
+.campaign-payment-status.partial{background:#fff3df;color:#906425}
+.campaign-payment-status.unpaid{background:#f0f3f6;color:#657989}
+.campaign-payment-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.campaign-payment-metrics>div{display:flex;flex-direction:column;gap:6px;min-width:0;background:#f5f8fa;border:1px solid #e9eef1;border-radius:11px;padding:13px 15px}
+.campaign-payment-metrics>div small{font-size:11px;color:#718597}
+.campaign-payment-metrics>div b{font-size:17px;line-height:1.5;color:#203f52;overflow-wrap:anywhere;direction:ltr;text-align:right}
+.campaign-payment-metrics>div:nth-child(2) b{color:#187a6f}
+.campaign-payment-metrics>div:nth-child(3) b{color:#aa7033}
+.campaign-payment-progress{height:6px;border-radius:99px;overflow:hidden;background:#e8eef1;margin-top:15px}
+.campaign-payment-progress>span{display:block;height:100%;background:#388e81;border-radius:inherit;transition:width .2s ease}
+.campaign-payment-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:15px}
+.campaign-payment-actions>.btn{flex:0 0 auto;min-width:172px}
+.campaign-payment-actions>.btn:disabled{opacity:.62;cursor:not-allowed}
+.campaign-payment-history{flex:1 1 255px;min-width:0;border:1px solid #e1e9ee;border-radius:10px;overflow:hidden}
+.campaign-payment-history>summary{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:11px 14px;font-size:12px;color:#375d6d;cursor:pointer;font-weight:750;background:#f8fafb;list-style:none}
+.campaign-payment-history>summary::-webkit-details-marker{display:none}
+.campaign-payment-history>summary:after{content:"⌄";font-size:18px;color:#6b9a9e}
+.campaign-payment-history[open]>summary:after{content:"⌃"}
+.campaign-payment-history-list{padding:8px 12px;background:#fff}
+.campaign-payment-history-row{display:grid;grid-template-columns:25px 110px 120px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #edf2f4;font-size:11px}
+.campaign-payment-history-row:last-child{border-bottom:0}
+.campaign-payment-history-index{display:flex;align-items:center;justify-content:center;border-radius:7px;background:#edf4f3;color:#53776d;font-weight:750;width:22px;height:22px}
+.campaign-payment-history-date{color:#617687}
+.campaign-payment-history-amount{color:#1d756d;font-weight:800;direction:ltr;text-align:right}
+.campaign-payment-history-notes{color:#697e8c;min-width:0;overflow-wrap:anywhere}
+.campaign-payment-nohistory{margin:0;padding:12px 2px;font-size:12px;color:#758995}
+.campaign-payments-footnote{font-size:11px;line-height:1.8;margin-top:18px}
+.campaign-payment-modal-parent{display:flex;flex-direction:column;gap:6px;padding:12px 15px;background:#f1f7f8;border:1px solid #dbe8eb;border-radius:12px;margin-bottom:12px}
+.campaign-payment-modal-parent strong{font-size:15px}
+.campaign-payment-modal-parent span{font-size:12px;color:#617e8c}
+.campaign-payment-modal-balances{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.campaign-payment-modal-balances>div{padding:12px;background:#f6f9fa;border:1px solid #e6ecf0;border-radius:10px;min-width:0;display:flex;flex-direction:column;gap:6px}
+.campaign-payment-modal-balances small{font-size:10px;color:#688094}
+.campaign-payment-modal-balances b{font-size:12px;direction:ltr;overflow-wrap:anywhere;text-align:right}
+@media(max-width:850px){
+ .campaign-payments-summary strong{font-size:17px}
+ .campaign-payment-metrics>div b{font-size:14px}
+ .campaign-payment-history-row{grid-template-columns:22px 95px 108px minmax(0,1fr)}
+ .campaign-payment-history-row>.linkbtn{grid-column:2/-1;justify-self:start}
+}
+@media(max-width:650px){
+ .campaign-payments-summary-grid{grid-template-columns:1fr;gap:8px}
+ .campaign-payments-summary{padding:14px 15px;gap:4px}
+ .campaign-payments-summary strong{font-size:20px}
+ .campaign-payments-intro h2{font-size:19px}
+ .campaign-payment-card{padding:14px 12px}
+ .campaign-payment-metrics{grid-template-columns:1fr;gap:7px}
+ .campaign-payment-metrics>div{flex-direction:row;justify-content:space-between;align-items:center;gap:9px;padding:9px 11px}
+ .campaign-payment-metrics>div b{font-size:13px;text-align:left}
+ .campaign-payment-actions>.btn{width:100%;min-width:0}
+ .campaign-payment-history{flex-basis:100%}
+ .campaign-payment-modal-balances{grid-template-columns:1fr}
+ .campaign-payment-modal-balances>div{flex-direction:row;justify-content:space-between}
+ .campaign-payment-history-row{grid-template-columns:22px minmax(0,1fr) auto;gap:6px}
+ .campaign-payment-history-notes{grid-column:2/-1}
+ .campaign-payment-history-row>.linkbtn{grid-column:2/-1}
+}
+@media(prefers-reduced-motion:reduce){.campaign-payment-progress>span{transition:none}}
