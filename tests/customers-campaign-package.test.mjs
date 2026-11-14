@@ -51,11 +51,14 @@ test('customers are saved independent of advertising packages; campaign specifie
  assert.equal(s.modal.data.months,3);
  assert.equal(quoteCampaign({package_id:codeToId('C'),months:6,quantity:1,currency:'USD'},[]).total,1100);
 
+ s.data.properties=[{id:'roof-five',area_m2:5,width_m:1,height_m:5}];
+ s.data.ad_sites=[{id:'E01',code:'E01',name:'سطح 5م',package_id:codeToId('E'),rooftop_property_id:'roof-five',active:true}];
  s.modal.siteIds=[];
  assert.throws(()=>formValidate('campaigns',{customer_id:customer.id,title:'حملة غير محددة',start_date:'2026-11-14',months:3,locations:'تكريت',price:100,currency:'USD'}),/حدد نوع الإعلان/, 'ad type required for campaign');
 
  for(const [packageCode,title] of [['A','حملة لوحات'],['E','حملة أسطح']]){
   const adPackage=codeToId(packageCode);
+  s.modal.siteIds=packageCode==='E'?['E01']:[];
   const data={
    customer_id:customer.id,title,package_id:adPackage,
    start_date:'2026-11-14',months:3,price:packageCode==='E'?180:280,currency:'USD',
