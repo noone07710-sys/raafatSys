@@ -6,22 +6,35 @@ const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
-const keys=['customers','packages','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts'];
+const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts'];
 const defs={
  customers:{title:'العملاء',icon:'♟',fields:[['name','اسم العميل','text',true],['phone','رقم الهاتف الأساسي (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة (12 رقم)','text',true],['rental_address','عنوان الاستئجار','text',true],['preferred_package_id','الباقة الإعلانية المطلوبة','lookup:packages',true],['status','الحالة','select',true,['active','inactive','inquiry']],['notes','الملاحظات','textarea']]},
- packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['package_type','نوع الباقة','select',true,['cabin','rooftop']],['width_m','العرض بالمتر','number',true],['height_m','الطول بالمتر','number',true],['area_m2','المساحة الإجمالية م²','computed'],['sides','عدد الأوجه','number',true],['specifications','مواصفات الباقة','textarea'],['default_months','عدد الأشهر الافتراضي','number',true],['price','سعر الباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
+ packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['package_type','نوع الباقة','select',true,['cabin','rooftop']],['pricing_mode','طريقة التسعير','select',true,['fixed_term','sqm_month']],['width_m','العرض بالمتر','number',true],['height_m','الطول بالمتر','number',true],['area_m2','المساحة الإجمالية م²','computed'],['sides','عدد الأوجه','number',true],['specifications','مواصفات الباقة','textarea'],['default_months','عدد الأشهر الافتراضي','number',true],['price','سعر الباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
  landlords:{title:'مالكو المواقع — الأسطح',icon:'▣',fields:[['name','اسم المالك','text',true],['phone','الهاتف (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة','text'],['governorate','المحافظة','text',true],['residential_address','عنوان السكن','text',true],['landmark','أقرب نقطة دالة','text'],['notes','الملاحظات','textarea'],['card_image','صورة البطاقة الموحدة','file']]},
  properties:{title:'عقارات ومساحات الأسطح',icon:'▤',fields:[['landlord_id','صاحب العقار','lookup:landlords',true],['title','اسم السطح / العقار','text',true],['width_m','عرض السطح بالمتر','number',true],['height_m','طول السطح بالمتر','number',true],['area_m2','إجمالي مساحة السطح م²','computed'],['quantity','العدد','number',true],['notes','الملاحظات','textarea']]},
  leases:{title:'عقود مالكي البنايات — الأسطح',icon:'▧',fields:[['landlord_id','اسم المالك','lookup:landlords',true],['property_id','عقار المالك','lookup:properties',true],['rent_total','إجمالي الإيجار المتفق عليه','number',true],['currency','عملة العقد','select',true,['IQD','USD']],['start_date','تاريخ البداية','date',true],['end_date','تاريخ النهاية','date',true],['grace_days','فترة السماح بالأيام','number',true],['payment_frequency','دورية الدفع','select',true,['annual','semiannual']],['company_representative','ممثل الشركة','text'],['landlord_representative','ممثل المالك','text'],['notes','الملاحظات','textarea']]},
  ad_sites:{title:'المواقع الإعلانية',icon:'⌖',fields:[['code','رمز الموقع','text',true],['name','اسم الموقع','text',true],['site_type','نوع الموقع','select',true,['roadside','rooftop','building','other']],['governorate','المحافظة','text',true],['address','الموقع والعنوان','text',true],['rooftop_property_id','العقار المرتبط (إذا كان سطحاً)','lookup:properties'],['active','حالة الموقع','select',true,['true','false']],['notes','الملاحظات','textarea']]},
- campaigns:{title:'المشاريع والحملات',icon:'✦',fields:[['customer_id','العميل','lookup:customers',true],['title','اسم الحملة','text',true],['package_id','الباقة الإعلانية','lookup:packages'],['months','عدد الأشهر','number',true],['locations','المواقع الإعلانية (أسماء أو رموز المواقع)','textarea'],['price','السعر الإجمالي','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','الملاحظات','textarea']]},
+ campaigns:{title:'المشاريع والحملات',icon:'✦',fields:[['customer_id','العميل','lookup:customers',true],['title','اسم الحملة','text',true],['package_id','الباقة الإعلانية','lookup:packages'],['months','عدد الأشهر','number',true],['quantity','عدد القطع','number',true],['requested_area_m2','مساحة الإعلان بالمتر المربع (لباقة E)','number'],['locations','المواقع الإعلانية (أسماء أو رموز المواقع)','textarea'],['price','السعر الإجمالي','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','الملاحظات','textarea']]},
  lease_installments:{title:'دفعات عقود الإيجار',icon:'◉',fields:[]},
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
+ package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['campaign_id','الحملة المرتبطة (اختياري)','lookup:campaigns'],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
-const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
+const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
 const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+
+// Demo data matches the official price matrix; real staff load rows from Supabase.
+const OFFICIAL_PACKAGES=[
+ {code:'A',name:'الباقة A',package_type:'cabin',pricing_mode:'fixed_term',width_m:1.2,height_m:2,sides:2,default_months:3,price:280,months:{3:280,6:430,12:670}},
+ {code:'B',name:'الباقة B',package_type:'cabin',pricing_mode:'fixed_term',width_m:2,height_m:3,sides:2,default_months:3,price:520,months:{3:520,6:760,12:1120}},
+ {code:'C',name:'الباقة C',package_type:'cabin',pricing_mode:'fixed_term',width_m:2.5,height_m:3.5,sides:2,default_months:3,price:760,months:{3:760,6:1100,12:1800}},
+ {code:'D',name:'الباقة D',package_type:'cabin',pricing_mode:'fixed_term',width_m:3,height_m:4,sides:2,default_months:3,price:800,months:{3:800,6:1300,12:2100}},
+ {code:'E',name:'الباقة E — إعلانات الأسطح',package_type:'rooftop',pricing_mode:'sqm_month',width_m:null,height_m:null,sides:1,default_months:3,price:12,months:{1:15,3:12,6:9,12:6}}
+];
+function seededDemoPackages(){return OFFICIAL_PACKAGES.map(p=>({id:'demo-package-'+p.code,name:p.name,code:p.code,package_type:p.package_type,pricing_mode:p.pricing_mode,width_m:p.width_m,height_m:p.height_m,area_m2:p.width_m&&p.height_m?p.width_m*p.height_m:null,sides:p.sides,default_months:p.default_months,price:p.price,currency:'USD',specifications:p.pricing_mode==='sqm_month'?'تسعير أسطح بالمتر المربع شهرياً':'لوحات ضوئية بوجهين تشمل الإيجار والتصميم والطباعة والتبديل والصيانة',notes:'التعرفة الأصلية من Raafat Map'}));}
+function seededDemoRates(){return OFFICIAL_PACKAGES.flatMap(p=>Object.entries(p.months).map(([months,usd_price])=>({id:'demo-rate-'+p.code+'-'+months,package_id:'demo-package-'+p.code,months:Number(months),usd_price})));}
+
 const lookup=(table,id)=>s.data[table].find(x=>x.id===id);
 const nameOf=(table,id)=>lookup(table,id)?.name||lookup(table,id)?.title||'—';
 const convert=(v,from,to)=>from===to?Number(v):Number(v)*(from==='USD'?Number(s.settings.usd_iqd):1/Number(s.settings.usd_iqd));
@@ -76,7 +89,7 @@ async function load(){
  s.loading=false;render();
 }
 function demo(){
- s.demo=true;s.session=null;s.staff={role:'admin'};s.config=null;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.settings={usd_iqd:1500};
+ s.demo=true;s.session=null;s.staff={role:'admin'};s.config=null;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={usd_iqd:1500};
  s.view='dashboard';s.error='';render();
 }
 async function connect(){
