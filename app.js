@@ -1108,7 +1108,7 @@ function relatedDetails(k,v){
   parts+='<div class="inline"><button type="button" class="btn secondary mini" data-new-linked="campaign_payments|campaign_id|'+v.id+'">+ تسجيل دفعة للحملة</button><button type="button" class="btn secondary mini" data-new-linked="customer_contracts|campaign_id|'+v.id+'">+ إنشاء عقد زبون لهذه الحملة</button></div>';
  }
  if(k==='customer_contracts'){
-   parts+='<div class="notice">هذا عقد بين الشركة والزبون، وليس عقد استئجار السطح من مالك البناية.</div><button type="button" class="btn secondary mini" data-customer-preview="'+v.id+'">معاينة وطباعة عقد الزبون</button>';
+   parts+='<div class="notice">هذا عقد بين الشركة والزبون، وليس عقد استئجار السطح من مالك البناية.</div><button type="button" class="btn secondary mini" data-customer-preview="'+v.id+'">معاينة وتحميل PDF بقالب رأفت</button>';
  }
  if(k==='leases'){
   parts+=list('استحقاقات العقد',s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date)),'lease_installments',x=>x.due_date+' — '+displayMoneyText(x.paid_amount,v.currency)+' / '+displayMoneyText(x.amount,v.currency));
@@ -1234,7 +1234,7 @@ function modalHtml(){
    '<div class="full"><h3>معلومات التوقيع والشروط</h3><p class="subtle">هذه الحقول تخص نص العقد فقط، وليست تفاصيل الحجز.</p></div>'+
    fieldsToEdit.map(f=>fieldHtml(f,v,v)).join('')+
    '</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ الملاحظات والشروط':'إنشاء العقد من الحملة')+'</button></div></form>'+
-   (v.id?'<div class="inline"><button class="btn secondary" data-customer-preview="'+v.id+'">معاينة بيانات العقد</button></div>':'')+
+   (v.id?'<div class="inline"><button class="btn secondary" data-customer-preview="'+v.id+'">معاينة وتحميل PDF بقالب رأفت</button></div>':'')+
    relatedDetails(k,v)+'</div></div>';
  }
 
@@ -1272,6 +1272,74 @@ function review(v){
 }
 
 
+
+// PDF data are taken from the saved customer contract snapshots and their
+// originating campaign; company branding is supplied by the exact PDF template,
+// NOT dynamically inserted from the settings page.
+function customerContractPdfPayload(v){
+ if(!v?.id)throw Error('احفظ عقد الزبون أولاً حتى تنزّل ملف PDF الرسمي');
+ const customer=lookup('customers',v.customer_id);
+ const pkg=lookup('packages',v.package_id);
+ const campaign=lookup('campaigns',v.campaign_id);
+ const site=lookup('ad_sites',v.site_id);
+ const details=contractCampaignDetails(v);
+ const dimension=v.package_dimensions_snapshot||
+  (pkg?.width_m&&pkg?.height_m?fmt(pkg.width_m)+' × '+fmt(pkg.height_m)+' م':'—');
+ const effectiveArea=Number(v.rented_area_m2)>0?fmt(v.rented_area_m2):
+  Number(v.package_area_snapshot)>0?fmt(v.package_area_snapshot):
+  Number(pkg?.area_m2)>0?fmt(pkg.area_m2):'—';
+ const sites=details.sites.length?details.sites:
+  site?[{id:site.id,code:site.code,name:site.name,address:site.address,governorate:site.governorate}]:[];
+ return {
+  number:numberedContract(v.contract_number),
+  customerName:v.customer_name_snapshot||customer?.name||'—',
+  customerPhone:customer?.phone||'—',
+  customerNationalId:customer?.national_id||'—',
+  companyRepresentative:v.company_representative||'—',
+  customerRepresentative:v.customer_representative||'—',
+  campaignTitle:v.campaign_title_snapshot||campaign?.title||'—',
+  packageName:v.package_name_snapshot||pkg?.name||'—',
+  dimensions:dimension,
+  area:effectiveArea,
+  quantity:details.total||1,
+  months:Number(v.duration_months)||0,
+  startDate:v.start_date,
+  endDate:v.end_date,
+  amount:Number(v.amount)||0,
+  currency:v.currency||'USD',
+  specifications:v.package_specifications_snapshot||pkg?.specifications||'',
+  sites:sites.map(x=>({code:x.code||'',name:x.name||'',address:x.address||'',governorate:x.governorate||''})),
+  additionalLocations:details.locations,
+  campaignNotes:details.notes,
+  terms:v.terms||'',
+  notes:v.notes||''
+ };
+}
+async function generateCustomerContractPdf(id,mode='download'){
+ const contract=lookup('customer_contracts',id);
+ if(!contract){toast('العقد غير موجود أو لم يتم حفظه',true);return}
+ const generator=typeof window!=='undefined'?window.RaafatContractPdf:null;
+ if(!generator){toast('مكوّن إنشاء PDF لم يكتمل تحميله. حدّث الصفحة وأعد المحاولة',true);return}
+ if(s.generatingContractPdf)return toast('إنشاء ملف العقد جارٍ بالفعل');
+ const win=mode==='preview'&&typeof window!=='undefined'?
+  window.open('','_blank'):null;
+ if(win){win.document.title='جارٍ إعداد عقد رأفت';win.document.body.textContent='جارٍ إعداد ملف PDF بالقالب الأصلي...'}
+ s.generatingContractPdf=true;
+ document.querySelectorAll('[data-customer-pdf]').forEach(button=>{button.disabled=true});
+ try{
+  const payload=customerContractPdfPayload(contract);
+  if(mode==='preview')await generator.preview(payload,win);
+  else await generator.download(payload);
+  toast(mode==='preview'?'تم إنشاء معاينة PDF باستخدام القالب الأصلي':'تم تنزيل عقد الزبون بالقالب الرسمي الأصلي');
+ }catch(e){
+  if(win&&!win.closed)win.close();
+  toast('تعذّر إعداد PDF: '+(e?.message||String(e)),true);
+ }finally{
+  s.generatingContractPdf=false;
+  document.querySelectorAll('[data-customer-pdf]').forEach(button=>{button.disabled=false});
+ }
+}
+
 function customerContractPreview(v){
  const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id),site=lookup('ad_sites',v.site_id),campaign=lookup('campaigns',v.campaign_id);
  const dimension=v.package_dimensions_snapshot||(pkg?.width_m&&pkg?.height_m?fmt(pkg.width_m)+' × '+fmt(pkg.height_m)+' م':'غير مسجل');
@@ -1280,7 +1348,7 @@ function customerContractPreview(v){
  const selectedLocations=sites.map(x=>(x.code||'')+' — '+(x.name||'')).join('، ');
  const siteCards=sites.map(x=>'<div class="contract-preview-board"><b>'+E((x.code||'')+' — '+(x.name||''))+'</b><small>'+E([x.governorate,x.address].filter(Boolean).join('، ')||'—')+'</small></div>').join('');
  const record=(label,value)=>'<div><small>'+E(label)+'</small><strong>'+E(value??'—')+'</strong></div>';
- return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(numberedContract(v.contract_number))+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('الرقم الوطني',customer?.national_id||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button class="btn" data-action="print">طباعة / حفظ PDF</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
+ return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(numberedContract(v.contract_number))+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('الرقم الوطني',customer?.national_id||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button type="button" class="btn" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',17)+' تحميل عقد PDF بتصميم رأفت</button><button type="button" class="btn secondary" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة القالب الأصلي</button><button type="button" class="btn secondary" data-action="close">إغلاق</button></div><p class="subtle contract-pdf-source-note noprint">المحتوى المعروض أعلاه للمراجعة فقط؛ زر التحميل يُولّد ملف PDF من القالب الأصلي الذي رفعته الشركة، وليس من تنسيق هذه المعاينة.</p></div></div>';
 }
 
 function previewHtml(v){
@@ -1360,6 +1428,7 @@ function bind(){
   }if(field==='site_id')data.siteIds=[id];openForm(k,data)});
  document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'leases',data:lookup('leases',x.dataset.preview)};render()});
  document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
+ document.querySelectorAll('[data-customer-pdf]').forEach(button=>button.onclick=()=>generateCustomerContractPdf(button.dataset.customerPdf,button.dataset.pdfMode||'download'));
  document.querySelectorAll('[data-print-record]').forEach(x=>x.onclick=()=>{const [table,id]=x.dataset.printRecord.split('|');s.modal={kind:'preview',table,data:lookup(table,id)};render()});
  document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total,advance_amount:0})});
  document.querySelectorAll('[data-card]').forEach(x=>x.onclick=()=>showCard(lookup('landlords',x.dataset.card)));
