@@ -22,9 +22,9 @@ test('Raafat Sys linked financial and currency rules',async()=>{
  s.data.customers=[{id:'customer1',name:'Test User'}];
  s.data.packages=[{id:'package1',code:'A',name:'الباقة A',price:280,currency:'USD',default_months:3,pricing_mode:'fixed_term'}];
  s.data.ad_sites=[{id:'site1',name:'Central Board',code:'A01',active:true}];
- s.data.campaigns=[{id:'campaign1',customer_id:'customer1',package_id:'package1',title:'Launch',price:400,currency:'USD',months:3}];
+ s.data.campaigns=[{id:'campaign1',customer_id:'customer1',package_id:'package1',title:'Launch',start_date:'2026-11-14',price:400,currency:'USD',months:3}];
  s.modal={table:'campaigns',siteIds:['site1']};
- assert.doesNotThrow(()=>formValidate('campaigns',{customer_id:'customer1',package_id:'package1',title:'Launch',price:400,months:3,currency:'USD'}));
+ assert.doesNotThrow(()=>formValidate('campaigns',{customer_id:'customer1',package_id:'package1',title:'Launch',start_date:'2026-11-14',price:400,months:3,currency:'USD'}));
  await syncCampaignSites('campaign1',['site1']);
  assert.equal(linkedSites('campaign1').length,1);
  await syncCampaignSites('campaign1',[]);
