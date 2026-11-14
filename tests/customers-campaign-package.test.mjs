@@ -52,13 +52,13 @@ test('customers are saved independent of advertising packages; campaign specifie
  assert.equal(quoteCampaign({package_id:codeToId('C'),months:6,quantity:1,currency:'USD'},[]).total,1100);
 
  s.modal.siteIds=[];
- assert.throws(()=>formValidate('campaigns',{customer_id:customer.id,title:'حملة غير محددة',months:3,locations:'تكريت',price:100,currency:'USD'}),/حدد نوع الإعلان/, 'ad type required for campaign');
+ assert.throws(()=>formValidate('campaigns',{customer_id:customer.id,title:'حملة غير محددة',start_date:'2026-11-14',months:3,locations:'تكريت',price:100,currency:'USD'}),/حدد نوع الإعلان/, 'ad type required for campaign');
 
  for(const [packageCode,title] of [['A','حملة لوحات'],['E','حملة أسطح']]){
   const adPackage=codeToId(packageCode);
   const data={
    customer_id:customer.id,title,package_id:adPackage,
-   months:3,price:packageCode==='E'?180:280,currency:'USD',
+   start_date:'2026-11-14',months:3,price:packageCode==='E'?180:280,currency:'USD',
    quantity:1,requested_area_m2:packageCode==='E'?5:null,locations:'تكريت'
   };
   assert.doesNotThrow(()=>formValidate('campaigns',data),'campaign with '+packageCode+' valid');
