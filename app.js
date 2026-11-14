@@ -520,7 +520,9 @@ function landlordDeleteStats(id){
   installments:s.data.lease_installments.filter(x=>leaseIds.has(x.lease_id)).length,
   booked:s.data.ad_sites.filter(x=>siteIds.has(x.id)&&(
    s.data.campaign_sites.some(link=>link.site_id===x.id)||
-   s.data.customer_contracts.some(contract=>contract.site_id===x.id)
+   s.data.customer_contracts.some(contract=>contract.site_id===x.id||
+    (Array.isArray(contract.campaign_sites_snapshot)&&
+      contract.campaign_sites_snapshot.some(site=>site.id===x.id)))
   )).length
  };
 }
