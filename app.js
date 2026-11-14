@@ -6,7 +6,7 @@ const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
-const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts'];
+const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts','company_expenses'];
 
 // Province choices are canonical Arabic governorate names (including Halabja, 2025).
 // Legacy saved names are displayed as a one-time existing option, not discarded.
@@ -39,6 +39,7 @@ const defs={
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
  package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
+ company_expenses:{title:'المصروفات',icon:'receipt',fields:[['expense_date','تاريخ المصروف','date',true],['title','شنو اشترت / صرفت الشركة؟','text',true],['category','تصنيف المصروف','select',true,['hospitality','office','transport','maintenance','supplies','utilities','other']],['amount','المبلغ المصروف','number',true],['currency','العملة','select',true,['IQD','USD']],['paid_by','اسم الشخص اللي صرف المبلغ','text'],['notes','ملاحظات إضافية','textarea']]},
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المعتمدة','lookup:campaigns',true],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
@@ -356,6 +357,9 @@ const NAV_GROUPS=[
   ['properties','الأسطح والعقارات','house'],
   ['leases','عقود مالكي الأسطح','file'],
   ['lease_installments','دفعات إيجار الأسطح','receipt']
+ ]},
+ {id:'finance',title:'المالية',subtitle:'مصروفات الشركة اليومية',icon:'wallet',items:[
+  ['company_expenses','المصروفات','receipt']
  ]}
 ];
 function navGroupForView(view){return NAV_GROUPS.find(group=>group.items.some(item=>item[0]===view))?.id||null;}
@@ -392,6 +396,7 @@ function bindNav(){
 function shell(content){
  return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
 }
+const EXPENSE_CATEGORY_LABELS={hospitality:'ضيافة ومشروبات',office:'قرطاسية ومكتبية',transport:'نقل ووقود',maintenance:'صيانة',supplies:'مستلزمات',utilities:'خدمات وفواتير',other:'أخرى'};
 const visibleTable=(k)=>s.data[k]||[];
 function dashboard(){
  let due=s.data.lease_installments.filter(x=>Number(x.paid_amount)<Number(x.amount)&&x.due_date<=today()).length;
@@ -408,11 +413,13 @@ const columns={
  leases:[['contract_number','رقم العقد'],['landlord_id','المالك'],['property_id','العقار'],['rent_total','الإيجار'],['lease_balance','المتبقي'],['end_date','النهاية']],
  campaigns:[['title','الحملة'],['customer_id','العميل'],['package_id','الباقة'],['sites','المواقع'],['price','السعر'],['campaign_balance','المتبقي']],
  campaign_payments:[['campaign_id','الحملة'],['paid_at','التاريخ'],['amount','الدفعة']],
+ company_expenses:[['expense_date','التاريخ'],['title','المصروف'],['category','التصنيف'],['amount','المبلغ'],['paid_by','صرف بواسطة']],
  customer_contracts:[['contract_number','رقم العقد'],['customer_id','الزبون'],['package_id','الباقة'],['contract_type','النوع'],['start_date','من'],['end_date','إلى'],['amount','القيمة']],
  lease_installments:[['lease_id','العقد والمالك'],['due_date','تاريخ الاستحقاق'],['amount','المبلغ'],['paid_amount','المدفوع']]
 };
 function showVal(k,row,f){
  let v=row[f];
+ if(f==='category'&&k==='company_expenses')return E(EXPENSE_CATEGORY_LABELS[v]||v);
  if(f==='status')return '<span class="pill '+E(v)+'">'+E(labels[v]||v)+'</span>';
  if(f==='site_type'||f==='contract_type'||f==='package_type')return E(labels[v]||v);
  if(f==='area_m2')return v==null?'—':E(fmt(v))+' م²';
@@ -638,6 +645,7 @@ function leaseInstallmentsOverview(){
 
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
+ if(k==='company_expenses')return expenseOverview();
  if(k==='lease_installments')return leaseInstallmentsOverview();
  const rows=visibleTable(k).filter(x=>{
   let q=s.search.trim().toLocaleLowerCase(),match=!q||JSON.stringify(x).toLocaleLowerCase().includes(q)||
@@ -1383,7 +1391,7 @@ function bind(){
 
 
 function openForm(k,row){
- const defaults={status:'inquiry',currency:s.displayCurrency,advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
+ const defaults={status:'inquiry',currency:s.displayCurrency,expense_date:today(),category:'hospitality',advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
  let data={...defaults,...(row||{})};
  if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
  if(k==='lease_installments'&&data.lease_id)data.entry_currency=lookup('leases',data.lease_id)?.currency||s.displayCurrency;
@@ -1412,6 +1420,13 @@ function captureForm(form){
  if(siteInputs.length)s.modal.siteIds=siteInputs.filter(el=>el.checked).map(el=>el.dataset.siteId);
 }
 function formValidate(k,v){
+ if(k==='company_expenses'){
+  if(!v.expense_date||!/^\d{4}-\d{2}-\d{2}$/.test(String(v.expense_date)))throw Error('حدد تاريخ المصروف');
+  if(!String(v.title||'').trim()||String(v.title).trim().length<2)throw Error('اكتب اسم المصروف (حرفين على الأقل)');
+  if(!EXPENSE_CATEGORY_LABELS[v.category])throw Error('اختر تصنيف المصروف من القائمة');
+  if(!['IQD','USD'].includes(v.currency))throw Error('اختر عملة المصروف');
+  if(!(Number(v.amount)>0)||!Number.isFinite(Number(v.amount)))throw Error('مبلغ المصروف يجب أن يكون أكبر من صفر');
+ }
  if(k==='customers'){
   if(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id))throw Error('الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
  }
