@@ -275,36 +275,75 @@ async function saveNewPassword(){
 function authPage(){return '<div class="welcome"><div class="authbox"><h1>رأفت</h1><p class="muted">نظام الإدارة المتكامل للدعاية والإعلان</p><p class="subtle">ربط قاعدة البيانات الخاصة بالشركة وتسجيل دخول الموظفين</p>'+ (s.error?'<div class="error">'+E(s.error)+'</div>':'')+
  '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><button class="linkbtn" data-action="forgotPassword" type="button">نسيت كلمة المرور؟</button><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
 
+
+// Consistent inline outline SVG icons — no external icon fonts or CDN.
+const UI_ICON_PATHS={
+ dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+ users:'<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M17 3a4 4 0 0 1 0 8M22 21v-2a5 5 0 0 0-4-5"/>',
+ user:'<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+ layers:'<path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 17l9 5 9-5"/>',
+ megaphone:'<path d="m3 11 18-5v12L3 13v-2ZM11 15v4a2 2 0 0 1-4 0v-5"/>',
+ file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8ZM14 2v6h6M8 13h8M8 17h8"/>',
+ pin:'<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+ wallet:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M16 14h.01"/>',
+ building:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M8 10h.01M16 10h.01M8 14h.01M16 14h.01"/>',
+ house:'<path d="m3 10 9-8 9 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10ZM9 22v-8h6v8"/>',
+ receipt:'<path d="M4 2v20l4-2 4 2 4-2 4 2V2l-4 2-4-2-4 2-4-2ZM8 9h8M8 13h8"/>',
+ chart:'<path d="M3 3v18h18M7 17v-5h3v5M13 17V7h3v10M19 17v-8h2"/>',
+ settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.5 1.5 0 0 0 .3 1.6l-2.1 2.1a1.5 1.5 0 0 0-1.6-.3l-1.2.5a1.5 1.5 0 0 0-1 1.4h-3.6a1.5 1.5 0 0 0-1-1.4L8 18.4a1.5 1.5 0 0 0-1.6.3l-2.1-2.1a1.5 1.5 0 0 0 .3-1.6L4 13.8a1.5 1.5 0 0 0-1.4-1v-2a1.5 1.5 0 0 0 1.4-1L4.6 8a1.5 1.5 0 0 0-.3-1.6l2.1-2.1A1.5 1.5 0 0 0 8 4.6l1.2-.5a1.5 1.5 0 0 0 1-1.4h3.6a1.5 1.5 0 0 0 1 1.4l1.2.5a1.5 1.5 0 0 0 1.6-.3l2.1 2.1a1.5 1.5 0 0 0-.3 1.6l.5 1.2a1.5 1.5 0 0 0 1.4 1v2a1.5 1.5 0 0 0-1.4 1Z"/>',
+ chevron:'<path d="m6 9 6 6 6-6"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
+ pencil:'<path d="m16 5 3 3M3 21l4.5-1 12-12a2.12 2.12 0 0 0-3-3l-12 12L3 21Z"/>',
+ trash:'<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M6 6l1 15h10l1-15M10 10v7M14 10v7"/>',
+ x:'<path d="M18 6 6 18M6 6l12 12"/>',
+ check:'<circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/>',
+ printer:'<path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/>',
+ download:'<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
+ logout:'<path d="M10 17l5-5-5-5m5 5H3M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>',
+ calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+ shield:'<path d="m12 22 8-4V6l-8-4-8 4v12l8 4Zm-3-10 2 2 4-4"/>',
+ alert:'<circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 17h.01"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/>',
+ image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+ money:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+ save:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v7h10V3M7 21v-8h10v8"/>'
+};
+function uiIcon(name,size=18){
+ const path=UI_ICON_PATHS[name]||UI_ICON_PATHS.alert;
+ const dimension=Number(size)>=12&&Number(size)<=32?Number(size):18;
+ return '<svg class="ui-icon" xmlns="http://www.w3.org/2000/svg" width="'+dimension+'" height="'+dimension+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+path+'</svg>';
+}
+
 const NAV_GROUPS=[
- {id:'customers',title:'الزبائن والإعلانات',subtitle:'العملاء والحجوزات والعقود',icon:'♙',items:[
-  ['customers','العملاء','♟'],
-  ['packages','الباقات الإعلانية','◈'],
-  ['campaigns','المشاريع والحملات','✦'],
-  ['customer_contracts','عقود الزبائن','▣'],
-  ['ad_sites','المواقع الإعلانية','⌖'],
-  ['campaign_payments','دفعات الحملات','◉']
+ {id:'customers',title:'الزبائن والإعلانات',subtitle:'العملاء والحجوزات والعقود',icon:'users',items:[
+  ['customers','العملاء','user'],
+  ['packages','الباقات الإعلانية','layers'],
+  ['campaigns','المشاريع والحملات','megaphone'],
+  ['customer_contracts','عقود الزبائن','file'],
+  ['ad_sites','المواقع الإعلانية','pin'],
+  ['campaign_payments','دفعات الحملات','wallet']
  ]},
- {id:'landlords',title:'مؤجّرو الأسطح والبنايات',subtitle:'المالكون والعقارات والإيجارات',icon:'▥',items:[
-  ['landlords','مالكو الأسطح والبنايات','▣'],
-  ['properties','الأسطح والعقارات','▤'],
-  ['leases','عقود مالكي الأسطح','▧'],
-  ['lease_installments','دفعات إيجار الأسطح','◉']
+ {id:'landlords',title:'مؤجّرو الأسطح والبنايات',subtitle:'المالكون والعقارات والإيجارات',icon:'building',items:[
+  ['landlords','مالكو الأسطح والبنايات','users'],
+  ['properties','الأسطح والعقارات','house'],
+  ['leases','عقود مالكي الأسطح','file'],
+  ['lease_installments','دفعات إيجار الأسطح','receipt']
  ]}
 ];
 function navGroupForView(view){return NAV_GROUPS.find(group=>group.items.some(item=>item[0]===view))?.id||null;}
 function navLink(id,label,icon){
  const active=id===s.view;
- return '<button type="button" data-nav="'+id+'" class="nav-link'+(active?' active':'')+'"'+(active?' aria-current="page"':'')+'><span class="nav-link-icon" aria-hidden="true">'+icon+'</span><span>'+label+'</span></button>';
+ return '<button type="button" data-nav="'+id+'" class="nav-link'+(active?' active':'')+'"'+(active?' aria-current="page"':'')+'><span class="nav-link-icon" aria-hidden="true">'+uiIcon(icon,19)+'</span><span>'+label+'</span></button>';
 }
 function navGroup(group){
  const expanded=s.navExpanded===group.id,contains=navGroupForView(s.view)===group.id;
- return '<div class="nav-group'+(contains?' has-active':'')+'"><button type="button" class="nav-group-toggle'+(expanded?' expanded':'')+'" data-nav-group="'+group.id+'" aria-expanded="'+expanded+'" aria-controls="nav-group-'+group.id+'"><span class="nav-group-icon" aria-hidden="true">'+group.icon+'</span><span class="nav-group-copy"><strong>'+group.title+'</strong><small>'+group.subtitle+'</small></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></button><div class="nav-group-items" id="nav-group-'+group.id+'" role="group" aria-label="'+group.title+'"'+(expanded?'':' hidden')+'>'+group.items.map(([id,label,icon])=>navLink(id,label,icon)).join('')+'</div></div>';
+ return '<div class="nav-group'+(contains?' has-active':'')+'"><button type="button" class="nav-group-toggle'+(expanded?' expanded':'')+'" data-nav-group="'+group.id+'" aria-expanded="'+expanded+'" aria-controls="nav-group-'+group.id+'"><span class="nav-group-icon" aria-hidden="true">'+uiIcon(group.icon,20)+'</span><span class="nav-group-copy"><strong>'+group.title+'</strong><small>'+group.subtitle+'</small></span><span class="nav-group-chevron" aria-hidden="true">'+uiIcon('chevron',17)+'</span></button><div class="nav-group-items" id="nav-group-'+group.id+'" role="group" aria-label="'+group.title+'"'+(expanded?'':' hidden')+'>'+group.items.map(([id,label,icon])=>navLink(id,label,icon)).join('')+'</div></div>';
 }
 function nav(){
- return navLink('dashboard','الرئيسية','◫')+
+ return navLink('dashboard','الرئيسية','dashboard')+
   '<div class="nav-group-list">'+NAV_GROUPS.map(navGroup).join('')+'</div>'+
   '<div class="nav-utility"><small class="nav-utility-label">الإدارة العامة</small>'+
-  navLink('reports','التقارير','▥')+navLink('settings','الإعدادات','⚙')+'</div>';
+  navLink('reports','التقارير','chart')+navLink('settings','الإعدادات','settings')+'</div>';
 }
 function changeNavGroup(id){
  if(!NAV_GROUPS.some(x=>x.id===id))return;
