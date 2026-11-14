@@ -104,7 +104,14 @@ function reports(){
 }
 function settings(){return '<div class="box" style="max-width:550px"><h2>أسعار الصرف</h2><p class="muted">سعر الدولار يتم تحديده يدوياً من إعدادات الشركة. يتغير تحويل العرض مباشرةً، ولا تتبدل المبالغ الأصلية المحفوظة.</p><form id="settingsForm"><label class="field"><span>قيمة 1 دولار أمريكي بالدينار العراقي</span><input name="usd_iqd" required type="number" min=".0001" step="any" value="'+E(s.settings.usd_iqd)+'"></label><button class="btn" type="submit">حفظ سعر الصرف</button></form><hr><p class="subtle">1 USD = '+fmt(s.settings.usd_iqd)+' IQD</p></div>';}
 function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>الصلاحية غير مفعلة</h1><p class="muted">تم تسجيل الدخول، لكن حسابك غير مضاف إلى موظفي نظام رأفت.</p><div class="notice">يجب إضافة معرّف حسابك إلى جدول staff_members من لوحة Supabase بدور admin أو staff، ثم تسجيل الدخول مجدداً.</div><button class="btn" data-action="logout">تسجيل خروج</button></div></div>'}
-function render(){let target=$('#app');target.innerHTML=(!s.demo&&!s.session)?authPage():(!s.demo&&!s.staff&&!s.loading?accessDenied():shell(s.view==='dashboard'?dashboard():s.view==='reports'?reports():s.view==='settings'?settings():listing(s.view))+(s.modal?modalHtml():'');bind();}
+function render(){
+ let target=$('#app');
+ let content=s.view==='dashboard'?dashboard():s.view==='reports'?reports():s.view==='settings'?settings():listing(s.view);
+ if(!s.demo&&!s.session){target.innerHTML=authPage();}
+ else if(!s.demo&&!s.staff&&!s.loading){target.innerHTML=accessDenied();}
+ else{target.innerHTML=shell(content)+(s.modal?modalHtml():'');}
+ bind();
+}
 function optionText(k,x){return k==='landlords'?x.name:k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+')':k==='leases'?x.contract_number:k==='campaigns'?x.title:'—';}
 function fieldHtml(f,v,all){
  let [id,label,type,required,opts]=f, val=v?.[id]??'', req=required?'required':'';
