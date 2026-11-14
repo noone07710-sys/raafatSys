@@ -501,8 +501,8 @@ function contractCampaignSummary(v){
  const siteList=sites.map(site=>'<div class="contract-campaign-site"><strong>'+E((site.code||'')+' — '+(site.name||''))+'</strong><small>'+E([site.governorate,site.address].filter(Boolean).join('، '))+'</small></div>').join('');
  return '<section class="contract-campaign-info full"><h3>تفاصيل الحملة المنقولة تلقائياً إلى العقد</h3>'+
   '<div class="contract-campaign-grid">'+
-  line('العميل',customer?.name||v.customer_name_snapshot)+
-  line('الباقة',pack?.name||v.package_name_snapshot)+
+  line('العميل',v.id?(v.customer_name_snapshot||customer?.name):(customer?.name||'—'))+
+  line('الباقة',v.id?(v.package_name_snapshot||pack?.name):(pack?.name||'—'))+
   line('عدد القطع المتفق عليها',total)+
   line('المواقع المعيّنة فعلياً',sites.length)+
   line('مدة الحملة',current.duration_months+' أشهر')+
@@ -1043,12 +1043,12 @@ function formValidate(k,v){
   const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id);
   if(!customer||!pkg)throw Error('اختر زبوناً وباقة إعلانية مسجلين');
   if((v.contract_type||pkg.package_type)!==pkg.package_type)throw Error('نوع عقد الزبون يجب أن يطابق نوع الباقة');
-  if(packageRates(pkg).length&&!packageRate(pkg,v.duration_months))throw Error('مدة العقد غير مدرجة بتعرفة الباقة');
-  if(pkg.pricing_mode==='sqm_month'&&!(Number(v.rented_area_m2)>0))throw Error('أدخل مساحة الأسطح المتعاقد عليها بالمتر المربع');
+  if(!v.id&&packageRates(pkg).length&&!packageRate(pkg,v.duration_months))throw Error('مدة العقد غير مدرجة بتعرفة الباقة');
+  if(!v.id&&pkg.pricing_mode==='sqm_month'&&!(Number(v.rented_area_m2)>0))throw Error('أدخل مساحة الأسطح المتعاقد عليها بالمتر المربع');
   if(v.end_date<v.start_date||!v.start_date||!v.end_date)throw Error('تأكد من تواريخ عقد الزبون');
   if(!(Number(v.amount)>=0))throw Error('مبلغ عقد الزبون غير صالح');
-  if(v.campaign_id){const cam=lookup('campaigns',v.campaign_id);if(!cam||cam.customer_id!==v.customer_id||(cam.package_id&&cam.package_id!==v.package_id))throw Error('الحملة المختارة يجب أن تكون لنفس الزبون والباقة');}
-  if(v.site_id&&!siteMatchesPackage(lookup('ad_sites',v.site_id),v.package_id))throw Error('موقع عقد الزبون لا يتبع الباقة الإعلانية المختارة');
+  if(v.campaign_id&&!v.id){const cam=lookup('campaigns',v.campaign_id);if(!cam||cam.customer_id!==v.customer_id||(cam.package_id&&cam.package_id!==v.package_id))throw Error('الحملة المختارة يجب أن تكون لنفس الزبون والباقة');}
+  if(!v.id&&v.site_id&&!siteMatchesPackage(lookup('ad_sites',v.site_id),v.package_id))throw Error('موقع عقد الزبون لا يتبع الباقة الإعلانية المختارة');
  }
  if(['landlords','customers'].includes(k)&&v.alternate_phone&&!/^[0-9]{11}$/.test(v.alternate_phone))throw Error('الهاتف البديل يجب أن يكون 11 رقم');
  if(k==='landlords'&&(!/^[0-9]{11}$/.test(v.phone)||(v.national_id&&!/^[0-9]{12}$/.test(v.national_id))))throw Error('هاتف المالك 11 رقم، ورقم البطاقة عند إدخاله 12 رقم');
