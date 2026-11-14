@@ -352,11 +352,30 @@ function bind(){
  document.querySelectorAll('[data-nav]').forEach(x=>x.onclick=()=>{s.view=x.dataset.nav;s.search='';s.filter='all';s.modal=null;render()});
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
- document.querySelectorAll('[data-new-linked]').forEach(x=>x.onclick=()=>{let [k,field,id]=x.dataset.newLinked.split('|');let data={[field]:id};if(field==='property_id')data.landlord_id=lookup('properties',id)?.landlord_id;if(field==='campaign_id')data.amount=campaignBalance(lookup('campaigns',id));if(field==='site_id')data.siteIds=[id];openForm(k,data)});
- document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',data:lookup('leases',x.dataset.preview)};render()});
+ document.querySelectorAll('[data-new-linked]').forEach(x=>x.onclick=()=>{let [k,field,id]=x.dataset.newLinked.split('|');let data={[field]:id};if(field==='property_id')data.landlord_id=lookup('properties',id)?.landlord_id;if(field==='campaign_id'){
+   const parent=lookup('campaigns',id);
+   if(k==='campaign_payments')data.amount=campaignBalance(parent);
+   if(k==='customer_contracts'&&parent){data.customer_id=parent.customer_id;data.package_id=parent.package_id;data.amount=parent.price;data.currency=parent.currency;}
+  }if(field==='site_id')data.siteIds=[id];openForm(k,data)});
+ document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'leases',data:lookup('leases',x.dataset.preview)};render()});
+ document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
+ document.querySelectorAll('[data-print-record]').forEach(x=>x.onclick=()=>{const [table,id]=x.dataset.printRecord.split('|');s.modal={kind:'preview',table,data:lookup(table,id)};render()});
  document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total})});
  document.querySelectorAll('[data-card]').forEach(x=>x.onclick=()=>showCard(lookup('landlords',x.dataset.card)));
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>actions(x.dataset.action));
+ document.querySelectorAll('[data-add-roof]').forEach(x=>x.onclick=()=>{
+  if($('#recordForm'))captureForm($('#recordForm'));
+  captureRoofDrafts();
+  s.modal.roofs.push({});
+  render();
+ });
+ document.querySelectorAll('[data-remove-roof]').forEach(x=>x.onclick=()=>{
+  if($('#recordForm'))captureForm($('#recordForm'));
+  captureRoofDrafts();
+  s.modal.roofs.splice(Number(x.dataset.removeRoof),1);
+  render();
+ });
+ document.querySelectorAll('[data-roof-field]').forEach(input=>input.addEventListener('input',()=>updateAreaOutputs($('#recordForm'))));
  if($('#globalCurrency'))$('#globalCurrency').onchange=e=>{
   if($('#recordForm'))captureForm($('#recordForm'));
   s.displayCurrency=e.target.value;
@@ -370,6 +389,11 @@ function bind(){
  if($('#settingsForm'))$('#settingsForm').onsubmit=e=>{e.preventDefault();saveSettings(e.target)};
  const form=$('#recordForm'),v=s.modal?.data,k=s.modal?.table;
  if(!form)return;
+ for(const name of ['width_m','height_m','quantity']){
+  const el=form.elements.namedItem(name);
+  if(el)el.addEventListener('input',()=>updateAreaOutputs(form));
+ }
+ updateAreaOutputs(form);
  document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId)});
  for(const name of ['price','rent_total','amount','paid_amount','initial_payment_amount']){
   let input=form.elements.namedItem(name);if(input)input.addEventListener('input',()=>{if(name==='price'&&k==='campaigns')s.modal.autoPrice=false;updateMoneyHints()});
@@ -395,8 +419,34 @@ function bind(){
  const owner=form.elements.namedItem('landlord_id');
  if(owner&&k==='leases')owner.onchange=()=>{captureForm(form);v.landlord_id=owner.value;v.property_id='';render()};
  const client=form.elements.namedItem('customer_id');
- if(client&&k==='campaigns')client.onchange=()=>{captureForm(form);v.customer_id=client.value;render()};
+ if(client&&k==='campaigns')client.onchange=()=>{
+  captureForm(form);
+  v.customer_id=client.value;
+  const pkg=lookup('packages',lookup('customers',client.value)?.preferred_package_id);
+  if(pkg&&!v.id){v.package_id=pkg.id;v.price=pkg.price;v.currency=pkg.currency;v.months=pkg.default_months;s.modal.autoPrice=true;}
+  render();
+ };
+ if(client&&k==='customer_contracts')client.onchange=()=>{
+  captureForm(form);v.customer_id=client.value;
+  if(!v.id){const p=lookup('packages',lookup('customers',client.value)?.preferred_package_id);if(p){v.package_id=p.id;v.contract_type=p.package_type;v.amount=p.price;v.currency=p.currency;v.end_date=addDays(plusMonths(v.start_date||today(),p.default_months),-1);}}
+  render();
+ };
  const pack=form.elements.namedItem('package_id');
+ if(pack&&k==='customer_contracts')pack.onchange=()=>{
+  captureForm(form);
+  const p=lookup('packages',pack.value);
+  v.package_id=pack.value;
+  if(p){v.contract_type=p.package_type;v.amount=p.price;v.currency=p.currency;if(!v.id)v.end_date=addDays(plusMonths(v.start_date||today(),p.default_months),-1);}
+  render();
+ };
+ const linkedCampaign=form.elements.namedItem('campaign_id');
+ if(linkedCampaign&&k==='customer_contracts')linkedCampaign.onchange=()=>{
+  captureForm(form);
+  const cam=lookup('campaigns',linkedCampaign.value);
+  v.campaign_id=linkedCampaign.value;
+  if(cam){v.customer_id=cam.customer_id;if(cam.package_id){const pkg=lookup('packages',cam.package_id);v.package_id=cam.package_id;v.contract_type=pkg?.package_type||'cabin';}v.amount=cam.price;v.currency=cam.currency;}
+  render();
+ };
  if(pack&&k==='campaigns')pack.onchange=()=>{
   captureForm(form);const p=lookup('packages',pack.value);
   v.package_id=pack.value;
