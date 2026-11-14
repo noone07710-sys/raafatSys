@@ -70,7 +70,8 @@ test('company branding settings render and save together with FX',async()=>{
  assert.equal(env.s.settings.company_short_name,'اختبار');
  assert.equal(env.s.settings.usd_iqd,1540);
  assert.match(page.innerHTML,/شركة اختبار للدعاية/);
- assert.match(page.innerHTML,/اختبار <span class="brand-sys">SYS/);
+ assert.match(page.innerHTML,/<strong>اختبار<\/strong>/);
+ assert.doesNotMatch(page.innerHTML,/<span class="brand-sys">SYS<\/span>/);
  assert.match(env.companyDocumentHeader(),/شركة اختبار للدعاية/);
  const ownerContract={id:'lease1',property_id:'prop1',landlord_id:'owner1',rent_total:1000,currency:'USD',payment_frequency:'annual',grace_days:0,start_date:'2026-11-14',end_date:'2027-11-13'};
  assert.match(env.previewHtml(ownerContract),/شركة اختبار للدعاية/);
