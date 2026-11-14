@@ -71,7 +71,7 @@ test('upfront rent is already paid, reduces the installment total, and never add
  assert.equal(api.leaseInstallmentPlan({...base,advance_amount:1200}).length,0,'full advance requires zero installments');
  await api.generateInstallments(base);
  assert.equal(s.data.lease_installments.filter(x=>x.lease_id==='freshLease').length,2);
- assert.throws(()=>api.generateInstallments(base),/أقساط.*موجودة/);
+ await assert.rejects(()=>api.generateInstallments(base),/أقساط.*موجودة/);
  assert.match(api.leasePlanSummary(base),/عدد الأقساط/);
  assert.match(api.leasePlanSummary(base),/200/);
  assert.match(api.leasePlanSummary(base),/500/);
