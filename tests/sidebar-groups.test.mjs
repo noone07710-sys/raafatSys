@@ -32,7 +32,7 @@ test('collapsible sidebar isolates customers and rooftop landlords and preserves
  s.data.packages=seededDemoPackages();
  s.data.package_rates=seededDemoRates();
 
- assert.equal(NAV_GROUPS.length,2);
+ assert.equal(NAV_GROUPS.length,3);
  assert.deepEqual(NAV_GROUPS[0].items.map(item=>item[0]),[
   'customers','packages','campaigns','customer_contracts','ad_sites','campaign_payments'
  ]);
@@ -43,6 +43,8 @@ test('collapsible sidebar isolates customers and rooftop landlords and preserves
  assert.equal(navGroupForView('campaign_payments'),'customers');
  assert.equal(navGroupForView('leases'),'landlords');
  assert.equal(navGroupForView('lease_installments'),'landlords');
+ assert.equal(navGroupForView('company_expenses'),'finance');
+ assert.deepEqual(NAV_GROUPS[2].items.map(item=>item[0]),['company_expenses']);
  assert.equal(navGroupForView('dashboard'),null);
 
  s.view='dashboard';
@@ -52,6 +54,7 @@ test('collapsible sidebar isolates customers and rooftop landlords and preserves
  assert.match(app.innerHTML,/data-nav-group="landlords" aria-expanded="false"/);
  assert.match(app.innerHTML,/id="nav-group-customers"[^>]*hidden/);
  assert.match(app.innerHTML,/id="nav-group-landlords"[^>]*hidden/);
+ assert.match(app.innerHTML,/id="nav-group-finance"[^>]*hidden/);
 
  const customerToggle=controls['[data-nav-group]'].find(x=>x.dataset.navGroup==='customers');
  assert.equal(typeof customerToggle.onclick,'function');
