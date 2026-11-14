@@ -795,7 +795,7 @@ function expenseOverview(){
   .map(([id,label])=>({id,label,items:all.filter(e=>e.category===id)})).filter(x=>x.items.length)
   .map(x=>'<div class="expense-category-chip"><span>'+E(x.label)+'</span><b>'+E(money(total(x.items),s.displayCurrency))+'</b></div>').join('');
  const cards=filtered.map(e=>{
-  const canEdit=s.demo||s.staff?.role==='admin';
+  const canEdit=s.staff?.role==='admin';
   return '<article class="expense-record"><div class="expense-record-main">'+
    '<span class="expense-record-category">'+E(EXPENSE_CATEGORY_LABELS[e.category]||e.category)+'</span>'+
    '<h3>'+E(e.title)+'</h3>'+
@@ -1593,6 +1593,7 @@ function bind(){
 
 
 function openForm(k,row){
+ if(k==='company_expenses'&&row?.id&&s.staff?.role!=='admin')return toast('تعديل المصروفات متاح للمدير فقط',true);
  const defaults={status:'inquiry',currency:s.displayCurrency,expense_date:today(),category:'hospitality',advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
  let data={...defaults,...(row||{})};
  if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
