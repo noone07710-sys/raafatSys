@@ -251,8 +251,32 @@ function moneyHint(n,currency){
  let other=currency==='USD'?'IQD':'USD';
  return 'يعادل '+money(roundAmount(convert(n,currency,other)),other)+' • السعر: 1$ = '+fmt(s.settings.usd_iqd)+' د.ع';
 }
+
+function packageRatesEditor(){
+ const pkg=s.modal?.data||{},mode=pkg.pricing_mode||'fixed_term',cur=pkg.currency||'USD';
+ const months=mode==='sqm_month'?[1,3,6,12]:[3,6,12];
+ return '<div class="full tier-editor"><h3>تعرفة الباقة حسب مدة الحجز</h3><p class="subtle">'+(mode==='sqm_month'?'السعر هنا للمتر المربع الواحد شهرياً؛ الناتج النهائي يضرب بالمساحة وعدد الأشهر.':'السعر هنا للقطعة الواحدة وللمدة كاملة، ولا يُقسم أو يُضرب بالأشهر.')+' جميع الأسعار تُحفظ مرجعياً بالدولار، ويمكن إدخالها بالعملة المختارة.</p><div class="formgrid">'+months.map(m=>{
+  const rate=packageRate(lookup('packages',pkg.id),m);
+  const original=s.modal.rateDraft?.[m]??(rate?roundAmount(convert(rate.usd_price,'USD',cur)):m===Number(pkg.default_months)?pkg.price:'');
+  return '<label class="field"><span>'+m+' '+(m===1?'شهر':'أشهر')+' — '+(mode==='sqm_month'?'$ / م² / شهر':'للإعلان كامل المدة')+'</span><input type="number" min="0" step="0.01" data-package-rate-month="'+m+'" value="'+E(original)+'" placeholder="أدخل السعر"><small class="conversion-hint" data-rate-hint="'+m+'">'+E(moneyHint(original,cur))+'</small></label>';
+ }).join('')+'</div></div>';
+}
+function packagePricingInfo(v){
+ const pkg=lookup('packages',v.package_id);
+ if(!pkg)return '<div class="notice full">اختر الباقة أولاً لعرض مددها وأسعارها.</div>';
+ let q=quoteCampaign(v,s.modal?.siteIds||[]);
+ let formula=pkg.pricing_mode==='sqm_month'?
+  'المساحة ('+fmt(q?.area||Number(v.requested_area_m2)||campaignSiteArea(s.modal?.siteIds||[]))+' م²) × سعر المتر الشهري × '+Number(v.months||0)+' أشهر':
+  'سعر القطعة لمدة '+Number(v.months||0)+' أشهر × '+Math.max(1,Number(v.quantity)||1,s.modal?.siteIds?.length||0)+' قطعة';
+ return '<div class="notice full"><b>'+E(pkg.name)+'</b> · '+E(formula)+'<div style="margin-top:6px">'+(q?'<strong>'+E(money(q.total,v.currency||'USD'))+'</strong> <small>('+E(money(q.usd,'USD'))+')</small>':'<b>الرجاء اختيار مدة صحيحة'+(pkg.pricing_mode==='sqm_month'?' وإدخال مساحة الإعلان':'')+'</b>')+'</div></div>';
+}
+
 function fieldHtml(f,v,all){
  let [id,label,type,required,opts]=f, val=v?.[id]??'',req=required?'required':'',k=s.modal?.table;
+ if(k==='packages'&&v.pricing_mode==='sqm_month'&&['width_m','height_m','area_m2'].includes(id))return '';
+ if(k==='campaigns'&&id==='quantity'&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month')return '';
+ if(k==='campaigns'&&id==='requested_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
+ if(k==='campaigns'&&id==='months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة الإعلان بالأشهر</span><select name="months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
  if(type==='computed')return '<label class="field"><span>'+E(label)+'</span><output class="computed-area" data-area-output>'+E(fmt(Number(v?.width_m||0)*Number(v?.height_m||0)))+' م²</output><small class="subtle">تُحسب تلقائياً: الطول × العرض</small></label>';
  if(k==='customer_contracts'&&id==='contract_type'){const type=lookup('packages',v.package_id)?.package_type||v.contract_type||'cabin';return '<label class="field"><span>نوع العقد من الباقة الإعلانية</span><output class="computed-area">'+E(labels[type]||type)+'</output><input type="hidden" name="contract_type" value="'+E(type)+'"></label>';}
  if(type==='file')return '<label class="field full"><span>'+E(label)+' — PNG/JPEG/WebP حتى 5MB</span><input name="'+id+'" type="file" accept="image/png,image/jpeg,image/webp"><span class="subtle">'+(v?.card_image_path?'صورة محفوظة خاصة':'ترفع إلى مساحة خاصة بعد الحفظ')+'</span></label>';
@@ -360,11 +384,11 @@ function modalHtml(){
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  let fields=meta.fields;
  if(k==='campaigns'){
-  const steps=[['العميل والحملة',['customer_id','title']],['الباقة والمواقع',['package_id','locations']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
-  const stepFields=s.formStep<4?fields.filter(x=>steps[s.formStep][1].includes(x[0])).map(f=>fieldHtml(f,v,v)).join(''):review(v);
+  const steps=[['العميل والحملة',['customer_id','title']],['الباقة والمواقع',['package_id','locations','quantity','requested_area_m2']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
+  const stepFields=s.formStep<4?fields.filter(x=>steps[s.formStep][1].includes(x[0])).map(f=>fieldHtml(f,v,v)).join('')+(s.formStep===2?packagePricingInfo(v):''):review(v);
   const client=lookup('customers',v.customer_id);
   const extra=s.formStep===0&&client?'<div class="notice full"><b>بيانات العميل:</b> '+E(client.name)+' · '+E(client.phone)+' · '+E(client.rental_address)+' · '+E(labels[client.status]||client.status)+'</div>':
-   s.formStep===1?selectedSiteCards(v):
+   s.formStep===1?selectedSiteCards(v)+packagePricingInfo(v):
    s.formStep===3&&!v.id?'<label class="field"><span>الدفعة الأولى (اختياري، بنفس عملة الحملة)</span><input type="number" name="initial_payment_amount" min="0" step="0.01" value="'+E(v.initial_payment_amount??'')+'"><small class="conversion-hint" data-money-hint="initial_payment_amount">'+E(moneyHint(v.initial_payment_amount||0,v.currency))+'</small></label><label class="field"><span>تاريخ الدفعة</span><input type="date" name="initial_payment_date" value="'+E(v.initial_payment_date||today())+'"></label>':'';
   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.id?'تعديل':'إضافة')+' حملة إعلانية</h2><button class="close" data-action="close">✕</button></div><div class="steps">'+steps.map((x,i)=>'<span class="step '+(s.formStep===i?'current':'')+'">'+(i+1)+'. '+x[0]+'</span>').join('')+'</div><form id="recordForm"><div class="formgrid">'+stepFields+extra+'</div><div class="actions">'+(s.formStep>0?'<button type="button" class="btn secondary" data-action="prevStep">السابق</button>':'')+'<button class="btn" type="submit">'+(s.formStep<4?'التالي':'حفظ الحملة')+'</button></div></form>'+linkedDetails('campaigns',v)+'</div></div>';
  }
@@ -380,7 +404,7 @@ function modalHtml(){
  if(k==='lease_installments'||k==='campaign_payments'){
   fields=[k==='lease_installments'?['lease_id','العقد','lookup:leases',true]:['campaign_id','الحملة','lookup:campaigns',true],['entry_currency','عملة إدخال المبلغ','select',true,['IQD','USD']],...(k==='lease_installments'?[['due_date','تاريخ الاستحقاق','date',true]]:[['paid_at','تاريخ الدفع','date',true]]),['amount',k==='lease_installments'?'قيمة القسط':'قيمة الدفعة','number',true],...(k==='lease_installments'?[['paid_amount','المبلغ المسدد','number',true]]:[]),['notes','الملاحظات','textarea']];
  }
- return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+ (v.id?'تعديل':'إضافة')+' — '+meta.title+'</h2><button class="close" data-action="close">✕</button></div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div>'+(k==='landlords'?landlordRoofMarkup():'')+(k==='campaign_payments'||k==='lease_installments'?'<div class="notice" id="paymentParentInfo"></div>':'')+'<div class="actions"><button class="btn" type="submit">حفظ البيانات</button></div></form>'+(k==='landlords'&&v.card_image_path?'<button class="btn secondary mini" data-card="'+v.id+'">عرض صورة البطاقة المرفوعة</button>':'')+relatedDetails(k,v)+'</div></div>';
+ return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+ (v.id?'تعديل':'إضافة')+' — '+meta.title+'</h2><button class="close" data-action="close">✕</button></div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div>'+(k==='packages'?packageRatesEditor():'')+(k==='landlords'?landlordRoofMarkup():'')+(k==='campaign_payments'||k==='lease_installments'?'<div class="notice" id="paymentParentInfo"></div>':'')+'<div class="actions"><button class="btn" type="submit">حفظ البيانات</button></div></form>'+(k==='landlords'&&v.card_image_path?'<button class="btn secondary mini" data-card="'+v.id+'">عرض صورة البطاقة المرفوعة</button>':'')+relatedDetails(k,v)+'</div></div>';
 }
 
 function review(v){
