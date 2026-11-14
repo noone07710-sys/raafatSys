@@ -508,6 +508,135 @@ function campaignPaymentOverview(){
 }
 
 
+
+function landlordDeleteStats(id){
+ const propertyIds=new Set(s.data.properties.filter(x=>x.landlord_id===id).map(x=>x.id));
+ const leases=s.data.leases.filter(x=>x.landlord_id===id);
+ const leaseIds=new Set(leases.map(x=>x.id));
+ const sites=s.data.ad_sites.filter(x=>propertyIds.has(x.rooftop_property_id));
+ const siteIds=new Set(sites.map(x=>x.id));
+ return {
+  properties:propertyIds.size,sites:sites.length,leases:leases.length,
+  installments:s.data.lease_installments.filter(x=>leaseIds.has(x.lease_id)).length,
+  booked:s.data.ad_sites.filter(x=>siteIds.has(x.id)&&(
+   s.data.campaign_sites.some(link=>link.site_id===x.id)||
+   s.data.customer_contracts.some(contract=>contract.site_id===x.id)
+  )).length
+ };
+}
+function openLandlordDelete(id){
+ if(s.staff?.role!=='admin')return toast('حذف مالكي العقارات مسموح للمدير فقط',true);
+ const landlord=lookup('landlords',id);
+ if(!landlord)return toast('المالك غير موجود',true);
+ s.modal={kind:'deleteLandlord',table:'landlords',data:landlord};
+ render();
+}
+function landlordDeleteDialog(landlord){
+ const stats=landlordDeleteStats(landlord.id);
+ return '<div class="overlay"><div class="modal customer-delete-modal" role="dialog" aria-modal="true" aria-labelledby="landlordDeleteTitle">'+
+ '<div class="modalhead"><h2 id="landlordDeleteTitle">حذف المالك وكل سجلاته</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+ '<div class="customer-delete-warning"><strong>حذف نهائي — لا يمكن التراجع عنه</strong>'+
+ '<p>حذف <b>'+E(landlord.name)+'</b> يشمل الأسطح والعقارات والقطع التابعة لها وعقود الإيجار وكل أقساطها. لا يمس العملاء أو حملاتهم.</p></div>'+
+ '<div class="customer-delete-stats">'+[
+  ['الأسطح والعقارات',stats.properties],['القطع الإعلانية',stats.sites],
+  ['عقود الإيجار',stats.leases],['دفعات وأقساط الإيجار',stats.installments]
+ ].map(([label,count])=>'<div><small>'+E(label)+'</small><strong>'+count+'</strong></div>').join('')+'</div>'+
+ (stats.booked?'<div class="notice landlord-delete-blocked"><strong>الحذف متوقف لحماية عقود الزبائن</strong>'+
+  '<p>عدد '+stats.booked+' من قطع هذا المالك مرتبطة بحملات أو عقود زبائن. فك ارتباطها أولاً، ثم ارجع لحذف المالك.</p></div>':'')+
+ '<form id="deleteLandlordForm"><input type="hidden" name="landlord_id" value="'+E(landlord.id)+'">'+
+ '<label class="field"><span>اكتب كلمة <b>حذف</b> لتأكيد حذف المالك وكل السجلات التابعة له</span>'+
+ '<input name="confirm" id="deleteLandlordConfirmation" autocomplete="off" placeholder="حذف" required'+(stats.booked?' disabled':'')+'></label>'+
+ '<div class="actions"><button class="btn secondary" type="button" data-action="close">إلغاء</button>'+
+ '<button class="btn danger customer-delete-confirm" id="deleteLandlordSubmit" type="submit" disabled>'+uiIcon('trash',16)+' حذف جميع سجلات المالك نهائياً</button></div></form></div></div>';
+}
+async function deleteLandlordConfirmed(form){
+ if(s.deletingLandlord)return;
+ if(s.staff?.role!=='admin')return toast('الحذف النهائي خاص بالمدير',true);
+ const landlord=s.modal?.kind==='deleteLandlord'?s.modal.data:null;
+ if(!landlord)return;
+ const fields=new FormData(form);
+ if(fields.get('confirm')!=='حذف'||fields.get('landlord_id')!==landlord.id)
+  return toast('اكتب كلمة حذف حرفياً للتأكيد',true);
+ const stats=landlordDeleteStats(landlord.id);
+ if(stats.booked)return toast('فك ارتباط قطع المالك بحملات وعقود الزبائن أولاً',true);
+ s.deletingLandlord=true;
+ const submit=$('#deleteLandlordSubmit');if(submit)submit.disabled=true;
+ try{
+  let imagePath=landlord.card_image_path||null;
+  if(s.demo){
+   const properties=new Set(s.data.properties.filter(x=>x.landlord_id===landlord.id).map(x=>x.id));
+   const leases=new Set(s.data.leases.filter(x=>x.landlord_id===landlord.id).map(x=>x.id));
+   s.data.lease_installments=s.data.lease_installments.filter(x=>!leases.has(x.lease_id));
+   s.data.leases=s.data.leases.filter(x=>x.landlord_id!==landlord.id);
+   s.data.ad_sites=s.data.ad_sites.filter(x=>!properties.has(x.rooftop_property_id));
+   s.data.properties=s.data.properties.filter(x=>x.landlord_id!==landlord.id);
+   s.data.landlords=s.data.landlords.filter(x=>x.id!==landlord.id);
+  }else{
+   if(!s.client||!s.session)throw Error('سجّل الدخول بحساب المدير أولاً');
+   const {data,error}=await s.client.rpc('raafat_delete_landlord_cascade',{p_landlord_id:landlord.id});
+   if(error)throw error;
+   if(data?.deleted_landlords!==1)throw Error('الخادم لم يؤكد حذف المالك');
+   imagePath=data.card_image_path||null;
+  }
+  // A storage object is separate from the SQL transaction. Delete it through
+  // the authorized private Storage API, never by manipulating storage tables.
+  let imageIssue='';
+  if(!s.demo&&imagePath){
+   const {error}=await s.client.storage.from('identity-cards').remove([imagePath]);
+   if(error)imageIssue=error.message||'تعذّر تنظيف صورة البطاقة';
+  }
+  s.modal=null;s.search='';s.filter='all';s.view='landlords';
+  if(s.demo)render();else await load();
+  toast(imageIssue?'تم حذف بيانات المالك، لكن تعذّر حذف صورة البطاقة: '+imageIssue:
+   'تم حذف المالك وكل عقاراته وقطعه وعقود إيجاره وأقساطه');
+ }catch(e){
+  toast('تعذّر حذف المالك: '+(e.message||String(e)),true);
+ }finally{
+  s.deletingLandlord=false;
+  if($('#deleteLandlordSubmit'))$('#deleteLandlordSubmit').disabled=false;
+ }
+}
+function openExpenseDelete(id){
+ if(s.staff?.role!=='admin')return toast('حذف المصروفات متاح للمدير فقط',true);
+ const expense=lookup('company_expenses',id);
+ if(!expense)return toast('المصروف غير موجود',true);
+ s.modal={kind:'deleteExpense',table:'company_expenses',data:expense};
+ render();
+}
+function expenseDeleteDialog(expense){
+ return '<div class="overlay"><div class="modal customer-delete-modal" role="dialog" aria-modal="true">'+
+ '<div class="modalhead"><h2>حذف مصروف مسجّل</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+ '<div class="customer-delete-warning"><strong>عملية حذف نهائية</strong><p>المصروف: <b>'+E(expense.title)+
+ '</b>، المبلغ: <b>'+E(money(expense.amount,expense.currency))+'</b>، بتاريخ '+E(expense.expense_date)+'</p></div>'+
+ '<form id="deleteExpenseForm"><input name="expense_id" type="hidden" value="'+E(expense.id)+'">'+
+ '<label class="field"><span>اكتب <b>حذف</b> للتأكيد</span><input id="deleteExpenseConfirmation" name="confirm" required placeholder="حذف"></label>'+
+ '<div class="actions"><button class="btn secondary" data-action="close" type="button">إلغاء</button>'+
+ '<button class="btn danger" id="deleteExpenseSubmit" type="submit" disabled>'+uiIcon('trash',15)+' حذف المصروف نهائياً</button></div></form></div></div>';
+}
+async function deleteExpenseConfirmed(form){
+ if(s.deletingExpense)return;
+ if(s.staff?.role!=='admin')return toast('حذف المصروف متاح للمدير فقط',true);
+ const expense=s.modal?.kind==='deleteExpense'?s.modal.data:null;
+ if(!expense)return;
+ const fields=new FormData(form);
+ if(fields.get('confirm')!=='حذف'||fields.get('expense_id')!==expense.id)
+  return toast('اكتب حذف للتأكيد',true);
+ s.deletingExpense=true;
+ try{
+  if(s.demo)s.data.company_expenses=s.data.company_expenses.filter(row=>row.id!==expense.id);
+  else{
+   const {data,error}=await s.client.from('company_expenses').delete().eq('id',expense.id).select('id').single();
+   if(error)throw error;
+   if(data?.id!==expense.id)throw Error('لم يؤكد الخادم الحذف');
+  }
+  s.modal=null;s.view='company_expenses';s.search='';s.expenseCategory='';
+  if(s.demo)render();else await load();
+  toast('تم حذف المصروف');
+ }catch(e){
+  toast('تعذّر حذف المصروف: '+(e.message||String(e)),true);
+ }finally{s.deletingExpense=false}
+}
+
 function customerCascadeStats(customerId){
  const campaigns=s.data.campaigns.filter(row=>row.customer_id===customerId);
  const ids=new Set(campaigns.map(row=>row.id));
@@ -706,7 +835,7 @@ function listing(k){
   return match&&(k!=='customers'||s.filter==='all'||x.status===s.filter);
  });
  let labelsBy={campaign_payments:'تسجيل دفعة'};
- return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="'+(k==='customers'?'ابحث باسم العميل أو رقم هاتفه...':k==='leases'?'ابحث باسم المالك أو رقم العقد أو اسم السطح...':k==='customer_contracts'?'ابحث باسم الزبون أو رقم العقد...':'بحث بالاسم أو الرقم أو الموقع...')+'" value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">'+uiIcon('plus',16)+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">'+uiIcon('pencil',14)+' تفاصيل / تعديل</button>'+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'" >'+uiIcon('printer',15)+' طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
+ return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="'+(k==='customers'?'ابحث باسم العميل أو رقم هاتفه...':k==='leases'?'ابحث باسم المالك أو رقم العقد أو اسم السطح...':k==='customer_contracts'?'ابحث باسم الزبون أو رقم العقد...':'بحث بالاسم أو الرقم أو الموقع...')+'" value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">'+uiIcon('plus',16)+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">'+uiIcon('pencil',14)+' تفاصيل / تعديل</button>'+(k==='landlords'&&s.staff?.role==='admin'?'<button class="linkbtn customer-delete-link" type="button" data-delete-landlord="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف المالك</button>':'')+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'" >'+uiIcon('printer',15)+' طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
 }
 
 function reports(){
@@ -954,6 +1083,7 @@ function relatedDetails(k,v){
   parts+='<div class="inline"><button type="button" class="btn secondary mini" data-new-linked="campaigns|customer_id|'+v.id+'">+ إنشاء حملة واختيار نوع الإعلان</button><button type="button" class="btn secondary mini" data-new-linked="customer_contracts|customer_id|'+v.id+'">+ عقد زبون</button>'+(s.staff?.role==='admin'?'<button type="button" class="btn danger mini" data-delete-customer="'+E(v.id)+'">'+uiIcon('trash',16)+' حذف الزبون وجميع سجلاته</button>':'')+'</div>';
  }
  if(k==='landlords'){
+  if(s.staff?.role==='admin')parts+='<div class="inline"><button class="btn danger mini" type="button" data-delete-landlord="'+E(v.id)+'">'+uiIcon('trash',16)+' حذف المالك وكل سجلاته</button></div>';
   parts+=list('الأسطح وأبعاد كل واحد',s.data.properties.filter(x=>x.landlord_id===v.id),'properties',x=>x.title+' / '+(x.width_m&&x.height_m?fmt(x.width_m)+' × '+fmt(x.height_m)+' م = '+fmt(x.area_m2)+' م²':x.dimensions));
   parts+=list('عقود المالك',s.data.leases.filter(x=>x.landlord_id===v.id),'leases',x=>x.contract_number+' — '+displayMoneyText(x.rent_total,x.currency));
   parts+='<button type="button" class="btn secondary mini" data-new-linked="properties|landlord_id|'+v.id+'">+ إضافة عقار للمالك</button>';
@@ -1037,6 +1167,8 @@ function leasePlanSummary(v){
 function modalHtml(){
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
+ if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
+ if(m.kind==='deleteExpense')return expenseDeleteDialog(v);
  let fields=meta.fields;
  if(k==='company_expenses'){
   return '<div class="overlay"><div class="modal expense-form-modal"><div class="modalhead"><h2>'+(v.id?'تعديل المصروف':'تسجيل مصروف جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+ 
@@ -1202,6 +1334,18 @@ function bind(){
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
  document.querySelectorAll('[data-delete-customer]').forEach(x=>x.onclick=()=>openCustomerDelete(x.dataset.deleteCustomer));
+ document.querySelectorAll('[data-delete-landlord]').forEach(x=>x.onclick=()=>openLandlordDelete(x.dataset.deleteLandlord));
+ document.querySelectorAll('[data-delete-expense]').forEach(x=>x.onclick=()=>openExpenseDelete(x.dataset.deleteExpense));
+ for(const [formId,inputId,buttonId,handler] of [
+  ['deleteLandlordForm','deleteLandlordConfirmation','deleteLandlordSubmit',deleteLandlordConfirmed],
+  ['deleteExpenseForm','deleteExpenseConfirmation','deleteExpenseSubmit',deleteExpenseConfirmed]
+ ]){
+  const form=$('#'+formId),input=$('#'+inputId),button=$('#'+buttonId);
+  if(form&&input&&button){
+   input.oninput=()=>{button.disabled=input.value.trim()!=='حذف'};
+   form.onsubmit=e=>{e.preventDefault();handler(form)};
+  }
+ }
  if($('#deleteCustomerForm')){
   const form=$('#deleteCustomerForm'),entry=$('#deleteCustomerConfirmation'),button=$('#deleteCustomerSubmit');
   if(entry&&button)entry.oninput=()=>{button.disabled=entry.value.trim()!=='حذف'||Boolean(s.deletingCustomer)};
