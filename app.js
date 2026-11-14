@@ -961,6 +961,8 @@ function formValidate(k,v){
   if(!classified)throw Error('حدد باقة الموقع الإعلاني A أو B أو C أو D أو E');
   const prefix=codedSitePackage(v.code);
   if(prefix&&String(classified.code||'').trim().toUpperCase()!==prefix)throw Error('رمز القطعة '+v.code+' لا يطابق الباقة '+classified.code+' المحددة');
+  if(v.id&&s.data.campaign_sites.some(link=>link.site_id===v.id&&lookup('campaigns',link.campaign_id)?.package_id&&lookup('campaigns',link.campaign_id).package_id!==v.package_id))
+   throw Error('القطعة مرتبطة بحملة من باقة أخرى. غيّر مواقع تلك الحملة قبل تعديل باقة القطعة.');
  }
  if(k==='campaigns'){
   const pkg=lookup('packages',v.package_id);
