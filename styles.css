@@ -28,3 +28,35 @@
 @media print{
  .related-panel,.currency-switch,.close{display:none!important}
 }
+
+/* Measured packages and individually measured rooftop spaces */
+.computed-area{display:flex;align-items:center;padding:11px 13px;min-height:44px;border-radius:10px;background:#eaf5f6;border:1px solid #cde2e5;color:#14666e;font-weight:800;direction:ltr;justify-content:flex-end}
+.roof-section{margin:20px 0 4px;padding-top:18px;border-top:1px solid #e0e8ef}
+.roof-section h3{font-size:17px;margin-bottom:5px}
+.roof-draft{background:#f8fafc;border:1px solid #dee7ef;border-radius:14px;padding:14px;margin:14px 0}
+.roof-draft>.inline{justify-content:space-between;margin-bottom:8px}
+.roof-draft .computed-area{background:#e8f6f1}
+.contract-head{text-align:center;border-bottom:2px solid #183648;padding:5px 0 22px;margin-bottom:18px}
+.contract-head h2{margin:0 0 8px;font-size:20px}
+.contract-head h3{margin:0 0 12px;font-size:16px}
+.contract-head>strong{display:block;font:800 20px Cairo,Tahoma,sans-serif;direction:ltr}
+.contract-head>small{display:block;color:#667789;margin-top:5px}
+.printed-contract .summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.printed-contract .summary div{background:#fafbfc;border:1px solid #e2e7eb;line-height:1.6}
+.printed-contract .summary strong{display:block;font-size:12px;overflow-wrap:anywhere}
+.printed-contract h3{margin-top:20px;font-size:15px}
+.printed-contract .legal-text{border-bottom:1px solid #e3eaf0;padding-bottom:12px;white-space:pre-wrap;font-size:12px;min-height:32px;line-height:1.9}
+.contract-sign{display:flex;justify-content:space-between;gap:30px;margin:55px 0 24px;font-size:13px;line-height:2.2}
+.print-note{color:#687481;font-size:10px;margin-top:24px;text-align:center}
+@page{size:A4;margin:15mm}
+@media print{
+ html,body,#app{margin:0!important;padding:0!important;background:#fff!important;color:#111!important;width:100%!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+ .shell,.sidebar,.toolbar,.top,.noprint,.actions,.related-panel,.currency-switch,.close{display:none!important}
+ .overlay.print-overlay,.overlay{display:block!important;position:static!important;inset:auto!important;background:#fff!important;padding:0!important;height:auto!important;min-height:0!important}
+ .modal,.print-modal{width:100%!important;max-width:none!important;max-height:none!important;min-height:0!important;overflow:visible!important;margin:0!important;border:0!important;border-radius:0!important;padding:0!important;box-shadow:none!important}
+ .contract,.printed-contract{padding:0!important;width:100%!important;background:white!important}
+ .printed-contract .summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .contract table,.contract .summary{break-inside:avoid}
+ .contract-sign{break-inside:avoid}
+ .print-note{font-size:9px}
+}
