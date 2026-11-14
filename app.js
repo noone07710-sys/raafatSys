@@ -351,7 +351,68 @@ function showVal(k,row,f){
  if(['price','rent_total','amount','paid_amount'].includes(f))return displayMoney(v,originalCurrency(k,row));
  return E(v);
 }
+function campaignPaymentOverview(){
+ const q=s.search.trim().toLocaleLowerCase();
+ const rows=s.data.campaigns.filter(cam=>
+  !q||[cam.title,cam.notes,cam.locations,
+    nameOf('customers',cam.customer_id),nameOf('packages',cam.package_id),
+    ...linkedSites(cam.id).flatMap(site=>[site.code,site.name])
+  ].some(value=>String(value||'').toLocaleLowerCase().includes(q)));
+ const total=s.data.campaigns.reduce((sum,cam)=>sum+convert(Number(cam.price||0),cam.currency,s.displayCurrency),0);
+ const received=s.data.campaigns.reduce((sum,cam)=>sum+convert(campaignPaid(cam.id),cam.currency,s.displayCurrency),0);
+ const remaining=s.data.campaigns.reduce((sum,cam)=>sum+convert(campaignBalance(cam),cam.currency,s.displayCurrency),0);
+ const summary=[
+  ['إجمالي قيمة الحملات',total,'total'],
+  ['إجمالي المبالغ الواصلة',received,'received'],
+  ['إجمالي المبالغ المتبقية',remaining,'remaining']
+ ].map(([label,amount,kind])=>'<div class="campaign-payments-summary '+kind+'"><small>'+label+'</small><strong>'+E(money(roundAmount(amount),s.displayCurrency))+'</strong></div>').join('');
+ const cards=rows.map(cam=>{
+  const paid=roundAmount(campaignPaid(cam.id));
+  const price=roundAmount(Number(cam.price)||0);
+  const balance=campaignBalance(cam);
+  const allPaid=balance<=0;
+  const progress=price>0?Math.max(0,Math.min(100,paid/price*100)):100;
+  const payments=s.data.campaign_payments.filter(payment=>payment.campaign_id===cam.id)
+   .sort((a,b)=>String(b.paid_at||b.created_at||'').localeCompare(String(a.paid_at||a.created_at||'')));
+  const cardTop='<div class="campaign-payment-head"><div class="campaign-payment-heading"><strong>'+E(cam.title||'حملة بدون عنوان')+'</strong>'+
+    '<small>العميل: '+E(nameOf('customers',cam.customer_id))+' · '+E(nameOf('packages',cam.package_id))+
+    (cam.months?' · '+E(cam.months)+' أشهر':'')+'</small></div>'+
+    '<span class="campaign-payment-status '+(allPaid?'settled':paid>0?'partial':'unpaid')+'">'+
+    (allPaid?'مسددة بالكامل':paid>0?'تسديد جزئي':'لم تُسدَّد')+'</span></div>';
+  const metrics='<div class="campaign-payment-metrics">'+
+   '<div><small>إجمالي الحملة</small><b>'+E(money(price,cam.currency))+'</b></div>'+
+   '<div><small>الواصل</small><b>'+E(money(paid,cam.currency))+'</b></div>'+
+   '<div><small>المتبقي</small><b>'+E(money(balance,cam.currency))+'</b></div></div>';
+  const history=payments.length?payments.map((payment,i)=>
+   '<div class="campaign-payment-history-row"><span class="campaign-payment-history-index">'+(payments.length-i)+'</span>'+
+   '<span class="campaign-payment-history-date">'+E(payment.paid_at||'—')+'</span>'+
+   '<span class="campaign-payment-history-amount">'+E(money(payment.amount,cam.currency))+'</span>'+
+   '<span class="campaign-payment-history-notes">'+E(payment.notes||'—')+'</span>'+
+   '<button type="button" class="linkbtn" data-edit="campaign_payments:'+E(payment.id)+'">تعديل الدفعة</button></div>'
+  ).join(''):'<p class="campaign-payment-nohistory">لا توجد دفعات مسجلة لهذه الحملة بعد.</p>';
+  return '<article class="campaign-payment-card">'+cardTop+metrics+
+   '<div class="campaign-payment-progress" role="progressbar" aria-label="نسبة السداد" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(progress)+'"><span style="width:'+progress+'%"></span></div>'+
+   '<div class="campaign-payment-actions">'+
+   '<button type="button" class="btn" data-new-linked="campaign_payments|campaign_id|'+E(cam.id)+'"'+(allPaid?' disabled title="الحملة مسددة بالكامل"':'')+'>'+
+   (allPaid?'تم تسديد الحملة':' + تسجيل دفعة جديدة')+'</button>'+
+   '<details class="campaign-payment-history"><summary>سجل الدفعات السابقة ('+payments.length+')</summary>'+
+   '<div class="campaign-payment-history-list">'+history+'</div></details>'+
+   '</div></article>';
+ }).join('');
+ return '<div class="campaign-payments-page">'+
+  '<div class="campaign-payments-intro"><h2>حسابات الحملات الإعلانية</h2><p>كل حملة تظهر مع إجمالي مبلغها والواصل والمتبقي. سجّل الدفعة مباشرة من نفس الحملة، وراجع سجل الدفعات القديمة عند الحاجة.</p></div>'+
+  '<div class="campaign-payments-summary-grid">'+summary+'</div>'+
+  '<div class="campaign-payments-toolbar"><input class="search" id="search" type="search" placeholder="ابحث باسم الحملة أو الزبون أو الباقة..." value="'+E(s.search)+'">'+
+  '<span class="campaign-payments-count">الحملات الظاهرة: '+rows.length+' من '+s.data.campaigns.length+'</span></div>'+
+  '<div class="campaign-payment-list">'+(cards||'<div class="box empty campaign-payment-empty">'+
+  (s.data.campaigns.length?'لا توجد حملات مطابقة للبحث.':'ماكو حملات مسجّلة بعد. من قسم المشاريع والحملات تگدر تنشئ أول حملة، وبعدها تظهر دفعاتها هنا.')+
+  '</div>')+'</div>'+
+  '<p class="subtle campaign-payments-footnote">تُعرض قيمة كل حملة وعوائدها بعملتها الأصلية. المجاميع العلوية محوّلة إلى العملة المختارة بالنظام باستخدام سعر الصرف المحدد في الإعدادات.</p>'+
+ '</div>';
+}
+
 function listing(k){
+ if(k==='campaign_payments')return campaignPaymentOverview();
  const rows=visibleTable(k).filter(x=>{
   let q=s.search.trim().toLocaleLowerCase(),match=!q||JSON.stringify(x).toLocaleLowerCase().includes(q)||
    (x.landlord_id&&nameOf('landlords',x.landlord_id).toLocaleLowerCase().includes(q))||
@@ -668,6 +729,30 @@ function modalHtml(){
    s.formStep===3&&!v.id?'<label class="field"><span>الدفعة الأولى (اختياري، بنفس عملة الحملة)</span><input type="number" name="initial_payment_amount" min="0" step="0.01" value="'+E(v.initial_payment_amount??'')+'"><small class="conversion-hint" data-money-hint="initial_payment_amount">'+E(moneyHint(v.initial_payment_amount||0,v.currency))+'</small></label><label class="field"><span>تاريخ الدفعة</span><input type="date" name="initial_payment_date" value="'+E(v.initial_payment_date||today())+'"></label>':'';
   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.id?'تعديل':'إضافة')+' حملة إعلانية</h2><button class="close" data-action="close">✕</button></div><div class="steps">'+steps.map((x,i)=>'<span class="step '+(s.formStep===i?'current':'')+'">'+(i+1)+'. '+x[0]+'</span>').join('')+'</div><form id="recordForm"><div class="formgrid">'+stepFields+extra+'</div><div class="actions">'+(s.formStep>0?'<button type="button" class="btn secondary" data-action="prevStep">السابق</button>':'')+'<button class="btn" type="submit">'+(s.formStep<4?'التالي':'حفظ الحملة')+'</button></div></form>'+relatedDetails('campaigns',v)+'</div></div>';
  }
+ if(k==='campaign_payments'){
+  const parent=lookup('campaigns',v.campaign_id);
+  if(!parent)return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>دفعة حملة</h2><button class="close" data-action="close">✕</button></div><div class="notice">اختر الحملة أولاً من صفحة دفعات الحملات.</div></div></div>';
+  const paidOthers=s.data.campaign_payments.filter(payment=>payment.campaign_id===parent.id&&payment.id!==v.id)
+   .reduce((sum,payment)=>sum+Number(payment.amount||0),0);
+  const canPay=Math.max(0,roundAmount(Number(parent.price)-paidOthers));
+  const editableFields=[
+   ['entry_currency','عملة استلام الدفعة','select',true,['IQD','USD']],
+   ['paid_at','تاريخ استلام الدفعة','date',true],
+   ['amount','المبلغ المستلم','number',true],
+   ['notes','ملاحظات على الدفعة','textarea']
+  ];
+  return '<div class="overlay"><div class="modal campaign-payment-modal"><div class="modalhead"><h2>'+(v.id?'تعديل دفعة مسجلة':'تسجيل دفعة للحملة')+'</h2><button class="close" data-action="close">✕</button></div>'+
+   '<div class="campaign-payment-modal-parent"><strong>'+E(parent.title)+'</strong><span>الزبون: '+E(nameOf('customers',parent.customer_id))+'</span></div>'+
+   '<div class="campaign-payment-modal-balances">'+
+   '<div><small>إجمالي الحملة</small><b>'+E(money(parent.price,parent.currency))+'</b></div>'+
+   '<div><small>المبلغ الواصل سابقاً'+(v.id?' باستثناء الدفعة الحالية':'')+'</small><b>'+E(money(paidOthers,parent.currency))+'</b></div>'+
+   '<div><small>المتاح لهذه الدفعة</small><b>'+E(money(canPay,parent.currency))+'</b></div></div>'+
+   '<form id="recordForm"><input type="hidden" name="campaign_id" value="'+E(parent.id)+'">'+
+   '<div class="formgrid">'+editableFields.map(field=>fieldHtml(field,v,v)).join('')+'</div>'+
+   '<div class="notice" id="paymentParentInfo"></div>'+
+   '<div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ تعديل الدفعة':'حفظ الدفعة وتحديث رصيد الحملة')+'</button></div></form>'+
+   '<p class="subtle">تُحفظ الدفعة بعملة الحملة الأصلية، ويُحتسب المبلغ المقابل تلقائياً عند اختلاف عملة الاستلام.</p></div></div>';
+ }
  if(k==='leases'){
   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(v.contract_number):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">✕</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الدفعات')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+v.id+'">معاينة / طباعة</button><button class="btn secondary" data-renew="'+v.id+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
@@ -772,7 +857,7 @@ function bind(){
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
  document.querySelectorAll('[data-new-linked]').forEach(x=>x.onclick=()=>{let [k,field,id]=x.dataset.newLinked.split('|');let data={[field]:id};if(field==='property_id')data.landlord_id=lookup('properties',id)?.landlord_id;if(field==='campaign_id'){
    const parent=lookup('campaigns',id);
-   if(k==='campaign_payments')data.amount=campaignBalance(parent);
+   if(k==='campaign_payments')data.amount='';
    if(k==='customer_contracts'&&parent){data.customer_id=parent.customer_id;data.package_id=parent.package_id;data.amount=parent.price;data.currency=parent.currency;}
   }if(field==='site_id')data.siteIds=[id];openForm(k,data)});
  document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'leases',data:lookup('leases',x.dataset.preview)};render()});
@@ -1082,6 +1167,8 @@ function formValidate(k,v){
  if(k==='campaign_payments'){
   const campaign=lookup('campaigns',v.campaign_id);
   if(!campaign)throw Error('اختر حملة مسجلة أولاً');
+  const original=v.id?lookup('campaign_payments',v.id):null;
+  if(original&&original.campaign_id!==v.campaign_id)throw Error('لا يمكن نقل دفعة قديمة إلى حملة أخرى');
   if(!(Number(v.amount)>0))throw Error('الدفعة يجب أن تكون أكبر من الصفر');
   const others=s.data.campaign_payments.filter(x=>x.campaign_id===v.campaign_id&&x.id!==v.id).reduce((a,x)=>a+Number(x.amount),0);
   if(Number(v.amount)>Number(campaign.price)-others+0.001)throw Error('قيمة الدفعة أكبر من رصيد الحملة المتبقي');
