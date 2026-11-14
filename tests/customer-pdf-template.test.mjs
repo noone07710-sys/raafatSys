@@ -94,6 +94,14 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  assert.ok(!calls.canvasTexts.some(x=>x.includes('123456789012')),'identity-card values must never be written anywhere on a PDF page');
  assert.ok(!calls.canvasTexts.some(x=>x.includes('البطاقة')||x.includes('الرقم الوطني')),'identity-card labels must never appear on the PDF');
  assert.ok(calls.templateFetches.some(x=>x==='https://example.test/raafatSys/customer-contract-template.pdf'));
+ const pagesBefore=calls.added;
+ await assert.rejects(
+  ()=>pdf.generate({...data,
+   sites:Array.from({length:100},(_,i)=>({code:'E'+i,name:'لوحة إعلان رقم '+i,address:'تكريت شارع الزهور'})),
+   terms:'شرط طويل يتكرر حتى يتجاوز مساحة الورقة '.repeat(200)}),
+  /لا تكفي صفحة A4 واحدة/
+ );
+ assert.equal(calls.added,pagesBefore,'extremely long legal agreements must not generate extra pages or incomplete files');
 });
 
 test('live saved-contract data drives PDF fields without replacing original company logo or editing contract snapshots',async()=>{
