@@ -138,23 +138,43 @@ function quotePackageUSD(pkg,months,quantity=1,areaM2=0){
   (Number(areaM2)>0?roundAmount(base*Number(months)*Number(areaM2)):null):
   roundAmount(base*Math.max(1,Number(quantity)||1));
 }
-function campaignSiteArea(ids){
- return (ids||[]).reduce((sum,id)=>{
-  const site=lookup('ad_sites',id),roof=lookup('properties',site?.rooftop_property_id);
-  return sum+Number(roof?.area_m2||0);
- },0);
+function rooftopSiteArea(site){
+ const roof=lookup('properties',site?.rooftop_property_id);
+ if(!roof)return 0;
+ const stored=Number(roof.area_m2);
+ const calculated=Number(roof.width_m)*Number(roof.height_m);
+ return Number.isFinite(stored)&&stored>0?stored:
+  (Number.isFinite(calculated)&&calculated>0?roundAmount(calculated):0);
 }
+function selectedRooftopAreas(ids){
+ const invalid=[],sites=[];
+ let area=0;
+ for(const id of ids||[]){
+  const site=lookup('ad_sites',id),size=rooftopSiteArea(site);
+  if(!site||!site.rooftop_property_id||!(size>0)){
+   invalid.push(site?.code||String(id));continue;
+  }
+  sites.push({id:site.id,code:site.code,name:site.name,area:size});
+  area+=size;
+ }
+ return {area:roundAmount(area),invalid,sites};
+}
+function campaignSiteArea(ids){return selectedRooftopAreas(ids).area;}
 function quoteCampaign(v,ids=[]){
  const pkg=lookup('packages',v.package_id);if(!pkg)return null;
  const count=Math.max(1,Number(v.quantity)||1,(ids||[]).length);
- const area=Number(v.requested_area_m2)>0?Number(v.requested_area_m2):campaignSiteArea(ids);
+ const area=pkg.pricing_mode==='sqm_month'?campaignSiteArea(ids):0;
  const usd=quotePackageUSD(pkg,Number(v.months),count,area);
  return usd===null?null:{usd,total:roundAmount(convert(usd,'USD',v.currency||'USD')),quantity:count,area};
 }
 function refreshCampaignQuote(){
- if(s.modal?.table!=='campaigns'||!s.modal.autoPrice)return;
- const v=s.modal.data;
- const quoted=quoteCampaign(v,s.modal.siteIds);
+ if(s.modal?.table!=='campaigns')return;
+ const v=s.modal.data, pkg=lookup('packages',v.package_id);
+ const ids=s.modal.siteIds||[];
+ v.requested_area_m2=pkg?.pricing_mode==='sqm_month'?(campaignSiteArea(ids)||null):null;
+ if(pkg?.pricing_mode==='sqm_month')v.quantity=Math.max(1,ids.length);
+ if(!s.modal.autoPrice)return;
+ const quoted=quoteCampaign(v,ids);
  v.price=quoted?quoted.total:0;
 }
 function packageRatesMarkup(pkg,currency=s.displayCurrency){
@@ -637,11 +657,23 @@ function packageRatesEditor(){
 function packagePricingInfo(v){
  const pkg=lookup('packages',v.package_id);
  if(!pkg)return '<div class="notice full">اختر الباقة أولاً لعرض مددها وأسعارها.</div>';
- let q=quoteCampaign(v,s.modal?.siteIds||[]);
- let formula=pkg.pricing_mode==='sqm_month'?
-  'المساحة ('+fmt(q?.area||Number(v.requested_area_m2)||campaignSiteArea(s.modal?.siteIds||[]))+' م²) × سعر المتر الشهري × '+Number(v.months||0)+' أشهر':
-  'سعر القطعة لمدة '+Number(v.months||0)+' أشهر × '+Math.max(1,Number(v.quantity)||1,s.modal?.siteIds?.length||0)+' قطعة';
- return '<div class="notice full"><b>'+E(pkg.name)+'</b> · '+E(formula)+'<div style="margin-top:6px">'+(q?'<strong>'+E(money(q.total,v.currency||'USD'))+'</strong> <small>('+E(money(q.usd,'USD'))+')</small>':'<b>الرجاء اختيار مدة صحيحة'+(pkg.pricing_mode==='sqm_month'?' وإدخال مساحة الإعلان':'')+'</b>')+'</div></div>';
+ const ids=s.modal?.siteIds||[],roofMode=pkg.pricing_mode==='sqm_month';
+ const roofs=selectedRooftopAreas(ids);
+ const q=quoteCampaign(v,ids);
+ const formula=roofMode?
+  'مساحة الأسطح المختارة ('+fmt(roofs.area)+' م²) × سعر المتر الشهري × '+Number(v.months||0)+' أشهر':
+  'سعر القطعة لمدة '+Number(v.months||0)+' أشهر × '+Math.max(1,Number(v.quantity)||1,ids.length)+' قطعة';
+ const details=roofMode?'<div class="campaign-auto-area"><strong>المساحة المحتسبة تلقائياً: '+E(fmt(roofs.area))+' م²</strong>'+
+  '<small>من القياسات المسجلة مسبقاً في قسم الأسطح والعقارات، دون إدخال الأمتار من جديد.</small>'+
+  (roofs.sites.length?'<small>'+E(roofs.sites.map(x=>(x.code||x.name)+' ('+fmt(x.area)+' م²)').join('، '))+'</small>':'')+
+  (roofs.invalid.length?'<small class="campaign-area-error">هذه القطع بلا سطح مرتبط بقياس صحيح: '+E(roofs.invalid.join('، '))+'. صحّح ربط السطح وقياسه أولاً.</small>':'')+
+  (!ids.length?'<small class="campaign-area-error">اختَر سطحاً من قائمة قطع الباقة E حتى تظهر المساحة والسعر.</small>':'')+
+  '</div>':'';
+ return '<div class="notice full"><b>'+E(pkg.name)+'</b> · '+E(formula)+details+
+  '<div style="margin-top:6px">'+
+  (q&&(!roofMode||!roofs.invalid.length)?'<strong>'+E(money(q.total,v.currency||'USD'))+'</strong> <small>('+E(money(q.usd,'USD'))+')</small>':
+   '<b>'+E(roofMode?'اختَر سطحاً مسجلاً بقياس صحيح ومدة تسعير معتمدة':'الرجاء اختيار مدة مسعّرة صحيحة')+'</b>')+
+  '</div></div>';
 }
 
 
@@ -739,7 +771,7 @@ function fieldHtml(f,v,all){
  if(k==='customer_contracts'&&id==='rented_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
  if(k==='customer_contracts'&&id==='duration_months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة عقد الزبون</span><select name="duration_months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
  if(k==='campaigns'&&id==='quantity'&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month')return '';
- if(k==='campaigns'&&id==='requested_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
+ if(k==='campaigns'&&id==='requested_area_m2')return ''; // E takes the area directly from selected registered rooftops.
  if(k==='campaigns'&&id==='months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة الإعلان بالأشهر</span><select name="months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
  if(id==='governorate')return governorateField(id,label,val,required);
  if(type==='computed')return '<label class="field"><span>'+E(label)+'</span><output class="computed-area" data-area-output>'+E(fmt(Number(v?.width_m||0)*Number(v?.height_m||0)))+' م²</output><small class="subtle">تُحسب تلقائياً: الطول × العرض</small></label>';
@@ -775,7 +807,7 @@ function selectedSiteCards(v){
  const mismatch=selected.filter(id=>!siteMatchesPackage(lookup('ad_sites',id),pkg.id));
  const notice=mismatch.length?'<div class="notice full">توجد '+mismatch.length+' قطع مرتبطة سابقاً بالحملة من باقة مختلفة. غيّر الباقة أو صحّح تصنيف القطع قبل الحفظ.</div>':'';
  if(!rows.length)return notice+'<div class="notice full">ماكو قطع مسجّلة للباقة <b>'+E(pkg.code)+'</b> حالياً. أضف قطع من قسم «المواقع الإعلانية» وحدّد الباقة '+E(pkg.code)+' أو أدخل موقعاً نصياً إضافياً.</div>';
- return notice+'<div class="full"><strong>القطع التابعة للباقة '+E(pkg.code)+' فقط</strong><p class="subtle">'+rows.length+' قطعة من نوع '+E(pkg.name)+' — اختَر قطعة أو أكثر. القطع من الباقات الأخرى مخفية تلقائياً.</p><div class="site-picker">'+rows.map(x=>'<label class="site-option"><input type="checkbox" data-site-id="'+E(x.id)+'" '+(selected.includes(x.id)?'checked':'')+'><span><b>'+E(x.code)+' — '+E(x.name)+'</b><small>'+E(labels[x.site_type]||x.site_type)+' · '+E(x.governorate)+' · '+E(x.address)+(x.active===false?' · غير متاحة حالياً':'')+(x.rooftop_property_id?' · '+E(nameOf('properties',x.rooftop_property_id)):'')+'</small></span></label>').join('')+'</div></div>';
+ return notice+'<div class="full"><strong>القطع التابعة للباقة '+E(pkg.code)+' فقط</strong><p class="subtle">'+rows.length+' قطعة من نوع '+E(pkg.name)+' — اختَر قطعة أو أكثر. القطع من الباقات الأخرى مخفية تلقائياً.</p><div class="site-picker">'+rows.map(x=>'<label class="site-option"><input type="checkbox" data-site-id="'+E(x.id)+'" '+(selected.includes(x.id)?'checked':'')+'><span><b>'+E(x.code)+' — '+E(x.name)+'</b><small>'+E(labels[x.site_type]||x.site_type)+' · '+E(x.governorate)+' · '+E(x.address)+(x.active===false?' · غير متاحة حالياً':'')+(x.rooftop_property_id?' · '+E(nameOf('properties',x.rooftop_property_id)):'')+(pkg.pricing_mode==='sqm_month'?' · '+(rooftopSiteArea(x)>0?E(fmt(rooftopSiteArea(x)))+' م²':'السطح بلا قياس مسجّل'):'')+'</small></span></label>').join('')+'</div></div>';
 }
 
 function relatedDetails(k,v){
@@ -856,7 +888,7 @@ function modalHtml(){
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  let fields=meta.fields;
  if(k==='campaigns'){
-  const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity','requested_area_m2']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
+  const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
   const stepFields=s.formStep<4?fields.filter(x=>steps[s.formStep][1].includes(x[0])).map(f=>fieldHtml(f,v,v)).join('')+(s.formStep===2?packagePricingInfo(v):''):review(v);
   const client=lookup('customers',v.customer_id);
   const extra=s.formStep===0&&client?'<div class="notice full"><b>بيانات العميل:</b> '+E(client.name)+' · '+E(client.phone)+' · '+E(client.rental_address)+' · '+E(labels[client.status]||client.status)+'</div>':
@@ -1291,7 +1323,12 @@ function formValidate(k,v){
   const pkg=lookup('packages',v.package_id);
   if(pkg&&packageRates(pkg).length){
    if(!packageRate(pkg,v.months))throw Error('هذه المدة غير مسعّرة في الباقة. اختر مدة من الخيارات الرسمية.');
-   if(pkg.pricing_mode==='sqm_month'&&!(Number(v.requested_area_m2)>0||campaignSiteArea(s.modal?.siteIds||[])>0))throw Error('أدخل مساحة إعلان الأسطح بالمتر المربع حتى نحتسب السعر الصحيح.');
+   if(pkg.pricing_mode==='sqm_month'){
+    const selected=s.modal?.siteIds||[],roofs=selectedRooftopAreas(selected);
+    if(!selected.length)throw Error('اختَر سطحاً إعلانياً من الباقة E، فالمساحة تُؤخذ من قياس السطح المسجل');
+    if(roofs.invalid.length)throw Error('لا يمكن احتساب مساحة الباقة E للقطع: '+roofs.invalid.join('، ')+'؛ اربط كل قطعة بسطح ذي قياس صحيح');
+    if(!(roofs.area>0))throw Error('مساحة السطح المسجل غير صحيحة، صحّح الطول والعرض في قسم الأسطح');
+   }
   }
   if(!lookup('customers',v.customer_id))throw Error('اختر عميلاً مسجلاً أولاً');
   if(!v.start_date||!/^\d{4}-\d{2}-\d{2}$/.test(String(v.start_date)))throw Error('حدد تاريخ بدء الحملة قبل حفظها');
@@ -1334,6 +1371,12 @@ function clean(k,v){
  let o={};
  fields.forEach(f=>{if(v[f]!==undefined){
   let val=v[f];
+  // Never send an empty string into PostgreSQL numeric columns.
+  // A blank optional numeric field must be null (not the invalid numeric value "").
+  const numericField=defs[k]?.fields.some(field=>field[0]===f&&field[2]==='number')||
+   (['campaign_payments','lease_installments'].includes(k)&&['amount','paid_amount'].includes(f));
+  if(numericField&&(val===''||val===null))val=null;
+  if(numericField&&val!==null&&(!Number.isFinite(Number(val))))throw Error('قيمة رقمية غير صالحة في '+f);
   if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','company_representative','landlord_representative','locations'].includes(f))val=null;
   if(f==='active')val=(val===true||val==='true');
   o[f]=val;
@@ -1394,6 +1437,9 @@ async function saveForm(form){
   refreshCampaignQuote();
   if(s.formStep===1&&!lookup('packages',v.package_id)){toast('اختَر الباقة الإعلانية أولاً',true);return;}
   if(s.formStep===1&&m.siteIds?.some(id=>!siteMatchesPackage(lookup('ad_sites',id),v.package_id))){toast('القطع المختارة لا تتبع الباقة المحددة، صحّح اختيار المواقع',true);return;}
+  if(s.formStep===1&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month'&&(!m.siteIds?.length||selectedRooftopAreas(m.siteIds).invalid.length)){
+   toast('الباقة E تتطلب اختيار سطح مرتبط بعقار له قياس صحيح؛ لا تحتاج إدخال الأمتار يدوياً',true);return;
+  }
   if(s.formStep===1&&!m.siteIds?.length&&!String(v.locations||'').trim()){
    toast('حدد موقعاً من القائمة أو أدخل موقعاً إضافياً قبل المتابعة',true);return;
   }
@@ -1401,6 +1447,18 @@ async function saveForm(form){
  }
  try{
   const normalized={...v};
+  if(k==='campaigns'){
+   const pkg=lookup('packages',v.package_id);
+   if(pkg?.pricing_mode==='sqm_month'){
+    const chosen=selectedRooftopAreas(m.siteIds||[]);
+    if(!(chosen.area>0)||!m.siteIds?.length||chosen.invalid.length)
+     throw Error('اختَر قطع الباقة E المرتبطة بأسطح مسجّلة لها مساحة صحيحة');
+    normalized.requested_area_m2=chosen.area;
+    normalized.quantity=Math.max(1,m.siteIds.length);
+   }else{
+    normalized.requested_area_m2=null;
+   }
+  }
   if(k==='customer_contracts'&&!v.id){
    const cam=lookup('campaigns',v.campaign_id);
    if(!cam)throw Error('اختَر حملة إعلانية محفوظة قبل إنشاء عقد الزبون');
