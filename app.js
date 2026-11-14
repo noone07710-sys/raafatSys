@@ -320,15 +320,71 @@ function bind(){
  updateMoneyHints();
 }
 
-function openForm(k,row){let defaults={status:'inquiry',currency:'IQD',default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};s.modal={kind:'edit',table:k,data:{...defaults,...(row||{})}};s.formStep=0;render()}
-function captureForm(form){if(!s.modal)return;let data=new FormData(form);for(let [k,v] of data.entries()){if(!(v instanceof File))s.modal.data[k]=v}}
-function formValidate(k,v){if(k==='customers'&&(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id)))throw Error('رقم الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
- if(['landlords','customers'].includes(k)&&v.alternate_phone&&!/^[0-9]{11}$/.test(v.alternate_phone))throw Error('الهاتف البديل يجب أن يكون 11 رقم');
- if(k==='landlords'&&!/^[0-9]{11}$/.test(v.phone))throw Error('رقم هاتف المالك يجب أن يكون 11 رقم');
- if(k==='leases'&&new Date(v.end_date)<new Date(v.start_date))throw Error('تاريخ انتهاء العقد يجب أن يكون بعد البداية');
- if(k==='leases'&&lookup('properties',v.property_id)?.landlord_id!==v.landlord_id)throw Error('العقار ليس تابعاً للمالك المختار');
+
+function openForm(k,row){
+ const defaults={status:'inquiry',currency:s.displayCurrency,site_type:'roadside',default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
+ let data={...defaults,...(row||{})};
+ if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.price=pack.price;data.currency=pack.currency;data.months=pack.default_months;}}
+ const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
+ s.modal={kind:'edit',table:k,data,siteIds:[...ids],autoPrice:k==='campaigns'&&!data.id};
+ s.formStep=0;render();
 }
-function clean(k,v){let fields=k==='campaign_payments'?['campaign_id','paid_at','amount','notes']:k==='lease_installments'?['lease_id','due_date','amount','paid_amount','notes']:defs[k].fields.filter(x=>x[2]!=='file').map(x=>x[0]);if(k==='leases')fields.push('renewed_from');let o={};fields.forEach(f=>{if(v[f]!==undefined){let val=v[f];if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','renewed_from','company_representative','landlord_representative'].includes(f))val=null;o[f]=val}});if(k==='landlords'&&v.card_image_path)o.card_image_path=v.card_image_path;return o}
+function captureForm(form){
+ if(!s.modal||!form)return;
+ const data=new FormData(form);
+ for(let [k,v] of data.entries())if(!(v instanceof File))s.modal.data[k]=v;
+ const siteInputs=[...form.querySelectorAll('[data-site-id]')];
+ if(siteInputs.length)s.modal.siteIds=siteInputs.filter(el=>el.checked).map(el=>el.dataset.siteId);
+}
+function formValidate(k,v){
+ if(k==='customers'&&(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id)))throw Error('الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
+ if(['landlords','customers'].includes(k)&&v.alternate_phone&&!/^[0-9]{11}$/.test(v.alternate_phone))throw Error('الهاتف البديل يجب أن يكون 11 رقم');
+ if(k==='landlords'&&(!/^[0-9]{11}$/.test(v.phone)||(v.national_id&&!/^[0-9]{12}$/.test(v.national_id))))throw Error('هاتف المالك 11 رقم، ورقم البطاقة عند إدخاله 12 رقم');
+ if(k==='ad_sites'&&v.site_type==='rooftop'&&!v.rooftop_property_id)throw Error('موقع السطح لازم تربطه بعقار مسجل عند مالك');
+ if(k==='campaigns'){
+  if(!lookup('customers',v.customer_id))throw Error('اختر عميلاً مسجلاً أولاً');
+  if(v.package_id&&!lookup('packages',v.package_id))throw Error('الباقة غير موجودة في السجلات');
+  if(!s.modal.siteIds?.length&&!String(v.locations||'').trim())throw Error('حدد موقعاً إعلانياً مسجلاً أو أضف موقعاً في الملاحظات النصية');
+  if(s.modal.siteIds?.some(id=>!lookup('ad_sites',id)))throw Error('أحد المواقع المختارة غير مسجل');
+  if(!(Number(v.months)>0)||Number(v.price)<0)throw Error('أدخل عدد أشهر وسعراً صحيحين');
+  if(Number(v.initial_payment_amount||0)>Number(v.price))throw Error('الدفعة الأولى أكبر من سعر الحملة');
+  if(v.id&&Number(v.price)<campaignPaid(v.id))throw Error('سعر الحملة أقل من الدفعات المسددة سابقاً');
+  const old=lookup('campaigns',v.id);
+  if(old&&old.currency!==v.currency&&s.data.campaign_payments.some(x=>x.campaign_id===v.id))throw Error('لا يمكن تغيير عملة حملة لها دفعات محفوظة. استخدم تحويل العرض بالأعلى.');
+ }
+ if(k==='campaign_payments'){
+  const campaign=lookup('campaigns',v.campaign_id);
+  if(!campaign)throw Error('اختر حملة مسجلة أولاً');
+  if(!(Number(v.amount)>0))throw Error('الدفعة يجب أن تكون أكبر من الصفر');
+  const others=s.data.campaign_payments.filter(x=>x.campaign_id===v.campaign_id&&x.id!==v.id).reduce((a,x)=>a+Number(x.amount),0);
+  if(Number(v.amount)>Number(campaign.price)-others+0.001)throw Error('قيمة الدفعة أكبر من رصيد الحملة المتبقي');
+ }
+ if(k==='leases'){
+  const property=lookup('properties',v.property_id);
+  if(!property||property.landlord_id!==v.landlord_id)throw Error('العقار المختار لا يتبع المالك المسجل');
+  if(!v.start_date||!v.end_date||v.end_date<v.start_date)throw Error('تأكد من بداية العقد ونهايته');
+  if(Number(v.rent_total)<0)throw Error('إجمالي الإيجار غير صالح');
+  const old=lookup('leases',v.id);
+  if(old&&s.data.lease_installments.some(x=>x.lease_id===v.id)&&['rent_total','currency','start_date','end_date','grace_days','payment_frequency'].some(field=>String(old[field])!==String(v[field])))throw Error('العقد له أقساط مرتبطة؛ استخدم تجديد العقد للشروط المالية الجديدة.');
+ }
+ if(k==='lease_installments'){
+  if(!lookup('leases',v.lease_id))throw Error('اختر عقداً مسجلاً أولاً');
+  if(Number(v.amount)<0||Number(v.paid_amount)<0||Number(v.paid_amount)>Number(v.amount))throw Error('المسدد لا يجوز أن يتجاوز قيمة القسط');
+ }
+}
+function clean(k,v){
+ let fields=k==='campaign_payments'?['campaign_id','paid_at','amount','notes']:k==='lease_installments'?['lease_id','due_date','amount','paid_amount','notes']:defs[k].fields.filter(x=>x[2]!=='file').map(x=>x[0]);
+ if(k==='leases')fields.push('renewed_from');
+ let o={};
+ fields.forEach(f=>{if(v[f]!==undefined){
+  let val=v[f];
+  if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','company_representative','landlord_representative','locations'].includes(f))val=null;
+  o[f]=val;
+ }});
+ if(k==='landlords'&&v.card_image_path)o.card_image_path=v.card_image_path;
+ return o;
+}
+
 async function persist(k,o,id){
  if(s.demo){if(k==='leases'&&!id&&!o.contract_number)o.contract_number='RA-'+(1+Math.max(0,...s.data.leases.map(x=>Number((x.contract_number||'').replace('RA-',''))||0)));let record={...o,id:id||uid(),created_at:today()};let idx=s.data[k].findIndex(x=>x.id===id);if(idx>=0)s.data[k][idx]={...s.data[k][idx],...record};else s.data[k].unshift(record);return record;}
  const request=id?s.client.from(k).update(o).eq('id',id).select().single():s.client.from(k).insert(o).select().single();let {data,error}=await request;if(error)throw error;return data;
