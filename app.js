@@ -247,6 +247,37 @@ function relatedDetails(k,v){
 }
 
 
+
+function landlordRoofMarkup(){
+ const roofs=s.modal?.roofs||[];
+ const rowHtml=roofs.map((r,i)=>'<div class="roof-draft" data-roof-row="'+i+'"><div class="inline"><strong>السطح '+(i+1)+'</strong><button type="button" class="linkbtn" data-remove-roof="'+i+'">حذف السطح</button></div><div class="formgrid"><label class="field full"><span>اسم أو عنوان السطح</span><input required data-roof-field="title" value="'+E(r.title||'')+'" placeholder="مثلاً: سطح بناية شارع الأربعين"></label><label class="field"><span>العرض بالمتر</span><input required type="number" min=".01" step=".01" data-roof-field="width_m" value="'+E(r.width_m||'')+'"></label><label class="field"><span>الطول بالمتر</span><input required type="number" min=".01" step=".01" data-roof-field="height_m" value="'+E(r.height_m||'')+'"></label><div class="field"><span>مساحة هذا السطح</span><output data-roof-area class="computed-area">'+E(fmt(Number(r.width_m||0)*Number(r.height_m||0)))+' م²</output></div><label class="field"><span>العدد</span><input required type="number" min="1" step="1" data-roof-field="quantity" value="'+E(r.quantity||1)+'"></label><label class="field full"><span>ملاحظات السطح</span><textarea data-roof-field="notes">'+E(r.notes||'')+'</textarea></label></div></div>').join('');
+ return '<div class="roof-section"><h3>الأسطح التابعة لهذا المالك</h3><p class="subtle">كل سطح يُسجّل بقياسه الخاص (طول وعرض) ويُحسب بالمتر المربع مباشرة، بدون تكرار بيانات المالك. الأسطح المسجلة سابقاً تظهر أسفل بيانات المالك ويمكن تعديل كل واحد منها.</p><div id="roofDrafts">'+rowHtml+'</div><button type="button" class="btn secondary" data-add-roof>+ إضافة سطح بقياس مختلف</button></div>';
+}
+function captureRoofDrafts(){
+ if(s.modal?.table!=='landlords')return;
+ const rows=[...document.querySelectorAll('[data-roof-row]')];
+ s.modal.roofs=rows.map(row=>{
+  const o={};
+  row.querySelectorAll('[data-roof-field]').forEach(input=>{o[input.dataset.roofField]=input.value;});
+  const original=s.modal.roofs?.[Number(row.dataset.roofRow)];
+  if(original?.saved)o.saved=true;
+  return o;
+ });
+}
+function updateAreaOutputs(form){
+ if(!form)return;
+ const width=Number(form.elements.namedItem('width_m')?.value||0);
+ const height=Number(form.elements.namedItem('height_m')?.value||0);
+ const out=form.querySelector('[data-area-output]');
+ if(out)out.textContent=fmt(width*height)+' م²';
+ document.querySelectorAll('[data-roof-row]').forEach(row=>{
+  const w=Number(row.querySelector('[data-roof-field="width_m"]')?.value||0);
+  const h=Number(row.querySelector('[data-roof-field="height_m"]')?.value||0);
+  const target=row.querySelector('[data-roof-area]');
+  if(target)target.textContent=fmt(w*h)+' م²';
+ });
+}
+
 function modalHtml(){
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  let fields=meta.fields;
@@ -271,7 +302,7 @@ function modalHtml(){
  if(k==='lease_installments'||k==='campaign_payments'){
   fields=[k==='lease_installments'?['lease_id','العقد','lookup:leases',true]:['campaign_id','الحملة','lookup:campaigns',true],['entry_currency','عملة إدخال المبلغ','select',true,['IQD','USD']],...(k==='lease_installments'?[['due_date','تاريخ الاستحقاق','date',true]]:[['paid_at','تاريخ الدفع','date',true]]),['amount',k==='lease_installments'?'قيمة القسط':'قيمة الدفعة','number',true],...(k==='lease_installments'?[['paid_amount','المبلغ المسدد','number',true]]:[]),['notes','الملاحظات','textarea']];
  }
- return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+ (v.id?'تعديل':'إضافة')+' — '+meta.title+'</h2><button class="close" data-action="close">✕</button></div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div>'+(k==='campaign_payments'||k==='lease_installments'?'<div class="notice" id="paymentParentInfo"></div>':'')+'<div class="actions"><button class="btn" type="submit">حفظ البيانات</button></div></form>'+(k==='landlords'&&v.card_image_path?'<button class="btn secondary mini" data-card="'+v.id+'">عرض صورة البطاقة المرفوعة</button>':'')+relatedDetails(k,v)+'</div></div>';
+ return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+ (v.id?'تعديل':'إضافة')+' — '+meta.title+'</h2><button class="close" data-action="close">✕</button></div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div>'+(k==='landlords'?landlordRoofMarkup():'')+(k==='campaign_payments'||k==='lease_installments'?'<div class="notice" id="paymentParentInfo"></div>':'')+'<div class="actions"><button class="btn" type="submit">حفظ البيانات</button></div></form>'+(k==='landlords'&&v.card_image_path?'<button class="btn secondary mini" data-card="'+v.id+'">عرض صورة البطاقة المرفوعة</button>':'')+relatedDetails(k,v)+'</div></div>';
 }
 
 function review(v){
@@ -422,7 +453,7 @@ function openForm(k,row){
   if(!data.end_date&&data.start_date&&data.package_id){const p=lookup('packages',data.package_id);if(p)data.end_date=addDays(plusMonths(data.start_date,p.default_months||1),-1);}
  }
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
- s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:[],autoPrice:k==='campaigns'&&!data.id};
+ s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id};
  s.formStep=0;render();
 }
 function captureForm(form){
