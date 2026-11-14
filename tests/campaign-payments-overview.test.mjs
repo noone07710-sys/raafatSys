@@ -60,8 +60,8 @@ test('payment page lists every campaign as account with total, received, remaini
  assert.match(html,/600 \$/);
  assert.match(html,/300,000 د\.ع/);
  assert.match(html,/150,000 د\.ع/);
- assert.match(html,/2,250,000 د\.ع/,'total must convert 1000 USD + 300000 IQD + 100 USD');
- assert.match(html,/900,000 د\.ع/,'remaining must convert 600 USD + 150000 IQD');
+ assert.match(html,/1,950,000 د\.ع/,'total must convert 1000 USD + 300000 IQD + 100 USD');
+ assert.match(html,/1,050,000 د\.ع/,'remaining must convert 600 USD + 150000 IQD');
  assert.match(html,/دفعة أولى/);assert.match(html,/دفعة ثانية/);
  assert.match(html,/data-edit="campaign_payments:payment-2"/);
  assert.match(html,/data-new-linked="campaign_payments\|campaign_id\|campaign-a"/);
