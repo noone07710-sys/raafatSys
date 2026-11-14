@@ -69,7 +69,7 @@ test('campaign is single source of truth for contract, including ALL site codes 
  await app.saveForm(form);
  assert.equal(s.data.customer_contracts.length,1);
  const saved=s.data.customer_contracts[0];
- assert.equal(saved.contract_number,'RC-1');
+ assert.equal(saved.contract_number,'RC-0001');
  assert.equal(saved.campaign_id,'cam-1');
  assert.equal(saved.customer_id,'cust-1');
  assert.equal(saved.duration_months,6);
