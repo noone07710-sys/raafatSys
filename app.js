@@ -32,7 +32,7 @@ const defs={
  packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['package_type','نوع الباقة','select',true,['cabin','rooftop']],['pricing_mode','طريقة التسعير','select',true,['fixed_term','sqm_month']],['width_m','العرض بالمتر','number',true],['height_m','الطول بالمتر','number',true],['area_m2','المساحة الإجمالية م²','computed'],['sides','عدد الأوجه','number',true],['specifications','مواصفات الباقة','textarea'],['default_months','عدد الأشهر الافتراضي','number',true],['price','السعر الافتراضي للباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
  landlords:{title:'مالكو المواقع — الأسطح',icon:'▣',fields:[['name','اسم المالك','text',true],['phone','الهاتف (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة','text'],['governorate','المحافظة','text',true],['residential_address','عنوان السكن','text',true],['landmark','أقرب نقطة دالة','text'],['notes','الملاحظات','textarea'],['card_image','صورة البطاقة الموحدة','file']]},
  properties:{title:'عقارات ومساحات الأسطح',icon:'▤',fields:[['landlord_id','صاحب العقار','lookup:landlords',true],['title','اسم السطح / العقار','text',true],['width_m','عرض السطح بالمتر','number',true],['height_m','طول السطح بالمتر','number',true],['area_m2','إجمالي مساحة السطح م²','computed'],['quantity','العدد','number',true],['notes','الملاحظات','textarea']]},
- leases:{title:'عقود مالكي البنايات — الأسطح',icon:'▧',fields:[['landlord_id','اسم المالك','lookup:landlords',true],['property_id','عقار المالك','lookup:properties',true],['rent_total','إجمالي الإيجار المتفق عليه','number',true],['currency','عملة العقد','select',true,['IQD','USD']],['start_date','تاريخ البداية','date',true],['end_date','تاريخ النهاية','date',true],['grace_days','فترة السماح بالأيام','number',true],['payment_frequency','دورية الدفع','select',true,['annual','semiannual']],['company_representative','ممثل الشركة','text'],['landlord_representative','ممثل المالك','text'],['notes','الملاحظات','textarea']]},
+ leases:{title:'عقود مالكي البنايات — الأسطح',icon:'▧',fields:[['landlord_id','اسم المالك','lookup:landlords',true],['property_id','عقار المالك','lookup:properties',true],['rent_total','إجمالي الإيجار المتفق عليه','number',true],['advance_amount','المبلغ المقدم عند التعاقد','number'],['currency','عملة العقد','select',true,['IQD','USD']],['start_date','تاريخ البداية','date',true],['end_date','تاريخ النهاية','date',true],['grace_days','فترة السماح بالأيام','number',true],['payment_frequency','دورية الدفع','select',true,['annual','semiannual']],['company_representative','ممثل الشركة','text'],['landlord_representative','ممثل المالك','text'],['notes','الملاحظات','textarea']]},
  ad_sites:{title:'المواقع الإعلانية',icon:'⌖',fields:[['code','رمز الموقع','text',true],['package_id','الباقة / نوع الإعلان A–E','lookup:packages',true],['name','اسم الموقع','text',true],['site_type','نوع الموقع','select',true,['roadside','rooftop','building','other']],['governorate','المحافظة','text',true],['address','الموقع والعنوان','text',true],['rooftop_property_id','العقار المرتبط (إذا كان سطحاً)','lookup:properties'],['active','حالة الموقع','select',true,['true','false']],['notes','الملاحظات','textarea']]},
  campaigns:{title:'المشاريع والحملات',icon:'✦',fields:[['customer_id','العميل','lookup:customers',true],['title','اسم الحملة','text',true],['package_id','نوع الإعلان / الباقة (A–E)','lookup:packages',true],['months','عدد الأشهر','number',true],['start_date','تاريخ بدء الحملة','date',true],['quantity','عدد القطع','number',true],['requested_area_m2','مساحة الإعلان بالمتر المربع (لباقة E)','number'],['locations','المواقع الإعلانية (أسماء أو رموز المواقع)','textarea'],['price','السعر الإجمالي','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','الملاحظات','textarea']]},
  lease_installments:{title:'دفعات عقود الإيجار',icon:'◉',fields:[]},
@@ -118,7 +118,9 @@ const receiptNumber=(payment)=>String(payment?.receipt_number||'').trim()||seria
 
 const campaignPaid=(id)=>s.data.campaign_payments.filter(x=>x.campaign_id===id).reduce((a,b)=>a+Number(b.amount||0),0);
 const campaignBalance=(v)=>Math.max(0,roundAmount(Number(v.price||0)-campaignPaid(v.id)));
-const leaseBalance=(v)=>s.data.lease_installments.filter(x=>x.lease_id===v.id).reduce((a,x)=>a+Math.max(0,Number(x.amount)-Number(x.paid_amount)),0);
+const leaseAdvance=(v)=>Math.max(0,Number(v?.advance_amount)||0);
+const leasePaidInstallments=(id)=>s.data.lease_installments.filter(x=>x.lease_id===id).reduce((sum,x)=>sum+Number(x.paid_amount||0),0);
+const leaseBalance=(v)=>Math.max(0,roundAmount(Number(v?.rent_total||0)-leaseAdvance(v)-leasePaidInstallments(v?.id)));
 
 function packageRates(pkg){return s.data.package_rates.filter(x=>x.package_id===pkg?.id).sort((a,b)=>a.months-b.months);}
 function packageRate(pkg,months){return packageRates(pkg).find(x=>Number(x.months)===Number(months));}
@@ -407,7 +409,7 @@ const columns={
  campaigns:[['title','الحملة'],['customer_id','العميل'],['package_id','الباقة'],['sites','المواقع'],['price','السعر'],['campaign_balance','المتبقي']],
  campaign_payments:[['campaign_id','الحملة'],['paid_at','التاريخ'],['amount','الدفعة']],
  customer_contracts:[['contract_number','رقم العقد'],['customer_id','الزبون'],['package_id','الباقة'],['contract_type','النوع'],['start_date','من'],['end_date','إلى'],['amount','القيمة']],
- lease_installments:[['lease_id','العقد'],['due_date','تاريخ الاستحقاق'],['amount','المبلغ'],['paid_amount','المدفوع']]
+ lease_installments:[['lease_id','العقد والمالك'],['due_date','تاريخ الاستحقاق'],['amount','المبلغ'],['paid_amount','المدفوع']]
 };
 function showVal(k,row,f){
  let v=row[f];
@@ -891,6 +893,22 @@ function updateAreaOutputs(form){
  });
 }
 
+function leasePlanSummary(v){
+ const rows=leaseInstallmentPlan(v);
+ const upfront=leaseAdvance(v),total=Number(v.rent_total||0);
+ const currency=v.currency||'USD';
+ const pieces=rows.length;
+ return '<div class="lease-plan-preview full"><strong>معاينة جدول دفع الإيجار</strong>'+
+  '<div class="lease-plan-values">'+
+  '<span>الإيجار المتفق عليه: <b>'+E(money(total,currency))+'</b></span>'+
+  '<span>المقدم المدفوع: <b>'+E(money(upfront,currency))+'</b></span>'+
+  '<span>المتبقي للأقساط: <b>'+E(money(Math.max(0,total-upfront),currency))+'</b></span>'+
+  '<span>عدد الأقساط: <b>'+pieces+'</b></span></div>'+
+  '<div class="lease-plan-dates">'+(rows.length?rows.map((r,i)=>'<span>القسط '+serial4(i+1)+' · '+E(r.due_date)+' · '+E(money(r.amount,currency))+'</span>').join(''):
+  '<span>لا توجد أقساط متبقية إذا كان المقدم يساوي كامل الإيجار.</span>')+'</div>'+
+  '<small>السنة الواحدة: سنوي = قسط واحد، ونصف سنوي = قسطين. المقدم لا ينشئ قسطاً ثالثاً.</small></div>';
+}
+
 function modalHtml(){
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
@@ -929,7 +947,7 @@ function modalHtml(){
    '<p class="subtle">تُحفظ الدفعة بعملة الحملة الأصلية، ويُحتسب المبلغ المقابل تلقائياً عند اختلاف عملة الاستلام.</p></div></div>';
  }
  if(k==='leases'){
-  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الدفعات')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+v.id+'">معاينة / طباعة</button><button class="btn secondary" data-renew="'+v.id+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
+  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+leasePlanSummary(v)+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الأقساط')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+v.id+'">معاينة / طباعة</button><button class="btn secondary" data-renew="'+v.id+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
 
  if(k==='customer_contracts'){
@@ -1044,7 +1062,7 @@ function bind(){
  document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'leases',data:lookup('leases',x.dataset.preview)};render()});
  document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
  document.querySelectorAll('[data-print-record]').forEach(x=>x.onclick=()=>{const [table,id]=x.dataset.printRecord.split('|');s.modal={kind:'preview',table,data:lookup(table,id)};render()});
- document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total})});
+ document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total,advance_amount:0})});
  document.querySelectorAll('[data-card]').forEach(x=>x.onclick=()=>showCard(lookup('landlords',x.dataset.card)));
  document.querySelectorAll('[data-action]').forEach(x=>x.onclick=()=>actions(x.dataset.action));
  document.querySelectorAll('[data-add-roof]').forEach(x=>x.onclick=()=>{
@@ -1259,7 +1277,7 @@ function bind(){
 
 
 function openForm(k,row){
- const defaults={status:'inquiry',currency:s.displayCurrency,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
+ const defaults={status:'inquiry',currency:s.displayCurrency,advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
  let data={...defaults,...(row||{})};
  if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
  if(k==='lease_installments'&&data.lease_id)data.entry_currency=lookup('leases',data.lease_id)?.currency||s.displayCurrency;
@@ -1363,9 +1381,10 @@ function formValidate(k,v){
   const property=lookup('properties',v.property_id);
   if(!property||property.landlord_id!==v.landlord_id)throw Error('العقار المختار لا يتبع المالك المسجل');
   if(!v.start_date||!v.end_date||v.end_date<v.start_date)throw Error('تأكد من بداية العقد ونهايته');
-  if(Number(v.rent_total)<0)throw Error('إجمالي الإيجار غير صالح');
+  if(!Number.isFinite(Number(v.rent_total))||Number(v.rent_total)<0)throw Error('إجمالي الإيجار غير صالح');
+  if(!Number.isFinite(Number(v.advance_amount||0))||Number(v.advance_amount||0)<0||Number(v.advance_amount||0)>Number(v.rent_total))throw Error('المبلغ المقدم يجب أن يكون من صفر إلى إجمالي الإيجار');
   const old=lookup('leases',v.id);
-  if(old&&s.data.lease_installments.some(x=>x.lease_id===v.id)&&['rent_total','currency','start_date','end_date','grace_days','payment_frequency'].some(field=>String(old[field])!==String(v[field])))throw Error('العقد له أقساط مرتبطة؛ استخدم تجديد العقد للشروط المالية الجديدة.');
+  if(old&&s.data.lease_installments.some(x=>x.lease_id===v.id)&&['rent_total','advance_amount','currency','start_date','end_date','grace_days','payment_frequency'].some(field=>String(old[field])!==String(v[field])))throw Error('العقد له أقساط مرتبطة؛ استخدم تجديد العقد للشروط المالية الجديدة.');
  }
  if(k==='lease_installments'){
   if(!lookup('leases',v.lease_id))throw Error('اختر عقداً مسجلاً أولاً');
@@ -1414,11 +1433,34 @@ async function persist(k,o,id){
 }
 function plusMonths(date,months){let d=new Date(date+'T12:00:00Z'),day=d.getUTCDate();d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+months);let max=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,0)).getUTCDate();d.setUTCDate(Math.min(day,max));return d.toISOString().slice(0,10)}
 function addDays(date,n){let d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+Number(n||0));return d.toISOString().slice(0,10)}
-async function generateInstallments(v){let interval=v.payment_frequency==='semiannual'?6:12,start=v.start_date,end=v.end_date,dates=[];for(let i=0;i<240;i+=interval){let date=plusMonths(start,i);if(date>end)break;dates.push(addDays(date,v.grace_days||0))}
- if(!dates.length)dates=[addDays(start,v.grace_days||0)];
- let total=Math.round(Number(v.rent_total)*100),base=Math.floor(total/dates.length),remainder=total-base*dates.length;
- let records=dates.map((date,i)=>({lease_id:v.id,due_date:date,amount:(base+(i===dates.length-1?remainder:0))/100,paid_amount:0}));
- for(let rec of records)await persist('lease_installments',rec);
+function leaseInstallmentPlan(v){
+ const start=String(v.start_date||''),end=String(v.end_date||'');
+ if(!start||!end||end<start)return [];
+ const original=Math.round(Number(v.rent_total||0)*100);
+ const upfront=Math.round(Number(v.advance_amount||0)*100);
+ if(!Number.isFinite(original)||!Number.isFinite(upfront)||upfront<0||upfront>original)return [];
+ const remaining=original-upfront;
+ if(remaining===0)return []; // fully paid at signing; nothing left to schedule
+ const interval=v.payment_frequency==='semiannual'?6:12;
+ const dueDates=[];
+ // A contract lasting one calendar year, or just a few days beyond it, has
+ // two half-yearly installments or one yearly installment. An extra period
+ // is created only when the end is >31 days past the next anniversary.
+ const lastAdvanceBoundary=addDays(end,-31);
+ for(let i=0;i<120;i++){
+  const anniversary=plusMonths(start,i*interval);
+  if(i>0&&anniversary>lastAdvanceBoundary)break;
+  dueDates.push(addDays(anniversary,Number(v.grace_days||0)));
+ }
+ const count=Math.max(1,dueDates.length),base=Math.floor(remaining/count),rest=remaining-base*count;
+ return dueDates.map((date,i)=>({lease_id:v.id,due_date:date,amount:(base+(i===count-1?rest:0))/100,paid_amount:0}));
+}
+async function generateInstallments(v){
+ const previous=s.data.lease_installments.filter(x=>x.lease_id===v.id);
+ if(previous.length)throw Error('أقساط هذا العقد موجودة مسبقاً. لن ننشئ أقساط مكررة.');
+ const plan=leaseInstallmentPlan(v);
+ for(const record of plan)await persist('lease_installments',record);
+ return plan;
 }
 
 async function syncCampaignSites(campaignId,siteIds){
