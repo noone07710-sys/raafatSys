@@ -316,7 +316,7 @@
   const fit=Math.min(1,availableHeight/naturalHeight);
   // Readability is more important than squeezing a legal agreement into
   // unreadable microscopic text. In that case, ask to shorten the agreement.
-  if(fit<0.72)throw Error('تفاصيل العقد كثيرة ولا تكفي صفحة A4 واحدة بخط واضح. اختصر الملاحظات أو الشروط أو عدد تفاصيل المواقع ثم أعد التحميل.');
+  if(fit<0.64)throw Error('تفاصيل العقد كثيرة ولا تكفي صفحة A4 واحدة بخط واضح. اختصر الملاحظات أو الشروط أو عدد تفاصيل المواقع ثم أعد التحميل.');
   const overlay=pageCanvas(size);
   const middle=(AREA.left+AREA.right)/2;
   overlay.ctx.translate(middle*(1-fit),AREA.top*(1-fit));
