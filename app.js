@@ -1391,12 +1391,12 @@ function customerContractPdfPayload(v){
   site?[{id:site.id,code:site.code,name:site.name,address:site.address,governorate:site.governorate}]:[];
  return {
   number:numberedContract(v.contract_number),
-  customerName:customer?.name||v.customer_name_snapshot||'—',
+  customerName:v.customer_name_snapshot||customer?.name||'—',
   customerPhone:customer?.phone||'—',
   companyRepresentative:v.company_representative||'—',
   customerRepresentative:v.customer_representative||'—',
-  campaignTitle:campaign?.title||v.campaign_title_snapshot||'—',
-  packageName:pkg?.name||v.package_name_snapshot||'—',
+  campaignTitle:v.campaign_title_snapshot||campaign?.title||'—',
+  packageName:v.package_name_snapshot||pkg?.name||'—',
   dimensions:dimension,
   area:effectiveArea,
   quantity:details.total||1,
