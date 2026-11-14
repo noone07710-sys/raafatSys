@@ -39,7 +39,7 @@ function companyLogoUrl(path=s.settings?.logo_path){
 }
 function companyLogoHtml(kind='sidebar'){
  const url=companyLogoUrl();
- return url?'<img class="company-logo company-logo-'+kind+'" src="'+E(url)+'" alt="شعار '+E(companyValue('company_short_name'))+'" loading="lazy">':
+ return url?'<img class="company-logo company-logo-'+kind+'" src="'+E(url)+'" alt="شعار '+E(companyValue('company_short_name'))+'" loading="'+(kind==='contract'?'eager':'lazy')+'">':
  '<span class="company-logo-fallback" aria-hidden="true">'+E(String(companyValue('company_short_name')).trim().slice(0,1)||'ر')+'</span>';
 }
 function companyDocumentHeader(){
