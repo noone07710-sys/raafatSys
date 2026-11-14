@@ -84,7 +84,7 @@ test('campaign is single source of truth for contract, including ALL site codes 
  assert.match(preview,/A01/);
  assert.match(preview,/A02/);
  assert.match(preview,/عدد القطع المتفق عليها/);
- assert.match(preview,/1290/);
+ assert.match(preview,/1,290/);
  assert.match(preview,/تتضمن الطباعة/);
 
  // Signed contract snapshot does not drift when the campaign and assigned sites change.
@@ -93,7 +93,7 @@ test('campaign is single source of truth for contract, including ALL site codes 
  const frozen=app.customerContractPreview(saved);
  assert.match(frozen,/A01/);
  assert.match(frozen,/A02/);
- assert.match(frozen,/1290/);
+ assert.match(frozen,/1,290/);
  assert.match(frozen,/تتضمن الطباعة/);
  assert.equal(saved.campaign_quantity_snapshot,3);
 });
