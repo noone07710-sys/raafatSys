@@ -204,3 +204,5 @@
  .company-logo-contract{width:68px;height:68px;max-width:68px;max-height:68px}
  .contract-company-copy h2{font-size:16px}
 }
+
+.settings-logo-fields:focus-within .settings-file-button{outline:2px solid #128e93;outline-offset:2px}
