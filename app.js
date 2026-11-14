@@ -9,7 +9,7 @@ const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publ
 const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts'];
 const defs={
  customers:{title:'العملاء',icon:'♟',fields:[['name','اسم العميل','text',true],['phone','رقم الهاتف الأساسي (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة (12 رقم)','text',true],['rental_address','عنوان الاستئجار','text',true],['preferred_package_id','الباقة الإعلانية المطلوبة','lookup:packages',true],['status','الحالة','select',true,['active','inactive','inquiry']],['notes','الملاحظات','textarea']]},
- packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['package_type','نوع الباقة','select',true,['cabin','rooftop']],['pricing_mode','طريقة التسعير','select',true,['fixed_term','sqm_month']],['width_m','العرض بالمتر','number',true],['height_m','الطول بالمتر','number',true],['area_m2','المساحة الإجمالية م²','computed'],['sides','عدد الأوجه','number',true],['specifications','مواصفات الباقة','textarea'],['default_months','عدد الأشهر الافتراضي','number',true],['price','سعر الباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
+ packages:{title:'الباقات الإعلانية',icon:'◈',fields:[['name','اسم الباقة','text',true],['code','رمز الباقة','text',true],['package_type','نوع الباقة','select',true,['cabin','rooftop']],['pricing_mode','طريقة التسعير','select',true,['fixed_term','sqm_month']],['width_m','العرض بالمتر','number',true],['height_m','الطول بالمتر','number',true],['area_m2','المساحة الإجمالية م²','computed'],['sides','عدد الأوجه','number',true],['specifications','مواصفات الباقة','textarea'],['default_months','عدد الأشهر الافتراضي','number',true],['price','السعر الافتراضي للباقة','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','ملاحظات','textarea']]},
  landlords:{title:'مالكو المواقع — الأسطح',icon:'▣',fields:[['name','اسم المالك','text',true],['phone','الهاتف (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة','text'],['governorate','المحافظة','text',true],['residential_address','عنوان السكن','text',true],['landmark','أقرب نقطة دالة','text'],['notes','الملاحظات','textarea'],['card_image','صورة البطاقة الموحدة','file']]},
  properties:{title:'عقارات ومساحات الأسطح',icon:'▤',fields:[['landlord_id','صاحب العقار','lookup:landlords',true],['title','اسم السطح / العقار','text',true],['width_m','عرض السطح بالمتر','number',true],['height_m','طول السطح بالمتر','number',true],['area_m2','إجمالي مساحة السطح م²','computed'],['quantity','العدد','number',true],['notes','الملاحظات','textarea']]},
  leases:{title:'عقود مالكي البنايات — الأسطح',icon:'▧',fields:[['landlord_id','اسم المالك','lookup:landlords',true],['property_id','عقار المالك','lookup:properties',true],['rent_total','إجمالي الإيجار المتفق عليه','number',true],['currency','عملة العقد','select',true,['IQD','USD']],['start_date','تاريخ البداية','date',true],['end_date','تاريخ النهاية','date',true],['grace_days','فترة السماح بالأيام','number',true],['payment_frequency','دورية الدفع','select',true,['annual','semiannual']],['company_representative','ممثل الشركة','text'],['landlord_representative','ممثل المالك','text'],['notes','الملاحظات','textarea']]},
@@ -145,7 +145,7 @@ async function load(){
  s.loading=false;render();
 }
 function demo(){
- s.demo=true;s.session=null;s.staff={role:'admin'};s.config=null;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={usd_iqd:1500};
+ s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={usd_iqd:1500};
  s.view='dashboard';s.error='';render();
 }
 async function connect(){
@@ -206,6 +206,7 @@ function showVal(k,row,f){
  if(f==='site_id')return E(nameOf('ad_sites',v));
  if(f==='campaign_id')return E(nameOf('campaigns',v));
  if(f==='lease_id')return E(lookup('leases',v)?.contract_number||'—');
+ if(f==='price'&&k==='packages')return displayMoney(v,originalCurrency(k,row))+(row.pricing_mode==='sqm_month'?'<small class="original-amount">للمتر المربع شهرياً (حسب المدة الافتراضية)</small>':'<small class="original-amount">للقطعة / كامل المدة الافتراضية</small>');
  if(['price','rent_total','amount','paid_amount'].includes(f))return displayMoney(v,originalCurrency(k,row));
  return E(v);
 }
@@ -258,7 +259,7 @@ function packageRatesEditor(){
  return '<div class="full tier-editor"><h3>تعرفة الباقة حسب مدة الحجز</h3><p class="subtle">'+(mode==='sqm_month'?'السعر هنا للمتر المربع الواحد شهرياً؛ الناتج النهائي يضرب بالمساحة وعدد الأشهر.':'السعر هنا للقطعة الواحدة وللمدة كاملة، ولا يُقسم أو يُضرب بالأشهر.')+' جميع الأسعار تُحفظ مرجعياً بالدولار، ويمكن إدخالها بالعملة المختارة.</p><div class="formgrid">'+months.map(m=>{
   const rate=packageRate(lookup('packages',pkg.id),m);
   const original=s.modal.rateDraft?.[m]??(rate?roundAmount(convert(rate.usd_price,'USD',cur)):m===Number(pkg.default_months)?pkg.price:'');
-  return '<label class="field"><span>'+m+' '+(m===1?'شهر':'أشهر')+' — '+(mode==='sqm_month'?'$ / م² / شهر':'للإعلان كامل المدة')+'</span><input type="number" min="0" step="0.01" data-package-rate-month="'+m+'" value="'+E(original)+'" placeholder="أدخل السعر"><small class="conversion-hint" data-rate-hint="'+m+'">'+E(moneyHint(original,cur))+'</small></label>';
+  return '<label class="field"><span>'+m+' '+(m===1?'شهر':'أشهر')+' — '+(mode==='sqm_month'?'لكل م² شهرياً':'للإعلان كامل المدة')+'</span><input type="number" min="0" step="0.01" data-package-rate-month="'+m+'" value="'+E(original)+'" placeholder="أدخل السعر"><small class="conversion-hint" data-rate-hint="'+m+'">'+E(moneyHint(original,cur))+'</small></label>';
  }).join('')+'</div></div>';
 }
 function packagePricingInfo(v){
@@ -526,7 +527,7 @@ function bind(){
  document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{
   captureForm(form);
   s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId);
-  if(!v.id&&s.modal.siteIds.length)v.quantity=s.modal.siteIds.length;
+  if(!v.id)v.quantity=Math.max(1,s.modal.siteIds.length);
   refreshCampaignQuote();
   render();
  });
