@@ -22,7 +22,7 @@ const defs={
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المرتبطة (اختياري)','lookup:campaigns'],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
-const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 
 // Demo data matches the official price matrix; real staff load rows from Supabase.
 const OFFICIAL_PACKAGES=[
@@ -158,11 +158,56 @@ async function connect(){
  }catch(e){toast(e.message,true)}
 }
 async function bootstrap(){
- if(s.config){try{s.client=createClient(s.config.url,s.config.key);const {data}=await s.client.auth.getSession();s.session=data.session;if(s.session)await load();else render()}catch(e){s.error=e.message;render()}}
- else render();
+ if(s.config){
+  try{
+   s.client=createClient(s.config.url,s.config.key);
+   s.passwordRecovery=Boolean(window.location?.hash?.includes('type=recovery')||window.location?.search?.includes('type=recovery'));
+   s.client.auth.onAuthStateChange((event,session)=>{
+    if(event==='PASSWORD_RECOVERY'){s.session=session;s.passwordRecovery=true;s.resetRequest=false;render();}
+   });
+   const {data,error}=await s.client.auth.getSession();
+   if(error)throw error;
+   s.session=data.session;
+   if(s.passwordRecovery){render();}
+   else if(s.session)await load();
+   else render();
+  }catch(e){s.error=e.message;render()}
+ }else render();
+}
+function passwordResetRequestPage(){
+ return '<div class="welcome"><div class="authbox"><h1>استعادة كلمة المرور</h1><p class="muted">نرسل رابطاً إلى بريد الحساب لتختار كلمة مرور جديدة بنفسك، بدون مشاركتها مع أحد.</p><form id="passwordResetRequestForm"><label class="field"><span>البريد الإلكتروني</span><input id="recoverEmail" type="email" autocomplete="email" required></label><button class="btn" type="submit">إرسال رابط الاستعادة</button></form><hr><button class="btn secondary" style="width:100%" data-action="cancelPasswordReset">العودة إلى تسجيل الدخول</button></div></div>';
+}
+function passwordRecoveryPage(){
+ return '<div class="welcome"><div class="authbox"><h1>إنشاء كلمة مرور جديدة</h1><p class="muted">استعمل كلمة قوية من 12 حرفاً على الأقل. لن تُرسل الكلمة إلى GitHub ولا تُعرض في المحادثة.</p>'+(s.session?'<form id="passwordChangeForm"><label class="field"><span>كلمة المرور الجديدة</span><input id="newPassword" type="password" minlength="12" required autocomplete="new-password"></label><label class="field"><span>تأكيد كلمة المرور</span><input id="confirmPassword" type="password" minlength="12" required autocomplete="new-password"></label><button class="btn" type="submit">حفظ كلمة المرور الجديدة</button></form>':'<div class="error">رابط الاستعادة غير صالح أو انتهت صلاحيته. ارجع إلى شاشة الدخول واطلب رابطاً جديداً.</div><button class="btn secondary" data-action="cancelPasswordReset">العودة إلى الدخول</button>')+'</div></div>';
+}
+async function sendPasswordReset(){
+ const email=$('#recoverEmail')?.value?.trim();
+ if(!email||!s.client)return;
+ try{
+  const {error}=await s.client.auth.resetPasswordForEmail(email,{
+   redirectTo:'https://noone07710-sys.github.io/raafatSys/'
+  });
+  if(error)throw error;
+  toast('إذا كان البريد مسجلاً، سيصلك رابط استعادة كلمة المرور. افحص الوارد والرسائل غير المرغوبة.');
+  s.resetRequest=false;render();
+ }catch(e){toast('تعذر إرسال رابط الاستعادة: '+e.message,true)}
+}
+async function saveNewPassword(){
+ const password=$('#newPassword')?.value||'',confirm=$('#confirmPassword')?.value||'';
+ if(password.length<12)return toast('اختَر كلمة مرور لا تقل عن 12 حرفاً',true);
+ if(password!==confirm)return toast('تأكيد كلمة المرور غير متطابق',true);
+ if(!s.client||!s.session)return toast('جلسة الاستعادة غير صالحة، اطلب رابطاً جديداً',true);
+ try{
+  const {error}=await s.client.auth.updateUser({password});
+  if(error)throw error;
+  s.passwordRecovery=false;s.resetRequest=false;
+  if(window.history?.replaceState)window.history.replaceState(null,'',window.location.pathname);
+  toast('تم تعيين كلمة المرور الجديدة بنجاح');
+  await load();
+ }catch(e){toast(e.message,true)}
 }
 function authPage(){return '<div class="welcome"><div class="authbox"><h1>رأفت <span style="color:#167683">Sys.</span></h1><p class="muted">نظام الإدارة المتكامل للدعاية والإعلان</p><p class="subtle">ربط قاعدة البيانات الخاصة بالشركة وتسجيل دخول الموظفين</p>'+ (s.error?'<div class="error">'+E(s.error)+'</div>':'')+
- '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
+ '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><button class="linkbtn" data-action="forgotPassword" type="button">نسيت كلمة المرور؟</button><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
 function nav(){return [['dashboard','الرئيسية','◫'],['customers','العملاء','♟'],['campaigns','المشاريع والحملات','✦'],['customer_contracts','عقود الزبائن','▣'],['packages','الباقات الإعلانية','◈'],['ad_sites','المواقع الإعلانية','⌖'],['landlords','مالكو الأسطح','▣'],['properties','العقارات والمساحات','▤'],['leases','عقود مالكي الأسطح','▧'],['campaign_payments','دفعات الحملات','◉'],['lease_installments','دفعات الإيجار','◉'],['reports','التقارير','▥'],['settings','الإعدادات','⚙']].map(([id,label,icon])=>'<button data-nav="'+id+'" class="'+(id===s.view?'active':'')+'">'+icon+' &nbsp;'+label+'</button>').join('')}
 function shell(content){
  return '<div class="shell"><aside class="sidebar"><div class="brand">رأفت <span style="color:#8fd6c8">SYS</span><small>الدعاية والإعلان والتجارة العامة</small></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>نظام إدارة شركة رأفت</small></div><div class="inline"><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
@@ -235,7 +280,9 @@ function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>ا
 function render(){
  let target=$('#app');
  let content=s.view==='dashboard'?dashboard():s.view==='reports'?reports():s.view==='settings'?settings():listing(s.view);
- if(!s.demo&&!s.session){target.innerHTML=authPage();}
+ if(s.passwordRecovery){target.innerHTML=passwordRecoveryPage();}
+ else if(s.resetRequest){target.innerHTML=passwordResetRequestPage();}
+ else if(!s.demo&&!s.session){target.innerHTML=authPage();}
  else if(!s.demo&&!s.staff&&!s.loading){target.innerHTML=accessDenied();}
  else{target.innerHTML=shell(content)+(s.modal?modalHtml():'');}
  bind();
@@ -515,6 +562,8 @@ function bind(){
  if($('#search'))$('#search').oninput=e=>{let pos=e.target.selectionStart;s.search=e.target.value;const parent=e.target.closest('.content');parent.innerHTML=listing(s.view);bind();let n=$('#search');n.focus();n.setSelectionRange(pos,pos)};
  if($('#statusfilter'))$('#statusfilter').onchange=e=>{s.filter=e.target.value;render()};
  if($('#connectForm'))$('#connectForm').onsubmit=e=>{e.preventDefault();connect()};
+ if($('#passwordResetRequestForm'))$('#passwordResetRequestForm').onsubmit=e=>{e.preventDefault();sendPasswordReset()};
+ if($('#passwordChangeForm'))$('#passwordChangeForm').onsubmit=e=>{e.preventDefault();saveNewPassword()};
  if($('#recordForm'))$('#recordForm').onsubmit=e=>{e.preventDefault();saveForm(e.target)};
  if($('#settingsForm'))$('#settingsForm').onsubmit=e=>{e.preventDefault();saveSettings(e.target)};
  const form=$('#recordForm'),v=s.modal?.data,k=s.modal?.table;
@@ -945,6 +994,8 @@ function exportCsv(k){
 
 function actions(a){
  if(a==='demo')return demo();
+ if(a==='forgotPassword'){s.resetRequest=true;s.error='';return render()}
+ if(a==='cancelPasswordReset'){s.resetRequest=false;s.passwordRecovery=false;return render()}
  if(a==='close'){s.modal=null;return render()}
  if(a==='logout'){if(s.client&&s.realtimeChannel)s.client.removeChannel(s.realtimeChannel);s.realtimeChannel=null;if(s.client)s.client.auth.signOut();s.session=null;s.staff=null;s.demo=false;s.modal=null;s.error='';return render()}
  if(a==='prevStep'){captureForm($('#recordForm'));s.formStep=Math.max(0,s.formStep-1);return render()}
