@@ -64,7 +64,7 @@ function companyLogoHtml(kind='sidebar'){
  '<span class="company-logo-fallback" aria-hidden="true">'+E(String(companyValue('company_short_name')).trim().slice(0,1)||'ر')+'</span>';
 }
 
-const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',expenseCategory:'',editing:null,modal:null,formStep:0,error:'',loading:false};
 
 // Demo data matches the official price matrix; real staff load rows from Supabase.
 const OFFICIAL_PACKAGES=[
@@ -388,7 +388,7 @@ function bindNav(){
  document.querySelectorAll('[data-nav]').forEach(x=>x.onclick=()=>{
   s.view=x.dataset.nav;
   s.navExpanded=navGroupForView(s.view);
-  s.search='';s.filter='all';s.modal=null;
+  s.search='';s.filter='all';s.expenseCategory='';s.modal=null;
   render();
  });
  document.querySelectorAll('[data-nav-group]').forEach(x=>x.onclick=()=>changeNavGroup(x.dataset.navGroup));
@@ -643,6 +643,57 @@ function leaseInstallmentsOverview(){
  '</section>';
 }
 
+function expenseOverview(){
+ const all=s.data.company_expenses||[],query=s.search.trim().toLocaleLowerCase();
+ const filtered=all.filter(expense=>
+  (!s.expenseCategory||expense.category===s.expenseCategory)&&
+  (!query||[expense.title,expense.notes,expense.paid_by,expense.expense_date,
+   EXPENSE_CATEGORY_LABELS[expense.category]].some(v=>String(v||'').toLocaleLowerCase().includes(query))))
+  .sort((a,b)=>String(b.expense_date||'').localeCompare(String(a.expense_date||''))||
+   String(b.created_at||'').localeCompare(String(a.created_at||'')));
+ const total=items=>roundAmount(items.reduce((sum,item)=>
+  sum+convert(Number(item.amount||0),item.currency,s.displayCurrency),0));
+ const thisMonth=today().slice(0,7);
+ const todayRows=all.filter(x=>x.expense_date===today());
+ const monthRows=all.filter(x=>String(x.expense_date||'').startsWith(thisMonth));
+ const tiles=[
+  ['كل المصروفات',money(total(all),s.displayCurrency),'total'],
+  ['مصروفات الشهر',money(total(monthRows),s.displayCurrency),'month'],
+  ['مصروفات اليوم',money(total(todayRows),s.displayCurrency),'today'],
+  ['عدد العمليات',String(all.length),'count']
+ ].map(([label,value,type])=>'<div class="expense-stat '+type+'"><small>'+E(label)+'</small><strong>'+E(value)+'</strong></div>').join('');
+ const categoryTotals=Object.entries(EXPENSE_CATEGORY_LABELS)
+  .map(([id,label])=>({id,label,items:all.filter(e=>e.category===id)})).filter(x=>x.items.length)
+  .map(x=>'<div class="expense-category-chip"><span>'+E(x.label)+'</span><b>'+E(money(total(x.items),s.displayCurrency))+'</b></div>').join('');
+ const cards=filtered.map(e=>{
+  const canEdit=s.demo||s.staff?.role==='admin';
+  return '<article class="expense-record"><div class="expense-record-main">'+
+   '<span class="expense-record-category">'+E(EXPENSE_CATEGORY_LABELS[e.category]||e.category)+'</span>'+
+   '<h3>'+E(e.title)+'</h3>'+
+   '<div class="expense-record-meta"><span>'+uiIcon('calendar',14)+' '+E(e.expense_date)+'</span>'+
+    (e.paid_by?'<span>'+uiIcon('user',14)+' '+E(e.paid_by)+'</span>':'')+'</div>'+
+   (e.notes?'<p>'+E(e.notes)+'</p>':'')+'</div>'+
+   '<div class="expense-record-side"><strong>'+displayMoney(e.amount,e.currency)+'</strong>'+
+   '<div class="expense-record-actions">'+(canEdit?
+     '<button class="linkbtn" data-edit="company_expenses:'+E(e.id)+'">'+uiIcon('pencil',14)+' تعديل</button>'+
+     '<button class="linkbtn expense-delete-link" data-delete-expense="'+E(e.id)+'">'+uiIcon('trash',14)+' حذف</button>':
+     '<span class="subtle">للعرض فقط</span>')+'</div></div></article>';
+ }).join('');
+ return '<section class="expense-page"><div class="expense-intro">'+
+  '<div><h2>مصروفات الشركة</h2><p>سجّل كل مبلغ صرفته الشركة: جاي، قهوة، مي، قرطاسية، وقود أو أي احتياجات يومية.</p></div>'+
+  '<button type="button" class="btn" data-new="company_expenses">'+uiIcon('plus',17)+' إضافة مصروف</button></div>'+
+  '<div class="expense-stat-grid">'+tiles+'</div>'+
+  (categoryTotals?'<div class="expense-categories"><h3>المصروفات حسب التصنيف</h3><div class="expense-category-grid">'+categoryTotals+'</div></div>':'')+
+  '<div class="expense-toolbar"><input class="search" id="search" type="search" placeholder="ابحث عن مصروف أو شخص أو تاريخ..." value="'+E(s.search)+'">'+
+  '<select id="expenseCategory" class="search" aria-label="تصفية مصروفات الشركة حسب التصنيف">'+
+  '<option value="">كل التصنيفات</option>'+Object.entries(EXPENSE_CATEGORY_LABELS).map(([id,label])=>
+   '<option value="'+id+'"'+(s.expenseCategory===id?' selected':'')+'>'+E(label)+'</option>').join('')+'</select>'+
+  '<span class="expense-count">المعروض '+filtered.length+' من '+all.length+'</span></div>'+
+  '<div class="expense-record-list">'+(cards||'<div class="box empty">'+
+   (all.length?'لا توجد مصروفات مطابقة للبحث أو التصنيف.':'ماكو مصروفات مسجّلة بعد. اضغط إضافة مصروف لتسجيل أول عملية.')+
+   '</div>')+'</div>'+
+  '<p class="subtle expense-footnote">المجاميع بعملة العرض المختارة بالأعلى، وتظل كل عملية محفوظة بعملتها الأصلية. المصروفات اليومية منفصلة عن دفعات الحملات وأقساط الإيجارات.</p></section>';
+}
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
  if(k==='company_expenses')return expenseOverview();
@@ -876,7 +927,7 @@ function fieldHtml(f,v,all){
   });
   return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><select name="'+id+'" '+req+'><option value="">— اختر —</option>'+rows.map(x=>'<option value="'+E(x.id)+'" '+(val===x.id?'selected':'')+'>'+E(optionText(table,x))+'</option>').join('')+'</select></label>';
  }
- if(type==='select')return '<label class="field"><span>'+E(label)+'</span><select name="'+id+'" '+req+'>'+opts.map(x=>'<option value="'+x+'" '+(String(val)===String(x)?'selected':'')+'>'+E(labels[x]||x)+'</option>').join('')+'</select></label>';
+ if(type==='select')return '<label class="field"><span>'+E(label)+'</span><select name="'+id+'" '+req+'>'+opts.map(x=>'<option value="'+x+'" '+(String(val)===String(x)?'selected':'')+'>'+E((k==='company_expenses'?EXPENSE_CATEGORY_LABELS[x]:null)||labels[x]||x)+'</option>').join('')+'</select></label>';
  let monetary=['price','rent_total','amount','paid_amount','initial_payment_amount'].includes(id);
  let extra=type==='number'?'min="0" step="'+(['months','default_months','quantity','grace_days'].includes(id)?'1':'0.01')+'"':type==='tel'?'inputmode="numeric" pattern="[0-9]{11}" maxlength="11"':id==='national_id'?'inputmode="numeric" pattern="[0-9]{12}" maxlength="12"':'';
  return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><input name="'+id+'" type="'+type+'" '+req+' '+extra+' value="'+E(val)+'">'+(monetary?'<small class="conversion-hint" data-money-hint="'+id+'">'+E(moneyHint(val,fieldCurrency(k,v)))+'</small>':'')+'</label>';
@@ -987,6 +1038,12 @@ function modalHtml(){
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  let fields=meta.fields;
+ if(k==='company_expenses'){
+  return '<div class="overlay"><div class="modal expense-form-modal"><div class="modalhead"><h2>'+(v.id?'تعديل المصروف':'تسجيل مصروف جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+ 
+   '<div class="notice">سجّل المبلغ الفعلي وتاريخه؛ العملة المختارة هنا هي عملة الدفع الأصلية، ويمكن تبديل عرض الإجماليات بالأعلى.</div>'+ 
+   '<form id="recordForm"><div class="formgrid">'+fields.map(field=>fieldHtml(field,v,v)).join('')+'</div>'+ 
+   '<div class="actions"><button class="btn" type="submit">'+uiIcon('save',16)+(v.id?' حفظ التعديلات':' حفظ المصروف')+'</button></div></form></div></div>';
+ }
  if(k==='campaigns'){
   const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
   const stepFields=s.formStep<4?fields.filter(x=>steps[s.formStep][1].includes(x[0])).map(f=>fieldHtml(f,v,v)).join('')+(s.formStep===2?packagePricingInfo(v):''):review(v);
@@ -1184,6 +1241,7 @@ function bind(){
  };
  if($('#search'))$('#search').oninput=e=>{let pos=e.target.selectionStart;s.search=e.target.value;const parent=e.target.closest('.content');parent.innerHTML=listing(s.view);bind();let n=$('#search');n.focus();n.setSelectionRange(pos,pos)};
  if($('#statusfilter'))$('#statusfilter').onchange=e=>{s.filter=e.target.value;render()};
+ if($('#expenseCategory'))$('#expenseCategory').onchange=e=>{s.expenseCategory=e.target.value;render()};
  if($('#connectForm'))$('#connectForm').onsubmit=e=>{e.preventDefault();connect()};
  if($('#passwordResetRequestForm'))$('#passwordResetRequestForm').onsubmit=e=>{e.preventDefault();sendPasswordReset()};
  if($('#passwordChangeForm'))$('#passwordChangeForm').onsubmit=e=>{e.preventDefault();saveNewPassword()};
