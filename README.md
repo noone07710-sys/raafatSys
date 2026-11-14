@@ -19,14 +19,29 @@
 
 التطبيق يبدأ بوضع **معاينة تجريبية** ببيانات خيالية في الذاكرة فقط؛ البيانات المدخلة هنا تزول عند تحديث الصفحة ولا يتم إرسالها إلى خادم.
 
-## ربط قاعدة البيانات الآمنة
-1. أنشئ مشروع Supabase **جديداً لهذا النظام**.
-2. نفّذ `supabase/schema.sql` مرة واحدة من SQL Editor بعد مراجعته.
-3. من Authentication → Users أنشئ مستخدم موظف (لا تفتح التسجيل العام).
-4. بعد إنشاء المستخدم، أضف معرّف المستخدم في جدول `staff_members` بدور `admin` من SQL Editor:
-   `insert into public.staff_members(user_id, role) values ('USER_UUID', 'admin');`
-5. من شاشة ربط النظام أدخل **Project URL** و**publishable/anon key فقط**، ثم سجّل دخولك بالبريد وكلمة المرور.
-6. لا تضع أبداً `service_role` أو مفتاح secret في الواجهة أو GitHub.
+## Supabase — تم الربط
+
+واجهة النظام مهيأة تلقائياً على:
+`https://gxredstctzkuwgsegykd.supabase.co`
+
+تم تنفيذ الترحيل `raafat_sys_initial_secure_erp` بنجاح بتاريخ 2026-11-14 على هذا المشروع. **ملاحظة:** المشروع يستضيف أيضاً جداول Layali المستقلة، ولم يجر تعديلها. لا تنفّذ ملف `supabase/schema.sql` مرة ثانية على نفس القاعدة.
+
+الاتصال في `app.js` يستخدم **مفتاح publishable العام فقط**. لا يُنشر مفتاح service_role أو secret أبداً.
+
+### تفعيل أول مدير
+
+لا يوجد مدير مُفعّل حتى الآن، حفاظاً على عدم منح مستخدمي المشروع الآخر صلاحيات هذا النظام دون اختيار صريح.
+
+1. افتح مشروع Supabase أعلاه ثم **Authentication → Users** وأنشئ مستخدم النظام أو اختر حساباً تملكه.
+2. انسخ **User UID** للحساب المطلوب (لا تعتمد على البريد وحده).
+3. من **SQL Editor** نفّذ بعد استبدال `YOUR_USER_UID` بالقيمة الصحيحة:
+   `insert into public.staff_members (user_id, role, active) values ('YOUR_USER_UID', 'admin', true) on conflict (user_id) do update set role='admin', active=true;`
+4. سجّل دخولك إلى الموقع ببريد هذا المستخدم وكلمة مروره.
+5. من إعدادات النظام حدّد سعر الدولار الصحيح. الرقم `1500` هو قيمة ابتدائية تجريبية **وليس سعر صرف تلقائي أو مؤكد**.
+
+### النشر
+
+المستودع يحتوي موقعاً ثابتاً. لن يصبح الموقع متاحاً للجمهور حتى تفعّل النشر من إعدادات GitHub Pages (Settings → Pages → Deploy from branch → main / root). واجهة الدخول لا تسمح بعرض البيانات دون عضوية `staff_members`.
 
 ## حماية البيانات
 - كل الجداول بنظام Row Level Security ولا يمكن تصفحها دون مستخدم مفعل ضمن staff_members.
