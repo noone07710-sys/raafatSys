@@ -32,7 +32,7 @@ test('official Raafat Map package rates and A-E calculation',()=>{
  assert.equal(quoteCustomerContract({package_id:pkg('E').id,duration_months:6,rented_area_m2:24,currency:'USD'}).amount,1296);
  s.data.customers=[{id:'customer1',name:'Tester',preferred_package_id:pkg('E').id}];
  s.modal={table:'campaigns',siteIds:[]};
- assert.doesNotThrow(()=>formValidate('campaigns',{customer_id:'customer1',package_id:pkg('E').id,months:3,requested_area_m2:24,locations:'تجريبي',price:864,currency:'USD'}));
- assert.throws(()=>formValidate('campaigns',{customer_id:'customer1',package_id:pkg('E').id,months:3,locations:'تجريبي',price:0,currency:'USD'}),/مساحة/);
+ assert.doesNotThrow(()=>formValidate('campaigns',{customer_id:'customer1',package_id:pkg('E').id,start_date:'2026-11-14',months:3,requested_area_m2:24,locations:'تجريبي',price:864,currency:'USD'}));
+ assert.throws(()=>formValidate('campaigns',{customer_id:'customer1',package_id:pkg('E').id,start_date:'2026-11-14',months:3,locations:'تجريبي',price:0,currency:'USD'}),/مساحة/);
  assert.match(packageCatalog(),/الباقة E/);
 });
