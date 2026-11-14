@@ -12,7 +12,7 @@ create table if not exists public.company_expenses (
  currency text not null check (currency in ('USD','IQD')),
  paid_by text,
  notes text,
- created_by uuid default (select auth.uid()),
+ created_by uuid default auth.uid(),
  created_at timestamptz not null default now()
 );
 create index if not exists company_expenses_date_idx
