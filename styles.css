@@ -60,3 +60,21 @@
  .contract-sign{break-inside:avoid}
  .print-note{font-size:9px}
 }
+
+/* Official A-E package catalog and duration tariff editor */
+.package-catalog{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:13px;margin-bottom:20px}
+.package-card{display:flex;flex-direction:column;gap:12px;background:#fff;min-width:0}
+.package-heading{display:flex;gap:12px;align-items:center}
+.package-heading>div{min-width:0;flex:1}
+.package-heading b{display:block;font-size:15px;color:#233d4b}
+.package-heading small{display:block;font-size:11px;color:#718396;margin-top:4px;line-height:1.8}
+.package-symbol{display:flex;align-items:center;justify-content:center;width:48px;height:48px;flex-shrink:0;background:#e5f3f1;color:#146a74;border-radius:13px;font-weight:800;font-size:26px;direction:ltr}
+.package-card .rate-line{margin-top:auto}
+.rate-line{display:grid;grid-template-columns:repeat(auto-fit,minmax(82px,1fr));gap:7px}
+.rate-tile{display:flex;flex-direction:column;gap:4px;min-width:0;padding:8px 5px;border-radius:9px;background:#f5f8fa;text-align:center}
+.rate-tile small{font-size:10px;color:#7c8a9a;line-height:1.7}
+.rate-tile strong{font-size:13px;direction:ltr;white-space:nowrap;color:#197481}
+.tier-editor{border:1px solid #d9e9e9;border-radius:13px;padding:16px;background:#f7fbfa;margin:12px 0 4px}
+.tier-editor h3{font-size:16px;margin-bottom:4px}
+.tier-editor .formgrid{margin-top:14px}
+@media(max-width:650px){.package-catalog{grid-template-columns:1fr}.rate-line{grid-template-columns:repeat(4,minmax(0,1fr))}.rate-tile strong{font-size:11px}}
