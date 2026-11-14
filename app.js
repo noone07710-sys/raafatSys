@@ -110,6 +110,12 @@ const displayMoneyText=(n,source)=>money(equivalent(n,source),s.displayCurrency)
 const displayMoney=(n,source)=>'<strong class="amount">'+E(money(equivalent(n,source),s.displayCurrency))+'</strong>'+(s.displayCurrency!==source?'<small class="original-amount">الأصل: '+E(money(n,source))+'</small>':'');
 const originalCurrency=(k,v)=>v?.currency||((k==='lease_installments')?lookup('leases',v?.lease_id)?.currency:(k==='campaign_payments')?lookup('campaigns',v?.campaign_id)?.currency:null)||'IQD';
 const linkedSites=(campaignId)=>s.data.campaign_sites.filter(x=>x.campaign_id===campaignId).map(x=>lookup('ad_sites',x.site_id)).filter(Boolean);
+const serial4=(number)=>String(Math.max(0,Number(number)||0)).padStart(4,'0');
+const numberedContract=(code)=>String(code??'').replace(/^([A-Z]+-)(\d+)$/,(_,prefix,num)=>prefix+serial4(num));
+const currencyAmount=(value,currency)=>displayMoney(value,currency);
+const receiptNumber=(payment)=>String(payment?.receipt_number||'').trim()||serial4(
+ 1+s.data.campaign_payments.filter(x=>String(x.created_at||x.paid_at||'')<String(payment?.created_at||payment?.paid_at||'')).length);
+
 const campaignPaid=(id)=>s.data.campaign_payments.filter(x=>x.campaign_id===id).reduce((a,b)=>a+Number(b.amount||0),0);
 const campaignBalance=(v)=>Math.max(0,roundAmount(Number(v.price||0)-campaignPaid(v.id)));
 const leaseBalance=(v)=>s.data.lease_installments.filter(x=>x.lease_id===v.id).reduce((a,x)=>a+Math.max(0,Number(x.amount)-Number(x.paid_amount)),0);
@@ -412,6 +418,8 @@ function showVal(k,row,f){
  if(f==='campaign_count')return fmt(s.data.campaigns.filter(x=>x.customer_id===row.id).length);
  if(f==='properties_count')return fmt(s.data.properties.filter(x=>x.landlord_id===row.id).length);
  if(f==='sites')return E(linkedSites(row.id).map(x=>x.code+' — '+x.name).join('، ')||row.locations||'—');
+ if(f==='contract_number')return E(numberedContract(v));
+ if(f==='receipt_number')return E(receiptNumber(row));
  if(f==='campaign_balance')return displayMoney(campaignBalance(row),row.currency);
  if(f==='lease_balance')return displayMoney(leaseBalance(row),row.currency);
  if(f==='landlord_id')return E(nameOf('landlords',v));
@@ -425,7 +433,7 @@ function showVal(k,row,f){
  if(f==='package_id')return E(nameOf('packages',v));
  if(f==='site_id')return E(nameOf('ad_sites',v));
  if(f==='campaign_id')return E(nameOf('campaigns',v));
- if(f==='lease_id')return E(lookup('leases',v)?.contract_number||'—');
+ if(f==='lease_id'){const lease=lookup('leases',v);return E(lease?numberedContract(lease.contract_number)+' — '+nameOf('landlords',lease.landlord_id):'—');}
  if(f==='price'&&k==='packages')return displayMoney(v,originalCurrency(k,row))+(row.pricing_mode==='sqm_month'?'<small class="original-amount">للمتر المربع شهرياً (حسب المدة الافتراضية)</small>':'<small class="original-amount">للقطعة / كامل المدة الافتراضية</small>');
  if(['price','rent_total','amount','paid_amount'].includes(f))return displayMoney(v,originalCurrency(k,row));
  return E(v);
@@ -459,13 +467,13 @@ function campaignPaymentOverview(){
     '<span class="campaign-payment-status '+(allPaid?'settled':paid>0?'partial':'unpaid')+'">'+
     (allPaid?'مسددة بالكامل':paid>0?'تسديد جزئي':'لم تُسدَّد')+'</span></div>';
   const metrics='<div class="campaign-payment-metrics">'+
-   '<div><small>إجمالي الحملة</small><b>'+E(money(price,cam.currency))+'</b></div>'+
-   '<div><small>الواصل</small><b>'+E(money(paid,cam.currency))+'</b></div>'+
-   '<div><small>المتبقي</small><b>'+E(money(balance,cam.currency))+'</b></div></div>';
+   '<div><small>إجمالي الحملة</small><b>'+currencyAmount(price,cam.currency)+'</b></div>'+
+   '<div><small>الواصل</small><b>'+currencyAmount(paid,cam.currency)+'</b></div>'+
+   '<div><small>المتبقي</small><b>'+currencyAmount(balance,cam.currency)+'</b></div></div>';
   const history=payments.length?payments.map((payment,i)=>
-   '<div class="campaign-payment-history-row"><span class="campaign-payment-history-index">'+(payments.length-i)+'</span>'+
+   '<div class="campaign-payment-history-row"><span class="campaign-payment-history-index">'+E(receiptNumber(payment))+'</span>'+
    '<span class="campaign-payment-history-date">'+E(payment.paid_at||'—')+'</span>'+
-   '<span class="campaign-payment-history-amount">'+E(money(payment.amount,cam.currency))+'</span>'+
+   '<span class="campaign-payment-history-amount">'+currencyAmount(payment.amount,cam.currency)+'</span>'+
    '<span class="campaign-payment-history-notes">'+E(payment.notes||'—')+'</span>'+
    '<button type="button" class="linkbtn" data-edit="campaign_payments:'+E(payment.id)+'">تعديل الدفعة</button></div>'
   ).join(''):'<p class="campaign-payment-nohistory">لا توجد دفعات مسجلة لهذه الحملة بعد.</p>';
@@ -486,7 +494,7 @@ function campaignPaymentOverview(){
   '<div class="campaign-payment-list">'+(cards||'<div class="box empty campaign-payment-empty">'+
   (s.data.campaigns.length?'لا توجد حملات مطابقة للبحث.':'ماكو حملات مسجّلة بعد. من قسم المشاريع والحملات تگدر تنشئ أول حملة، وبعدها تظهر دفعاتها هنا.')+
   '</div>')+'</div>'+
-  '<p class="subtle campaign-payments-footnote">تُعرض قيمة كل حملة وعوائدها بعملتها الأصلية. المجاميع العلوية محوّلة إلى العملة المختارة بالنظام باستخدام سعر الصرف المحدد في الإعدادات.</p>'+
+  '<p class="subtle campaign-payments-footnote">كل مبالغ الصفحة تظهر بعملة العرض المحددة بالأعلى، وتظهر القيمة الأصلية تحت المبلغ المحوّل. لا تتغير العملة المحفوظة في السجلات.</p>'+
  '</div>';
 }
 
@@ -632,7 +640,7 @@ function render(){
  else{target.innerHTML=shell(content)+(s.modal?modalHtml():'');}
  bind();
 }
-function optionText(k,x){return k==='landlords'||k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+' / '+(labels[x.package_type]||x.package_type||'')+')':k==='ad_sites'?x.code+' — '+x.name:k==='leases'||k==='customer_contracts'?x.contract_number:k==='campaigns'?x.title+' — '+nameOf('customers',x.customer_id):'—';}
+function optionText(k,x){return k==='landlords'||k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+' / '+(labels[x.package_type]||x.package_type||'')+')':k==='ad_sites'?x.code+' — '+x.name:k==='leases'||k==='customer_contracts'?numberedContract(x.contract_number):k==='campaigns'?x.title+' — '+nameOf('customers',x.customer_id):'—';}
 
 function fieldCurrency(k,v){
  if(k==='campaign_payments')return v.entry_currency||lookup('campaigns',v.campaign_id)?.currency||s.displayCurrency;
@@ -911,9 +919,9 @@ function modalHtml(){
   return '<div class="overlay"><div class="modal campaign-payment-modal"><div class="modalhead"><h2>'+(v.id?'تعديل دفعة مسجلة':'تسجيل دفعة للحملة')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
    '<div class="campaign-payment-modal-parent"><strong>'+E(parent.title)+'</strong><span>الزبون: '+E(nameOf('customers',parent.customer_id))+'</span></div>'+
    '<div class="campaign-payment-modal-balances">'+
-   '<div><small>إجمالي الحملة</small><b>'+E(money(parent.price,parent.currency))+'</b></div>'+
-   '<div><small>المبلغ الواصل سابقاً'+(v.id?' باستثناء الدفعة الحالية':'')+'</small><b>'+E(money(paidOthers,parent.currency))+'</b></div>'+
-   '<div><small>المتاح لهذه الدفعة</small><b>'+E(money(canPay,parent.currency))+'</b></div></div>'+
+   '<div><small>إجمالي الحملة</small><b>'+currencyAmount(parent.price,parent.currency)+'</b></div>'+
+   '<div><small>المبلغ الواصل سابقاً'+(v.id?' باستثناء الدفعة الحالية':'')+'</small><b>'+currencyAmount(paidOthers,parent.currency)+'</b></div>'+
+   '<div><small>المتاح لهذه الدفعة</small><b>'+currencyAmount(canPay,parent.currency)+'</b></div></div>'+
    '<form id="recordForm"><input type="hidden" name="campaign_id" value="'+E(parent.id)+'">'+
    '<div class="formgrid">'+editableFields.map(field=>fieldHtml(field,v,v)).join('')+'</div>'+
    '<div class="notice" id="paymentParentInfo"></div>'+
@@ -921,23 +929,23 @@ function modalHtml(){
    '<p class="subtle">تُحفظ الدفعة بعملة الحملة الأصلية، ويُحتسب المبلغ المقابل تلقائياً عند اختلاف عملة الاستلام.</p></div></div>';
  }
  if(k==='leases'){
-  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(v.contract_number):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الدفعات')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+v.id+'">معاينة / طباعة</button><button class="btn secondary" data-renew="'+v.id+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
+  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(v.numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الدفعات')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+v.id+'">معاينة / طباعة</button><button class="btn secondary" data-renew="'+v.id+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
 
  if(k==='customer_contracts'){
   const legacy=Boolean(v.id&&!v.campaign_id);
   if(legacy){
-   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>عقد سابق — '+E(v.contract_number)+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><div class="notice">هذا عقد قديم غير مربوط بحملة. بياناته محفوظة مثل ما كانت؛ العقود الجديدة تُنشأ فقط من الحملات.</div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">حفظ تعديلات العقد السابق</button></div></form>'+relatedDetails(k,v)+'</div></div>';
+   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>عقد سابق — '+E(v.numberedContract(v.contract_number))+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><div class="notice">هذا عقد قديم غير مربوط بحملة. بياناته محفوظة مثل ما كانت؛ العقود الجديدة تُنشأ فقط من الحملات.</div><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">حفظ تعديلات العقد السابق</button></div></form>'+relatedDetails(k,v)+'</div></div>';
   }
   const campaigns=s.data.campaigns.filter(cam=>!s.modal.contractCustomerFilter||cam.customer_id===s.modal.contractCustomerFilter||cam.id===v.campaign_id);
   const chosen=lookup('campaigns',v.campaign_id);
   const campaignSelect=v.id?
-   '<div class="notice"><b>الحملة المعتمدة:</b> '+E(v.campaign_title_snapshot||chosen?.title||'—')+' · <b>رقم العقد:</b> '+E(v.contract_number)+'</div>':
+   '<div class="notice"><b>الحملة المعتمدة:</b> '+E(v.campaign_title_snapshot||chosen?.title||'—')+' · <b>رقم العقد:</b> '+E(v.numberedContract(v.contract_number))+'</div>':
    '<label class="field full"><span>اختَر الحملة التي تريد إنشاء عقد لها *</span><select name="campaign_id" required><option value="">— اختر حملة محفوظة —</option>'+
    campaigns.map(cam=>'<option value="'+E(cam.id)+'" '+(v.campaign_id===cam.id?'selected':'')+'>'+E(cam.title+' — '+nameOf('customers',cam.customer_id)+' — '+nameOf('packages',cam.package_id))+'</option>').join('')+
    '</select></label>';
   const fieldsToEdit=fields.filter(f=>['company_representative','customer_representative','terms','notes'].includes(f[0]));
-  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.id?'تفاصيل وتعديل عقد '+E(v.contract_number):'إنشاء عقد من حملة إعلانية')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.id?'تفاصيل وتعديل عقد '+E(v.numberedContract(v.contract_number)):'إنشاء عقد من حملة إعلانية')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
    '<div class="notice">كل التفاصيل المالية والفنية وعدد القطع والمواقع تُعتمد من الحملة مباشرة، وما تحتاج تحددها مرة ثانية.</div>'+
    '<form id="recordForm"><div class="formgrid">'+campaignSelect+contractCampaignSummary(v)+
    '<div class="full"><h3>معلومات التوقيع والشروط</h3><p class="subtle">هذه الحقول تخص نص العقد فقط، وليست تفاصيل الحجز.</p></div>'+
@@ -967,13 +975,13 @@ function customerContractPreview(v){
  const selectedLocations=sites.map(x=>(x.code||'')+' — '+(x.name||'')).join('، ');
  const siteCards=sites.map(x=>'<div class="contract-preview-board"><b>'+E((x.code||'')+' — '+(x.name||''))+'</b><small>'+E([x.governorate,x.address].filter(Boolean).join('، ')||'—')+'</small></div>').join('');
  const record=(label,value)=>'<div><small>'+E(label)+'</small><strong>'+E(value??'—')+'</strong></div>';
- return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(v.contract_number)+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('الرقم الوطني',customer?.national_id||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button class="btn" data-action="print">طباعة / حفظ PDF</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
+ return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(v.numberedContract(v.contract_number))+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('الرقم الوطني',customer?.national_id||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button class="btn" data-action="print">طباعة / حفظ PDF</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
 }
 
 function previewHtml(v){
  let p=nameOf('properties',v.property_id),l=nameOf('landlords',v.landlord_id);
  let rows=s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date));
- return '<div class="overlay"><div class="modal"><div class="modalhead noprint"><h2>معاينة العقد</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract"><h3 style="text-align:center">معاينة بيانات عقد إيجار سطح بين الشركة ومالك البناية — '+E(v.contract_number)+'</h3><div class="summary"><div><small>اسم المالك</small>'+E(l)+'</div><div><small>هاتف المالك</small>'+E(lookup('landlords',v.landlord_id)?.phone||'—')+'</div><div><small>رقم البطاقة الموحدة للمالك</small>'+E(lookup('landlords',v.landlord_id)?.national_id||'—')+'</div><div><small>المحافظة وعنوان السكن</small>'+E([lookup('landlords',v.landlord_id)?.governorate,lookup('landlords',v.landlord_id)?.residential_address].filter(Boolean).join(' — ')||'—')+'</div><div><small>العقار</small>'+E(p)+'</div><div><small>قياسات السطح</small>'+E(lookup('properties',v.property_id)?.dimensions||'—')+'</div><div><small>بداية العقد</small>'+E(v.start_date)+'</div><div><small>نهاية العقد</small>'+E(v.end_date)+'</div><div><small>الأجرة الإجمالية</small>'+E(money(v.rent_total,v.currency))+'</div><div><small>المعادل بسعر الصرف الحالي — للاطلاع فقط</small>'+E(money(equivalent(v.rent_total,v.currency),s.displayCurrency))+'</div><div><small>الدورية</small>'+E(labels[v.payment_frequency])+'</div><div><small>فترة السماح</small>'+E(v.grace_days)+' يوم</div><div><small>ممثل الشركة / المالك</small>'+E(v.company_representative||'—')+' / '+E(v.landlord_representative||'—')+'</div></div><p style="margin-top:18px">ملاحظات وشروط: '+E(v.notes||'لا توجد')+'</p><h3>جدول الدفعات</h3><table><thead><tr><th>تاريخ الاستحقاق</th><th>المبلغ</th><th>المدفوع</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+E(x.due_date)+'</td><td>'+E(money(x.amount,v.currency))+'</td><td>'+E(money(x.paid_amount,v.currency))+'</td></tr>').join('')+'</tbody></table><div style="display:flex;justify-content:space-between;margin-top:55px"><span>توقيع ممثل الشركة: ___________</span><span>توقيع ممثل المالك: ___________</span></div><p class="subtle" style="margin-top:25px">هذه معاينة للبيانات المسجلة وليست بديلاً عن نص عقد قانوني معتمد.</p></article><div class="actions noprint"><button class="btn" data-action="print" >'+uiIcon('printer',16)+' طباعة العقد</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
+ return '<div class="overlay"><div class="modal"><div class="modalhead noprint"><h2>معاينة العقد</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract"><h3 style="text-align:center">معاينة بيانات عقد إيجار سطح بين الشركة ومالك البناية — '+E(v.numberedContract(v.contract_number))+'</h3><div class="summary"><div><small>اسم المالك</small>'+E(l)+'</div><div><small>هاتف المالك</small>'+E(lookup('landlords',v.landlord_id)?.phone||'—')+'</div><div><small>رقم البطاقة الموحدة للمالك</small>'+E(lookup('landlords',v.landlord_id)?.national_id||'—')+'</div><div><small>المحافظة وعنوان السكن</small>'+E([lookup('landlords',v.landlord_id)?.governorate,lookup('landlords',v.landlord_id)?.residential_address].filter(Boolean).join(' — ')||'—')+'</div><div><small>العقار</small>'+E(p)+'</div><div><small>قياسات السطح</small>'+E(lookup('properties',v.property_id)?.dimensions||'—')+'</div><div><small>بداية العقد</small>'+E(v.start_date)+'</div><div><small>نهاية العقد</small>'+E(v.end_date)+'</div><div><small>الأجرة الإجمالية</small>'+E(money(v.rent_total,v.currency))+'</div><div><small>المعادل بسعر الصرف الحالي — للاطلاع فقط</small>'+E(money(equivalent(v.rent_total,v.currency),s.displayCurrency))+'</div><div><small>الدورية</small>'+E(labels[v.payment_frequency])+'</div><div><small>فترة السماح</small>'+E(v.grace_days)+' يوم</div><div><small>ممثل الشركة / المالك</small>'+E(v.company_representative||'—')+' / '+E(v.landlord_representative||'—')+'</div></div><p style="margin-top:18px">ملاحظات وشروط: '+E(v.notes||'لا توجد')+'</p><h3>جدول الدفعات</h3><table><thead><tr><th>تاريخ الاستحقاق</th><th>المبلغ</th><th>المدفوع</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+E(x.due_date)+'</td><td>'+E(money(x.amount,v.currency))+'</td><td>'+E(money(x.paid_amount,v.currency))+'</td></tr>').join('')+'</tbody></table><div style="display:flex;justify-content:space-between;margin-top:55px"><span>توقيع ممثل الشركة: ___________</span><span>توقيع ممثل المالك: ___________</span></div><p class="subtle" style="margin-top:25px">هذه معاينة للبيانات المسجلة وليست بديلاً عن نص عقد قانوني معتمد.</p></article><div class="actions noprint"><button class="btn" data-action="print" >'+uiIcon('printer',16)+' طباعة العقد</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
 }
 
 function updateMoneyHints(){
@@ -1389,10 +1397,11 @@ function clean(k,v){
 
 async function persist(k,o,id){
  if(s.demo){
-  if(k==='leases'&&!id&&!o.contract_number)o.contract_number='RA-'+(1+Math.max(0,...s.data.leases.map(x=>Number((x.contract_number||'').replace('RA-',''))||0)));
+  if(k==='leases'&&!id&&!o.contract_number)o.contract_number='RA-'+serial4(1+Math.max(0,...s.data.leases.map(x=>Number((x.contract_number||'').replace('RA-',''))||0)));
+  if(k==='campaign_payments'&&!id)o.receipt_number=serial4(1+Math.max(0,...s.data.campaign_payments.map(x=>Number(x.receipt_number)||0)));
   if(k==='customer_contracts'&&!id){
    Object.assign(o,campaignContractData(lookup('campaigns',o.campaign_id)));
-   o.contract_number='RC-'+(1+Math.max(0,...s.data.customer_contracts.map(x=>Number((x.contract_number||'').replace('RC-',''))||0)));
+   o.contract_number='RC-'+serial4(1+Math.max(0,...s.data.customer_contracts.map(x=>Number((x.contract_number||'').replace('RC-',''))||0)));
    const p=lookup('packages',o.package_id),cust=lookup('customers',o.customer_id),site=lookup('ad_sites',o.site_id);
    o.package_name_snapshot=p?.name||'—';
    o.package_dimensions_snapshot=p?.width_m+' × '+p?.height_m+' m';
