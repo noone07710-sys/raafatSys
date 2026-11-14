@@ -47,6 +47,62 @@ const linkedSites=(campaignId)=>s.data.campaign_sites.filter(x=>x.campaign_id===
 const campaignPaid=(id)=>s.data.campaign_payments.filter(x=>x.campaign_id===id).reduce((a,b)=>a+Number(b.amount||0),0);
 const campaignBalance=(v)=>Math.max(0,roundAmount(Number(v.price||0)-campaignPaid(v.id)));
 const leaseBalance=(v)=>s.data.lease_installments.filter(x=>x.lease_id===v.id).reduce((a,x)=>a+Math.max(0,Number(x.amount)-Number(x.paid_amount)),0);
+
+function packageRates(pkg){return s.data.package_rates.filter(x=>x.package_id===pkg?.id).sort((a,b)=>a.months-b.months);}
+function packageRate(pkg,months){return packageRates(pkg).find(x=>Number(x.months)===Number(months));}
+function packageMonths(pkg){
+ const rates=packageRates(pkg);
+ return rates.length?rates.map(x=>Number(x.months)):[Number(pkg?.default_months||3)];
+}
+function quotePackageUSD(pkg,months,quantity=1,areaM2=0){
+ if(!pkg)return null;
+ const rate=packageRate(pkg,months);
+ if(rate){
+  const unit=Number(rate.usd_price);
+  if(pkg.pricing_mode==='sqm_month'){
+   if(!(Number(areaM2)>0))return null;
+   return roundAmount(unit*Number(months)*Number(areaM2));
+  }
+  return roundAmount(unit*Math.max(1,Number(quantity)||1));
+ }
+ if(packageRates(pkg).length)return null; // no invented interpolation for official tiers
+ if(Number(months)!==Number(pkg.default_months))return null;
+ const base=convert(pkg.price,pkg.currency||'USD','USD');
+ return pkg.pricing_mode==='sqm_month'?
+  (Number(areaM2)>0?roundAmount(base*Number(months)*Number(areaM2)):null):
+  roundAmount(base*Math.max(1,Number(quantity)||1));
+}
+function campaignSiteArea(ids){
+ return (ids||[]).reduce((sum,id)=>{
+  const site=lookup('ad_sites',id),roof=lookup('properties',site?.rooftop_property_id);
+  return sum+Number(roof?.area_m2||0);
+ },0);
+}
+function quoteCampaign(v,ids=[]){
+ const pkg=lookup('packages',v.package_id);if(!pkg)return null;
+ const count=Math.max(1,Number(v.quantity)||1,(ids||[]).length);
+ const area=Number(v.requested_area_m2)>0?Number(v.requested_area_m2):campaignSiteArea(ids);
+ const usd=quotePackageUSD(pkg,Number(v.months),count,area);
+ return usd===null?null:{usd,total:roundAmount(convert(usd,'USD',v.currency||'USD')),quantity:count,area};
+}
+function refreshCampaignQuote(){
+ if(s.modal?.table!=='campaigns'||!s.modal.autoPrice)return;
+ const v=s.modal.data;
+ const quoted=quoteCampaign(v,s.modal.siteIds);
+ v.price=quoted?quoted.total:0;
+}
+function packageRatesMarkup(pkg,currency=s.displayCurrency){
+ const tiers=packageRates(pkg);
+ const mode=pkg.pricing_mode==='sqm_month';
+ return '<div class="rate-line">'+tiers.map(t=>
+  '<div class="rate-tile"><small>'+t.months+' '+(t.months===1?'شهر':'أشهر')+'</small><strong>'+E(money(roundAmount(convert(t.usd_price,'USD',currency)),currency))+'</strong><small>'+(mode?'للمتر² شهرياً':'للقطعة / كامل المدة')+'</small></div>'
+ ).join('')+'</div>';
+}
+function packageCatalog(){
+ const rows=s.data.packages.filter(p=>['A','B','C','D','E'].includes(p.code)).sort((a,b)=>a.code.localeCompare(b.code));
+ return '<div class="package-catalog">'+rows.map(p=>'<article class="box package-card"><div class="package-heading"><span class="package-symbol">'+E(p.code)+'</span><div><b>'+E(p.name)+'</b><small>'+E(p.pricing_mode==='sqm_month'?'قياس مخصص لكل سطح • تسعير مساحة':'قياس '+fmt(p.width_m)+' × '+fmt(p.height_m)+' متر • '+fmt(p.area_m2)+' م² • وجهان')+'</small></div></div>'+packageRatesMarkup(p)+'<div class="inline" style="margin-top:10px"><button class="btn secondary mini" data-edit="packages:'+p.id+'">عرض وتعديل الباقة</button></div></article>').join('')+'</div>';
+}
+
 function toast(text,bad=false){let x=document.createElement('div');x.className=bad?'error toast':'notice toast';x.textContent=text;document.body.append(x);Object.assign(x.style,{position:'fixed',bottom:'20px',left:'20px',zIndex:20,maxWidth:'min(90vw,500px)',boxShadow:'0 5px 30px #1113'});setTimeout(()=>x.remove(),4500)}
 
 function subscribeToExchangeRate(){
@@ -161,7 +217,7 @@ function listing(k){
   return match&&(k!=='customers'||s.filter==='all'||x.status===s.filter);
  });
  let labelsBy={lease_installments:'إضافة دفعة يدوية',campaign_payments:'تسجيل دفعة'};
- return (k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="بحث في السجلات..." value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">+ '+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">تفاصيل / تعديل</button>'+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'">🖨 طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
+ return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="بحث في السجلات..." value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">+ '+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">تفاصيل / تعديل</button>'+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'">🖨 طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
 }
 
 function reports(){
