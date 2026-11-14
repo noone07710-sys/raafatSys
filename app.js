@@ -397,28 +397,68 @@ async function generateInstallments(v){let interval=v.payment_frequency==='semia
  let records=dates.map((date,i)=>({lease_id:v.id,due_date:date,amount:(base+(i===dates.length-1?remainder:0))/100,paid_amount:0}));
  for(let rec of records)await persist('lease_installments',rec);
 }
-async function saveForm(form){
- let m=s.modal,k=m.table;captureForm(form);let v=m.data;
- if(k==='campaigns'&&s.formStep<4){s.formStep++;render();return}
- try{
- formValidate(k,v);let o=clean(k,v);
- if(k==='leases'&&!v.id){o.contract_number='';}
- if(k==='landlords'){
-  let file=form.elements.card_image?.files?.[0];
-  if(file){if(s.demo)throw Error('رفع صورة بطاقة حقيقية غير مسموح في وضع المعاينة');if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5242880)throw Error('الصورة يجب أن تكون PNG أو JPEG أو WebP وبحجم أقل من 5MB');
-   let path=s.session.user.id+'/'+uid()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-   let {error}=await s.client.storage.from('identity-cards').upload(path,file,{upsert:false,contentType:file.type});if(error)throw error;
-   o.card_image_path=path;
+
+async function syncCampaignSites(campaignId,siteIds){
+ const ids=[...new Set(siteIds||[])];
+ const current=s.data.campaign_sites.filter(x=>x.campaign_id===campaignId);
+ for(const row of current.filter(x=>!ids.includes(x.site_id))){
+  if(s.demo)s.data.campaign_sites=s.data.campaign_sites.filter(x=>x.id!==row.id);
+  else{
+   const {error}=await s.client.from('campaign_sites').delete().eq('id',row.id);
+   if(error)throw error;
   }
  }
- let saved=await persist(k,o,v.id);
- if(k==='campaigns'&&!v.id&&Number(v.initial_payment_amount)>0)await persist('campaign_payments',{campaign_id:saved.id,paid_at:v.initial_payment_date||today(),amount:Number(v.initial_payment_amount)});
- if(k==='leases'&&!v.id){try{await generateInstallments(saved)}catch(e){toast('تم حفظ العقد لكن فشل إنشاء دفعاته: '+e.message,true)}}
- s.modal=null;
- if(s.demo){s.view=k;render()}else await load();
- toast('تم حفظ السجل بنجاح');
- }catch(e){toast(e.message,true)}
+ for(const id of ids.filter(x=>!current.some(row=>row.site_id===x))){
+  const added=await persist('campaign_sites',{campaign_id:campaignId,site_id:id});
+  if(!s.demo)s.data.campaign_sites.push(added);
+ }
 }
+async function saveForm(form){
+ if(!s.modal)return;
+ const m=s.modal,k=m.table;
+ captureForm(form);let v=m.data;
+ if(k==='campaigns'&&s.formStep<4){
+  if(s.formStep===1&&!m.siteIds?.length&&!String(v.locations||'').trim()){
+   toast('حدد موقعاً من القائمة أو أدخل موقعاً إضافياً قبل المتابعة',true);return;
+  }
+  s.formStep++;render();return;
+ }
+ try{
+  formValidate(k,v);
+  let o=clean(k,v);
+  if(k==='leases'&&!v.id)o.contract_number='';
+  if(k==='landlords'){
+   let file=form.elements.card_image?.files?.[0];
+   if(file){
+    if(s.demo)throw Error('رفع صورة البطاقة غير متاح في وضع المعاينة');
+    if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>5242880)throw Error('صورة البطاقة يجب أن تكون PNG أو JPEG أو WebP وبحد أقصى 5MB');
+    const path=s.session.user.id+'/'+uid()+'-'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const {error}=await s.client.storage.from('identity-cards').upload(path,file,{upsert:false,contentType:file.type});
+    if(error)throw error;
+    o.card_image_path=path;
+   }
+  }
+  const saved=await persist(k,o,v.id);
+  if(k==='campaigns'){
+   // The parent record is saved first to get its id; all site records point to that id.
+   // Keep the existing record open on partial failure to prevent accidental duplicate creation.
+   m.data.id=saved.id;
+   await syncCampaignSites(saved.id,m.siteIds);
+   if(!v.id&&Number(v.initial_payment_amount)>0)await persist('campaign_payments',{
+    campaign_id:saved.id,paid_at:v.initial_payment_date||today(),amount:Number(v.initial_payment_amount)
+   });
+  }
+  if(k==='leases'&&!v.id){
+   m.data.id=saved.id;
+   try{await generateInstallments(saved)}
+   catch(e){toast('تم إنشاء العقد لكن بعض الأقساط لم تُنشأ: '+e.message,true)}
+  }
+  s.modal=null;
+  if(s.demo){s.view=k;render()}else await load();
+  toast('تم حفظ السجل وربطه بنجاح');
+ }catch(e){toast(e.message||String(e),true)}
+}
+
 async function saveSettings(form){const rate=Number(new FormData(form).get('usd_iqd'));if(!(rate>0))return toast('سعر الصرف يجب أن يكون أكبر من الصفر',true);
  try{if(!s.demo){let {error}=await s.client.from('settings').update({usd_iqd:rate,updated_at:new Date().toISOString()}).eq('id',1);if(error)throw error}s.settings.usd_iqd=rate;render();toast('تم تحديث سعر الصرف')}catch(e){toast(e.message,true)}
 }
