@@ -133,3 +133,74 @@
 @media(prefers-reduced-motion:reduce){
  .nav-group,.nav-group-chevron,.nav .nav-link{transition:none}
 }
+
+
+/* Company identity: admin settings, sidebar brand and printable contracts */
+.brand-company{display:flex;gap:11px;align-items:center;padding:1px 10px 18px}
+.sidebar-logo-frame{flex:0 0 53px;width:53px;height:53px;border-radius:14px;background:#234353;border:1px solid #365767;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.company-logo-sidebar{max-width:100%;width:100%;height:100%;object-fit:contain}
+.brand-company-name{flex:1;min-width:0;line-height:1.55}
+.brand-company-name>strong{display:block;overflow-wrap:anywhere;font-size:19px;line-height:1.5}
+.brand-sys{color:#8fd6c8;font-size:14px;direction:ltr;display:inline-block}
+.brand-company-name>small{margin-top:3px;display:block;font-size:10px;line-height:1.65;word-break:break-word}
+.company-logo-fallback{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:#b8e9de;font-weight:800;font-size:29px}
+.settings-page{max-width:1370px;margin-inline:auto}
+.settings-intro{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:5px 0 23px}
+.settings-eyebrow{font-size:10px;letter-spacing:1.4px;color:#247b80;font-weight:800}
+.settings-intro h2{font-size:25px;line-height:1.6;margin:5px 0}
+.settings-intro p{color:#768696;font-size:12px;line-height:1.9;margin:0}
+.settings-state{white-space:nowrap;font-size:11px;border:1px solid #d6e4e6;background:#eef7f6;color:#356f76;border-radius:30px;padding:7px 13px;font-weight:700}
+.settings-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(265px,320px);align-items:start;gap:20px}
+.settings-main{min-width:0}
+.settings-panel{border:1px solid #e0e8ef;background:white;border-radius:17px;padding:22px 23px;margin-bottom:15px;box-shadow:0 5px 23px #172d3c08}
+.settings-section-title{display:flex;align-items:center;gap:13px;margin-bottom:22px}
+.settings-section-icon{display:flex;align-items:center;justify-content:center;flex:0 0 42px;width:42px;height:42px;border-radius:13px;background:#eaf5f4;color:#20757c;font-size:22px;font-weight:750}
+.settings-section-title h3{margin:0 0 3px;font-size:16px}
+.settings-section-title p{margin:0;color:#8291a0;font-size:11px;line-height:1.7}
+.settings-logo-row{border:1px dashed #cddde3;border-radius:13px;background:#f9fbfc;margin-top:12px;padding:15px;display:flex;align-items:center;gap:18px}
+.settings-logo-visual{width:130px;height:120px;border-radius:13px;border:1px solid #e1e9ed;background:white;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 130px}
+.settings-logo-visual img{max-width:100%;max-height:100%;object-fit:contain;width:100%;height:100%}
+.settings-logo-visual span{font-size:64px;font-weight:800;color:#19727c}
+.settings-logo-visual [hidden]{display:none!important}
+.settings-logo-fields{min-width:0;flex:1}
+.settings-logo-fields h4{margin:0 0 5px;font-size:14px}
+.settings-logo-fields p{margin:0 0 11px;color:#728595;font-size:11px;line-height:1.8}
+.settings-file-button{display:inline-block;border:1px solid #aed3d2;background:#ecf7f5;color:#176e72;border-radius:9px;font-weight:800;font-size:12px;padding:9px 15px;cursor:pointer}
+.settings-file-button:hover{background:#e0f2ef}
+.settings-file-input{position:absolute;left:-10000px;width:1px;height:1px;opacity:0}
+.settings-file-input:focus-visible+.settings-file-button{outline:2px solid #128e93}
+.settings-logo-fields>small{display:block;font-size:10px;color:#8492a2;word-break:break-all;margin-top:7px}
+.settings-remove-logo{display:block;border:0;background:transparent;color:#b6434c;font-size:12px;font-weight:700;margin-top:8px;padding:4px 0}
+.settings-rate-note{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;border-radius:10px;padding:10px 15px;background:#f1f8f8;min-height:85px}
+.settings-rate-note small{color:#708697;font-size:11px}
+.settings-rate-note strong{direction:ltr;font-size:15px;color:#176f78}
+.settings-savebar{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#173b45;color:white;border:1px solid #275866;padding:18px 20px;border-radius:15px;margin:13px 0 25px}
+.settings-savebar strong{font-size:14px;display:block}
+.settings-savebar small{display:block;color:#a8c6c6;font-size:11px;margin-top:6px}
+.settings-savebar .btn{background:#2e9693;border-color:#2e9693}
+.settings-preview-column{position:sticky;top:25px;min-width:0}
+.settings-preview-card{background:linear-gradient(160deg,#142f40,#214b4f);padding:23px;border-radius:18px;color:#e8f5f2;text-align:center;box-shadow:0 14px 30px #152f4020;overflow-wrap:anywhere}
+.settings-preview-kicker{display:block;color:#96c7c3;letter-spacing:1.6px;font-size:10px;font-weight:750;margin-bottom:10px}
+.settings-preview-card h3{font-size:16px;margin-bottom:17px}
+.settings-preview-logo{display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:18px;border:1px solid #ffffff2b;background:#ffffff12;width:135px;height:120px;margin:0 auto 17px}
+.company-logo-preview{width:100%;height:100%;object-fit:contain}
+.settings-preview-logo .company-logo-fallback{font-size:68px}
+.settings-preview-card>b{font-size:15px;display:block;line-height:1.8;margin-bottom:6px}
+.settings-preview-card p{font-size:11px;color:#b1d0d0;line-height:1.9}
+.settings-preview-contact{font-size:11px;color:#c6e7de;line-height:1.8}
+.settings-preview-card hr{border-color:#456069;margin:17px 0 13px}
+.settings-preview-note{font-size:10px;line-height:1.7;color:#9cc2c5}
+.contract-company-head{display:flex;align-items:center;justify-content:center;gap:15px;text-align:right;padding-bottom:17px;margin-bottom:16px;border-bottom:1px solid #d6e0e7}
+.company-logo-contract{width:75px;height:75px;max-width:75px;max-height:75px;flex:0 0 75px;object-fit:contain}
+.contract-company-head>.company-logo-fallback{width:72px;height:72px;background:#e9f3f2;color:#196f73;border-radius:14px;flex:0 0 72px}
+.contract-company-copy{min-width:0;flex:0 1 auto}
+.contract-company-copy h2{font-size:17px;line-height:1.7;margin:0 0 4px}
+.contract-company-copy small{font-size:10px;line-height:1.8;color:#637789;overflow-wrap:anywhere}
+@media(max-width:1000px){.settings-layout{grid-template-columns:minmax(0,1fr)}.settings-preview-column{position:static;grid-row:1}.settings-preview-logo{width:110px;height:96px}.settings-preview-card{padding:15px}.settings-preview-card h3{margin-bottom:7px}.settings-preview-card .settings-preview-logo{margin-bottom:9px}}
+@media(max-width:650px){.settings-intro{align-items:flex-start;gap:8px}.settings-intro h2{font-size:20px}.settings-panel{padding:17px 14px}.settings-logo-row{gap:12px;align-items:flex-start}.settings-logo-visual{flex:0 0 94px;width:94px;height:100px}.settings-logo-visual span{font-size:47px}.settings-logo-fields p{font-size:10px}.settings-savebar{flex-wrap:wrap;padding:15px}.settings-savebar .btn{width:100%}.settings-section-title{gap:9px}.settings-section-icon{width:35px;height:35px;flex-basis:35px}.brand-company{padding:2px 8px 10px}.settings-layout{gap:10px}.settings-intro .settings-state{font-size:10px}}
+@media print{
+ .settings-preview-column,.settings-main,.settings-intro,.settings-savebar{display:none!important}
+ .contract-company-head{break-inside:avoid;padding-bottom:10px;margin-bottom:12px}
+ .company-logo-contract{width:68px;height:68px;max-width:68px;max-height:68px}
+ .contract-company-copy h2{font-size:16px}
+}
