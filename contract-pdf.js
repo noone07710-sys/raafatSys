@@ -127,7 +127,6 @@
    y+=18;separator(y+1);y+=13;
   }
   heading();
-  const usedPages=[]; // placeholders for the public API layout object
   function available(h){return y+h<=maxY}
   function jump(next){
    if(available(next))return false;
@@ -142,7 +141,7 @@
   }
   function line(label,value,opts={}){
    const x=right-9,max=width-20,size=opts.size||10.5;
-   const rows=wrapped(ctx,text(label)+'  '+text(value),max,size,opts.bold?700:600);
+   const rows=wrapped(ctx,(label?text(label)+'  ':'')+text(value),max,size,opts.bold?700:600);
    rows.forEach(row=>{set(row,x,y,size,opts.bold?700:600,opts.muted?COLORS.muted:COLORS.text);y+=15});
    y+=2;
   }
@@ -180,7 +179,7 @@
    ctx.fillText(''+pageNumber,left,maxY+11);
    ctx.textAlign='right';
   }
-  return {get y(){return y},get maxY(){return maxY},available,reserve,section,line,pair,paragraph,note,space,signature,footer,usedPages};
+  return {get y(){return y},get maxY(){return maxY},available,reserve,section,line,pair,paragraph,note,space,signature,footer};
  }
  // No need to guess page count: content runs through an explicit flow function
  // that creates fresh overlay pages as required, all using the same PDF template.
@@ -209,10 +208,13 @@
    if(!current.writer.available(need))start();
   }
   function section(title,estimated=45){next(estimated);current.writer.section(title)}
-  function one(label,value,size=17){
-   next(size+12);
-   const w=current.writer;
-   w.line(label,value);
+  function one(label,value){
+   const source=(label?text(label)+'  ':'')+text(value);
+   const lines=wrapped(current.ctx,source,size.width-2*PAGE.left-20,10.5,600);
+   for(const line of lines){
+    next(21);
+    current.writer.line('',line);
+   }
   }
   function paired(a,b,c,d){
    next(60);current.writer.pair(a,b,c,d);
@@ -226,7 +228,7 @@
     const ctx=current.ctx;
     const pieces=wrapped(ctx,sub||' ',size.width-2*PAGE.left-20,10.3,500);
     for(const line of pieces){
-     next(17);
+     next(25);
      current.writer.paragraph(line);
     }
    }
