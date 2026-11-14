@@ -76,6 +76,13 @@ test('A-E billboard categories filter sites and reject cross-package bookings',(
  assert.throws(()=>formValidate('ad_sites',{code:'A01',package_id:'',site_type:'roadside'}),/حدد باقة/);
  assert.throws(()=>formValidate('ad_sites',{code:'E-10',package_id:id('E'),site_type:'rooftop'}),/عقار/);
 
+ // A booked site cannot be reclassified as B without correcting the linked campaign.
+ s.data.campaigns=[{id:'booked-A',package_id:id('A'),customer_id:'customer-1'}];
+ s.data.campaign_sites=[{id:'link-1',campaign_id:'booked-A',site_id:'siteA'}];
+ assert.throws(()=>formValidate('ad_sites',{id:'siteA',code:'B-21',package_id:id('B'),site_type:'roadside'}),/مرتبطة بحملة/);
+ assert.doesNotThrow(()=>formValidate('ad_sites',{id:'siteA',code:'A01',package_id:id('A'),site_type:'roadside'}));
+ s.data.campaigns=[];s.data.campaign_sites=[];
+
  const campaign={customer_id:'customer-1',package_id:id('A'),months:3,locations:'تكريت',price:280,currency:'USD'};
  assert.throws(()=>formValidate('campaigns',campaign),/لا تتبع الباقة/);
  s.modal.siteIds=['siteA','legacyA'];
