@@ -501,6 +501,7 @@ function bind(){
  document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{
   captureForm(form);
   s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId);
+  if(!v.id&&s.modal.siteIds.length)v.quantity=s.modal.siteIds.length;
   refreshCampaignQuote();
   render();
  });
@@ -513,6 +514,16 @@ function bind(){
   for(const name of ['price','rent_total','amount','paid_amount','initial_payment_amount']){
    let input=form.elements.namedItem(name);
    if(input&&input.value!=='')input.value=String(roundAmount(convert(input.value,previous,next)));
+  }
+  if(k==='packages'){
+   form.querySelectorAll('[data-package-rate-month]').forEach(input=>{
+    if(input.value==='')return;
+    const changed=roundAmount(convert(input.value,previous,next));
+    input.value=String(changed);
+    s.modal.rateDraft[Number(input.dataset.packageRateMonth)]=String(changed);
+    const hint=form.querySelector('[data-rate-hint="'+input.dataset.packageRateMonth+'"]');
+    if(hint)hint.textContent=moneyHint(changed,next);
+   });
   }
   captureForm(form);s.modal.data.currency=next;updateMoneyHints();
  };
