@@ -19,7 +19,7 @@ const defs={
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
  package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
- customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['campaign_id','الحملة المرتبطة (اختياري)','lookup:campaigns'],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
+ customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المرتبطة (اختياري)','lookup:campaigns'],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
 const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
@@ -271,9 +271,34 @@ function packagePricingInfo(v){
  return '<div class="notice full"><b>'+E(pkg.name)+'</b> · '+E(formula)+'<div style="margin-top:6px">'+(q?'<strong>'+E(money(q.total,v.currency||'USD'))+'</strong> <small>('+E(money(q.usd,'USD'))+')</small>':'<b>الرجاء اختيار مدة صحيحة'+(pkg.pricing_mode==='sqm_month'?' وإدخال مساحة الإعلان':'')+'</b>')+'</div></div>';
 }
 
+
+function quoteCustomerContract(v){
+ const pkg=lookup('packages',v.package_id);
+ if(!pkg)return null;
+ const months=Number(v.duration_months||pkg.default_months||3);
+ const area=Number(v.rented_area_m2)>0?Number(v.rented_area_m2):0;
+ const usd=quotePackageUSD(pkg,months,1,area);
+ return usd===null?null:{usd,amount:roundAmount(convert(usd,'USD',v.currency||'USD')),area,months};
+}
+function refreshCustomerContractQuote(){
+ if(s.modal?.table!=='customer_contracts'||s.modal?.data?.id||s.modal?.data?.campaign_id)return;
+ const v=s.modal.data;
+ const quote=quoteCustomerContract(v);
+ v.amount=quote?quote.amount:0;
+ if(v.start_date&&v.duration_months)v.end_date=addDays(plusMonths(v.start_date,Number(v.duration_months)),-1);
+}
+function customerPricingInfo(v){
+ const pkg=lookup('packages',v.package_id);
+ if(!pkg)return '<p class="notice">حدد باقة إعلان حتى يظهر سعر عقد الزبون.</p>';
+ const quote=quoteCustomerContract(v);
+ return '<div class="notice"><b>تسعيرة الباقة:</b> '+E(pkg.pricing_mode==='sqm_month'?'سعر المتر الشهري × المساحة × الأشهر':'سعر القطعة لكامل المدة')+' · '+E(v.duration_months||pkg.default_months)+' أشهر'+(pkg.pricing_mode==='sqm_month'?' · '+E(v.rented_area_m2||'—')+' م²':'')+'<div>'+E(quote?money(quote.amount,v.currency||'USD'):'أدخل مساحة الإعلان المطلوبة كي يظهر السعر')+'</div></div>';
+}
+
 function fieldHtml(f,v,all){
  let [id,label,type,required,opts]=f, val=v?.[id]??'',req=required?'required':'',k=s.modal?.table;
  if(k==='packages'&&v.pricing_mode==='sqm_month'&&['width_m','height_m','area_m2'].includes(id))return '';
+ if(k==='customer_contracts'&&id==='rented_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
+ if(k==='customer_contracts'&&id==='duration_months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة عقد الزبون</span><select name="duration_months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
  if(k==='campaigns'&&id==='quantity'&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month')return '';
  if(k==='campaigns'&&id==='requested_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
  if(k==='campaigns'&&id==='months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة الإعلان بالأشهر</span><select name="months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
@@ -398,7 +423,7 @@ function modalHtml(){
 
  if(k==='customer_contracts'){
   const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id);
-  const summary='<div class="notice"><b>الزبون:</b> '+E(customer?.name||'—')+' · <b>الباقة:</b> '+E(pkg?.name||'—')+' · <b>قياسها:</b> '+(pkg?.width_m&&pkg?.height_m?E(fmt(pkg.width_m)+' × '+fmt(pkg.height_m)+' م / '+fmt(pkg.area_m2)+' م²'):'غير محدد')+'</div>';
+  const summary='<div class="notice"><b>الزبون:</b> '+E(customer?.name||'—')+' · <b>الباقة:</b> '+E(pkg?.name||'—')+' · <b>قياسها:</b> '+(pkg?.width_m&&pkg?.height_m?E(fmt(pkg.width_m)+' × '+fmt(pkg.height_m)+' م / '+fmt(pkg.area_m2)+' م²'):'حسب مساحة السطح')+'</div>'+customerPricingInfo(v);
   return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.id?'تعديل عقد '+E(v.contract_number):'إضافة عقد زبون جديد')+'</h2><button class="close" data-action="close">✕</button></div><div class="notice">هذا عقد بين <b>شركة رأفت والزبون</b>، من باقة الكابينات أو الأسطح؛ مختلف عن عقد الشركة مع مالك البناية.</div>'+summary+'<form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ تعديلات عقد الزبون':'حفظ عقد الزبون')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-customer-preview="'+v.id+'">معاينة وطباعة العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
  if(k==='lease_installments'||k==='campaign_payments'){
@@ -418,7 +443,7 @@ function customerContractPreview(v){
  const dimension=v.package_dimensions_snapshot||(pkg?.width_m&&pkg?.height_m?fmt(pkg.width_m)+' × '+fmt(pkg.height_m)+' م':'غير مسجل');
  const specs=v.package_specifications_snapshot||pkg?.specifications||'لم يتم إدخال المواصفات';
  const record=(label,value)=>'<div><small>'+E(label)+'</small><strong>'+E(value??'—')+'</strong></div>';
- return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">✕</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h2>شركة رأفت للدعاية والإعلان والتجارة العامة</h2><h3>عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(v.contract_number)+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','شركة رأفت للدعاية والإعلان والتجارة العامة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('الرقم الوطني',customer?.national_id||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('الموقع الإعلاني',v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button class="btn" data-action="print">طباعة / حفظ PDF</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
+ return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">✕</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h2>شركة رأفت للدعاية والإعلان والتجارة العامة</h2><h3>عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(v.contract_number)+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','شركة رأفت للدعاية والإعلان والتجارة العامة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('الرقم الوطني',customer?.national_id||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('الموقع الإعلاني',v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button class="btn" data-action="print">طباعة / حفظ PDF</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
 }
 
 function previewHtml(v){
