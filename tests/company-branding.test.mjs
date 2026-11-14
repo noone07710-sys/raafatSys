@@ -24,7 +24,7 @@ function createHarness({demo=true,admin=true}={}){
   get(k){return this.values[k]??null}
  };
  const env=new Function('localStorage','document','crypto','createClient','window','FormData','URL','setTimeout',
-  code+'\nreturn {s,render,settings,saveSettings,companyValue,companyLogoUrl,companyLogoHtml,companyDocumentHeader,customerContractPreview,previewHtml,seededDemoPackages,seededDemoRates};'
+  code+'\nreturn {s,render,settings,saveSettings,companyValue,companyLogoUrl,companyLogoHtml,customerContractPreview,previewHtml,seededDemoPackages,seededDemoRates};'
  )({getItem:()=>null,setItem:()=>{}},doc,{randomUUID:()=> 'unique-image-2026'},()=>{}, {},FakeFormData,FakeURL,()=>{});
  const {s}=env;
  s.demo=demo;
@@ -72,12 +72,13 @@ test('company branding settings render and save together with FX',async()=>{
  assert.match(page.innerHTML,/شركة اختبار للدعاية/);
  assert.match(page.innerHTML,/<strong>اختبار<\/strong>/);
  assert.doesNotMatch(page.innerHTML,/<span class="brand-sys">SYS<\/span>/);
- assert.match(env.companyDocumentHeader(),/شركة اختبار للدعاية/);
+ assert.match(page.innerHTML,/شركة اختبار للدعاية/);
  const ownerContract={id:'lease1',property_id:'prop1',landlord_id:'owner1',rent_total:1000,currency:'USD',payment_frequency:'annual',grace_days:0,start_date:'2026-11-14',end_date:'2027-11-13'};
- assert.match(env.previewHtml(ownerContract),/شركة اختبار للدعاية/);
+ assert.doesNotMatch(env.previewHtml(ownerContract),/شركة اختبار للدعاية/);
+ assert.match(env.previewHtml(ownerContract),/بين الشركة ومالك البناية/);
  const customerContract={id:'cc1',package_id:env.s.data.packages[0].id,customer_id:'unknown',contract_type:'cabin',duration_months:3,start_date:'2026-11-14',end_date:'2027-02-13',contract_number:'RC-1',amount:280,currency:'USD'};
- assert.match(env.customerContractPreview(customerContract),/شركة اختبار للدعاية/);
- assert.doesNotMatch(env.customerContractPreview(customerContract),/الطرف الأول<\/small><strong>شركة رأفت/);
+ assert.doesNotMatch(env.customerContractPreview(customerContract),/شركة اختبار للدعاية/);
+ assert.match(env.customerContractPreview(customerContract),/الطرف الأول<\/small><strong>الشركة/);
 });
 
 test('demo logo is previewable, removable, and image formats are validated',async()=>{
@@ -85,7 +86,9 @@ test('demo logo is previewable, removable, and image formats are validated',asyn
  files.logo={name:'logo.png',type:'image/png',size:1000};
  await env.saveSettings(form);
  assert.equal(env.s.demoLogoUrl,'blob:logo-preview');
- assert.match(env.companyDocumentHeader(),/blob:logo-preview/);
+ assert.match(env.companyLogoHtml('sidebar'),/blob:logo-preview/);
+ const customerContract={id:'demo',contract_number:'RC-1',amount:280,currency:'USD',contract_type:'cabin',start_date:'2026-11-14',end_date:'2027-02-13'};
+ assert.doesNotMatch(env.customerContractPreview(customerContract),/blob:logo-preview/);
  files.logo=null;values.remove_logo='true';
  await env.saveSettings(form);
  assert.equal(env.s.settings.logo_path,null);
@@ -139,7 +142,8 @@ test('real admin settings save uses private authorized write and public media UR
  assert.equal(updates[0].company_name,'شركة مدارة');
  assert.equal(updates[0].logo_path,uploads[0].path);
  assert.equal(env.s.settings.usd_iqd,1500);
- assert.match(env.companyDocumentHeader(),/assets\.example\.test/);
+ assert.match(env.companyLogoHtml('sidebar'),/assets\.example\.test/);
+ assert.doesNotMatch(env.previewHtml({id:'lease1',property_id:'p',landlord_id:'l',rent_total:1000,currency:'USD',payment_frequency:'annual',grace_days:0,start_date:'2026-11-14',end_date:'2027-11-13'}),/assets\.example\.test/);
 });
 
 test('non-admin cannot write company settings',async()=>{
