@@ -20,7 +20,7 @@ const defs={
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى'};
-const s={client:null,session:null,staff:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 const lookup=(table,id)=>s.data[table].find(x=>x.id===id);
 const nameOf=(table,id)=>lookup(table,id)?.name||lookup(table,id)?.title||'—';
 const convert=(v,from,to)=>from===to?Number(v):Number(v)*(from==='USD'?Number(s.settings.usd_iqd):1/Number(s.settings.usd_iqd));
@@ -34,6 +34,19 @@ const campaignPaid=(id)=>s.data.campaign_payments.filter(x=>x.campaign_id===id).
 const campaignBalance=(v)=>Math.max(0,roundAmount(Number(v.price||0)-campaignPaid(v.id)));
 const leaseBalance=(v)=>s.data.lease_installments.filter(x=>x.lease_id===v.id).reduce((a,x)=>a+Math.max(0,Number(x.amount)-Number(x.paid_amount)),0);
 function toast(text,bad=false){let x=document.createElement('div');x.className=bad?'error toast':'notice toast';x.textContent=text;document.body.append(x);Object.assign(x.style,{position:'fixed',bottom:'20px',left:'20px',zIndex:20,maxWidth:'min(90vw,500px)',boxShadow:'0 5px 30px #1113'});setTimeout(()=>x.remove(),4500)}
+
+function subscribeToExchangeRate(){
+ if(s.demo||!s.staff||!s.client||s.realtimeChannel)return;
+ s.realtimeChannel=s.client.channel('raafat-sys-exchange-rate')
+  .on('postgres_changes',{event:'UPDATE',schema:'public',table:'settings',filter:'id=eq.1'},payload=>{
+   if(payload.new?.usd_iqd&&Number(payload.new.usd_iqd)>0){
+    if($('#recordForm'))captureForm($('#recordForm'));
+    s.settings=payload.new;render();
+   }
+  })
+  .subscribe();
+}
+
 async function load(){
  if(s.demo)return render();
  if(!s.client||!s.session)return render();
@@ -57,6 +70,7 @@ async function load(){
   for(let i=0;i<keys.length;i++)s.data[keys[i]]=requests[i]||[];
   if(requests[keys.length].error)throw requests[keys.length].error;
   s.settings=requests[keys.length].data||s.settings;s.error='';
+  subscribeToExchangeRate();
  }catch(e){s.error=e.message||String(e)}
  s.loading=false;render();
 }
@@ -515,7 +529,7 @@ function exportCsv(k){
 function actions(a){
  if(a==='demo')return demo();
  if(a==='close'){s.modal=null;return render()}
- if(a==='logout'){if(s.client)s.client.auth.signOut();s.session=null;s.staff=null;s.demo=false;s.modal=null;s.error='';return render()}
+ if(a==='logout'){if(s.client&&s.realtimeChannel)s.client.removeChannel(s.realtimeChannel);s.realtimeChannel=null;if(s.client)s.client.auth.signOut();s.session=null;s.staff=null;s.demo=false;s.modal=null;s.error='';return render()}
  if(a==='prevStep'){captureForm($('#recordForm'));s.formStep=Math.max(0,s.formStep-1);return render()}
  if(a==='print')return window.print();
  if(a==='exportCustomers')return exportCsv('customers');
