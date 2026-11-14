@@ -477,10 +477,31 @@ async function showCard(v){if(!v?.card_image_path||s.demo)return;
  // Open transient link rather than embedding sensitive ID images in the document.
  window.open(data.signedUrl,'_blank','noopener,noreferrer');
 }
-function exportCsv(k){let rows=s.data[k],cols=k==='customers'?['name','phone','alternate_phone','national_id','rental_address','status','notes']:['lease_id','due_date','amount','paid_amount','notes'];
- let csv='\ufeff'+[cols.join(','),...rows.map(r=>cols.map(col=>'"'+String(r[col]??'').replace(/"/g,'""')+'"').join(','))].join('\r\n');
- let url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));let a=document.createElement('a');a.href=url;a.download='raafat-'+k+'-'+today()+'.csv';a.click();URL.revokeObjectURL(url);
+
+function exportCsv(k){
+ const rows=s.data[k]||[];
+ let headers=[],data=[];
+ if(k==='customers'){
+  headers=['الاسم','الهاتف','الهاتف البديل','رقم البطاقة الموحدة','عنوان الاستئجار','الحالة','الملاحظات'];
+  data=rows.map(x=>[x.name,x.phone,x.alternate_phone,x.national_id,x.rental_address,labels[x.status]||x.status,x.notes]);
+ }else if(k==='campaigns'){
+  headers=['الحملة','العميل','الباقة','المواقع','الأشهر','السعر الأصلي','العملة','السعر بالدينار','السعر بالدولار','المدفوع','المتبقي'];
+  data=rows.map(x=>[x.title,nameOf('customers',x.customer_id),nameOf('packages',x.package_id),linkedSites(x.id).map(s=>s.code+' '+s.name).join('، ')||x.locations,x.months,x.price,x.currency,roundAmount(convert(x.price,x.currency,'IQD')),roundAmount(convert(x.price,x.currency,'USD')),campaignPaid(x.id),campaignBalance(x)]);
+ }else if(k==='lease_installments'){
+  headers=['العقد','المالك','تاريخ الاستحقاق','القسط الأصلي','المدفوع','العملة','القسط بالدينار','القسط بالدولار','المتبقي'];
+  data=rows.map(x=>{let lease=lookup('leases',x.lease_id),cur=lease?.currency||'IQD';return [lease?.contract_number,nameOf('landlords',lease?.landlord_id),x.due_date,x.amount,x.paid_amount,cur,roundAmount(convert(x.amount,cur,'IQD')),roundAmount(convert(x.amount,cur,'USD')),roundAmount(Number(x.amount)-Number(x.paid_amount))]});
+ }else return;
+ const escaped=(val)=>{
+  let value=String(val??'');
+  // Prevent spreadsheet formula evaluation if imported into a spreadsheet application.
+  if(/^[\s]*[=+\-@]/.test(value))value="'"+value;
+  return '"'+value.replace(/"/g,'""')+'"';
+ };
+ const csv='\ufeff'+[headers,...data].map(row=>row.map(escaped).join(',')).join('\r\n');
+ const link=document.createElement('a'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+ link.href=url;link.download='raafat-'+k+'-'+today()+'.csv';link.click();URL.revokeObjectURL(url);
 }
+
 function actions(a){
  if(a==='demo')return demo();
  if(a==='close'){s.modal=null;return render()}
@@ -488,6 +509,7 @@ function actions(a){
  if(a==='prevStep'){captureForm($('#recordForm'));s.formStep=Math.max(0,s.formStep-1);return render()}
  if(a==='print')return window.print();
  if(a==='exportCustomers')return exportCsv('customers');
+ if(a==='exportCampaigns')return exportCsv('campaigns');
  if(a==='exportInstallments')return exportCsv('lease_installments');
 }
 bootstrap();
