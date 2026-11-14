@@ -170,7 +170,7 @@ async function load(){
  s.loading=false;render();
 }
 function demo(){
- s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={...COMPANY_DEFAULTS,usd_iqd:1500};
+ s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;if(s.demoLogoUrl){URL.revokeObjectURL(s.demoLogoUrl);s.demoLogoUrl=null;}s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={...COMPANY_DEFAULTS,usd_iqd:1500};
  s.view='dashboard';s.error='';render();
 }
 async function connect(){
@@ -629,6 +629,25 @@ function updateMoneyHints(){
   }
  }
 }
+
+function updateSettingsLogoPreview(src){
+ const image=$('#settingsLogoImage'),fallback=$('#settingsLogoFallback');
+ if(image){if(src){image.src=src;image.hidden=false;}else{image.removeAttribute('src');image.hidden=true;}}
+ if(fallback)fallback.hidden=Boolean(src);
+ const target=$('#settingsBrandPreview');
+ if(target){
+  target.innerHTML=src?'<img class="company-logo company-logo-preview" src="'+E(src)+'" alt="معاينة الشعار">':
+   '<span class="company-logo-fallback" aria-hidden="true">'+E(String($('#settingsForm')?.elements.namedItem('company_short_name')?.value||companyValue('company_short_name')).slice(0,1))+'</span>';
+ }
+}
+function updateSettingsPreview(form){
+ const val=k=>form.elements.namedItem(k)?.value?.trim()||'';
+ const name=$('#settingsPreviewName');if(name)name.textContent=val('company_name')||COMPANY_DEFAULTS.company_name;
+ const tagline=$('#settingsPreviewTagline');if(tagline)tagline.textContent=val('company_tagline');
+ const contact=$('#settingsPreviewContact');
+ if(contact)contact.textContent=[val('company_governorate'),val('company_city'),val('company_phone')].filter(Boolean).join(' • ')||'بيانات التواصل تظهر هنا بعد إضافتها';
+}
+
 function bind(){
  bindNav();
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
@@ -671,7 +690,26 @@ function bind(){
  if($('#passwordResetRequestForm'))$('#passwordResetRequestForm').onsubmit=e=>{e.preventDefault();sendPasswordReset()};
  if($('#passwordChangeForm'))$('#passwordChangeForm').onsubmit=e=>{e.preventDefault();saveNewPassword()};
  if($('#recordForm'))$('#recordForm').onsubmit=e=>{e.preventDefault();saveForm(e.target)};
- if($('#settingsForm'))$('#settingsForm').onsubmit=e=>{e.preventDefault();saveSettings(e.target)};
+ if($('#settingsForm')){
+  const form=$('#settingsForm');
+  form.onsubmit=e=>{e.preventDefault();saveSettings(e.target)};
+  form.oninput=()=>updateSettingsPreview(form);
+  const logoInput=$('#companyLogoFile');
+  if(logoInput)logoInput.onchange=()=>{
+   const file=logoInput.files?.[0];
+   if(!file)return;
+   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>4194304||!file.size){
+    toast('صيغة الشعار المسموحة PNG أو JPG أو WebP وبحد 4MB',true);
+    logoInput.value='';return;
+   }
+   if(s.temporaryLogoUrl)URL.revokeObjectURL(s.temporaryLogoUrl);
+   s.temporaryLogoUrl=URL.createObjectURL(file);
+   const remove=$('#removeCompanyLogo');
+   if(remove)remove.value='false';
+   const info=$('#settingsLogoFilename');if(info)info.textContent=file.name;
+   updateSettingsLogoPreview(s.temporaryLogoUrl);
+  };
+ }
  const form=$('#recordForm'),v=s.modal?.data,k=s.modal?.table;
  if(!form)return;
  for(const name of ['width_m','height_m','quantity']){
@@ -1064,8 +1102,67 @@ async function saveForm(form){
  }catch(e){toast(e.message||String(e),true)}
 }
 
-async function saveSettings(form){const rate=Number(new FormData(form).get('usd_iqd'));if(!(rate>0))return toast('سعر الصرف يجب أن يكون أكبر من الصفر',true);
- try{if(!s.demo){let {error}=await s.client.from('settings').update({usd_iqd:rate,updated_at:new Date().toISOString()}).eq('id',1);if(error)throw error}s.settings.usd_iqd=rate;render();toast('تم تحديث سعر الصرف')}catch(e){toast(e.message,true)}
+async function saveSettings(form){
+ if(!s.demo&&s.staff?.role!=='admin')return toast('تغيير إعدادات الشركة يتطلب صلاحية المدير',true);
+ const data=new FormData(form);
+ const rate=Number(data.get('usd_iqd'));
+ if(!Number.isFinite(rate)||rate<=0||rate>100000000)return toast('أدخل سعر صرف موجباً وصحيحاً',true);
+ const fields=['company_name','company_short_name','company_tagline','company_phone','company_whatsapp','company_email',
+  'company_website','company_address','company_governorate','company_city','company_registration'];
+ const record={usd_iqd:rate};
+ for(const key of fields){
+  const value=String(data.get(key)||'').trim();
+  if(value.length>500)return toast('بعض بيانات الشركة طويلة أكثر من المسموح',true);
+  record[key]=value;
+ }
+ if(!record.company_name||!record.company_short_name)return toast('أدخل اسم الشركة الرسمي والمختصر',true);
+ const email=record.company_email;
+ if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return toast('البريد الإلكتروني للشركة غير صالح',true);
+ if(record.company_website){
+  try{
+   const url=new URL(record.company_website);
+   if(!['https:','http:'].includes(url.protocol))throw Error('Unsupported protocol');
+  }catch(_){return toast('أدخل رابط موقع صحيحاً يبدأ بـ https:// أو http://',true)}
+ }
+ const file=form.elements.namedItem('company_logo_file')?.files?.[0];
+ const logoType={ 'image/png':'png','image/jpeg':'jpg','image/webp':'webp'};
+ if(file&&(!logoType[file.type]||file.size>4194304||file.size===0))
+  return toast('الشعار لازم PNG أو JPG أو WebP، وحجمه أقل من 4MB',true);
+ const removeLogo=data.get('remove_logo')==='true';
+ let uploaded=null;
+ try{
+  record.logo_path=removeLogo?null:s.settings.logo_path||null;
+  if(file){
+   if(s.demo){
+    if(s.demoLogoUrl&&typeof URL?.revokeObjectURL==='function')URL.revokeObjectURL(s.demoLogoUrl);
+    s.demoLogoUrl=URL.createObjectURL(file);
+   }else{
+    uploaded='company/logos/'+uid()+'.'+logoType[file.type];
+    const {error}=await s.client.storage.from('raafat-branding').upload(uploaded,file,{
+     cacheControl:'3600',upsert:false,contentType:file.type
+    });
+    if(error)throw error;
+    record.logo_path=uploaded;
+   }
+  }else if(removeLogo&&s.demo&&s.demoLogoUrl){
+   if(typeof URL?.revokeObjectURL==='function')URL.revokeObjectURL(s.demoLogoUrl);
+   s.demoLogoUrl=null;
+  }
+  let saved=record;
+  if(!s.demo){
+   const {data:row,error}=await s.client.from('settings')
+     .update({...record,updated_at:new Date().toISOString()}).eq('id',1).select('*').single();
+   if(error)throw error;
+   saved=row;
+  }
+  s.settings={...s.settings,...saved};
+  s.error='';
+  render();
+  toast(s.demo?'تم حفظ الهوية للمعاينة فقط، ولن تستمر بعد تحديث الصفحة':'تم حفظ هوية الشركة والشعار وسعر الصرف بنجاح');
+ }catch(e){
+  if(uploaded&&s.client){try{await s.client.storage.from('raafat-branding').remove([uploaded])}catch(_){}}
+  toast('تعذّر حفظ الإعدادات: '+(e.message||String(e)),true);
+ }
 }
 async function showCard(v){if(!v?.card_image_path||s.demo)return;
  let {data,error}=await s.client.storage.from('identity-cards').createSignedUrl(v.card_image_path,60);
@@ -1099,6 +1196,16 @@ function exportCsv(k){
 }
 
 function actions(a){
+ if(a==='removeCompanyLogo'){
+  const form=$('#settingsForm'),remove=$('#removeCompanyLogo');
+  if(!form||!remove)return;
+  remove.value='true';
+  const input=$('#companyLogoFile');if(input)input.value='';
+  if(s.temporaryLogoUrl){URL.revokeObjectURL(s.temporaryLogoUrl);s.temporaryLogoUrl=null;}
+  const name=$('#settingsLogoFilename');if(name)name.textContent='سيُزال الشعار عند الحفظ';
+  updateSettingsLogoPreview('');
+  return;
+ }
  if(a==='demo')return demo();
  if(a==='forgotPassword'){s.resetRequest=true;s.error='';return render()}
  if(a==='cancelPasswordReset'){s.resetRequest=false;s.passwordRecovery=false;return render()}
