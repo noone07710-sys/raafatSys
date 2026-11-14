@@ -573,16 +573,81 @@ async function deleteCustomerConfirmed(form){
  }
 }
 
+function leaseInstallmentsOverview(){
+ const query=s.search.trim().toLocaleLowerCase();
+ const leases=s.data.leases.filter(lease=>{
+  const owner=lookup('landlords',lease.landlord_id),property=lookup('properties',lease.property_id);
+  return !query||[lease.contract_number,numberedContract(lease.contract_number),owner?.name,owner?.phone,
+   property?.title,property?.dimensions,lease.start_date,lease.end_date]
+   .some(val=>String(val||'').toLocaleLowerCase().includes(query));
+ }).sort((a,b)=>String(b.start_date||'').localeCompare(String(a.start_date||'')));
+ const totals=s.data.leases.reduce((acc,lease)=>{
+  const paid=leasePaidInstallments(lease.id),advance=leaseAdvance(lease);
+  acc.rent+=convert(Number(lease.rent_total||0),lease.currency,s.displayCurrency);
+  acc.advance+=convert(advance,lease.currency,s.displayCurrency);
+  acc.paid+=convert(paid,lease.currency,s.displayCurrency);
+  acc.due+=convert(leaseBalance(lease),lease.currency,s.displayCurrency);
+  return acc;
+ },{rent:0,advance:0,paid:0,due:0});
+ const cards=leases.map(lease=>{
+  const rows=s.data.lease_installments.filter(row=>row.lease_id===lease.id)
+   .sort((a,b)=>String(a.due_date||'').localeCompare(String(b.due_date||'')));
+  const owner=nameOf('landlords',lease.landlord_id),property=nameOf('properties',lease.property_id);
+  const original=Number(lease.rent_total||0),upfront=leaseAdvance(lease);
+  const installmentsPaid=leasePaidInstallments(lease.id),remaining=leaseBalance(lease);
+  const status=remaining<=0?'مكتمل التسديد':installmentsPaid+upfront>0?'تسديد جزئي':'غير مسدّد';
+  const progress=original>0?Math.min(100,Math.max(0,Math.round((installmentsPaid+upfront)/original*100))):100;
+  const installmentRows=rows.map((row,i)=>{
+   const balance=Math.max(0,roundAmount(Number(row.amount||0)-Number(row.paid_amount||0)));
+   const label=balance<=0?'مسدّد':row.due_date<today()?'متأخر':row.due_date===today()?'مستحق اليوم':'بانتظار الاستحقاق';
+   return '<div class="lease-ledger-installment">'+
+    '<span class="lease-ledger-ordinal">قسط '+serial4(i+1)+'</span>'+
+    '<span class="lease-ledger-date">الاستحقاق: '+E(row.due_date||'—')+'</span>'+
+    '<span class="lease-ledger-amounts"><span>القيمة: '+currencyAmount(row.amount,lease.currency)+'</span>'+
+     '<span>المدفوع: '+currencyAmount(row.paid_amount,lease.currency)+'</span>'+
+     '<span>الباقي: '+currencyAmount(balance,lease.currency)+'</span></span>'+
+    '<span class="lease-ledger-status '+(balance<=0?'paid':row.due_date<today()?'late':'pending')+'">'+label+'</span>'+
+    '<button class="btn secondary mini" type="button" data-edit="lease_installments:'+E(row.id)+'">'+uiIcon('pencil',15)+' تسجيل / تعديل التسديد</button>'+
+   '</div>';
+  }).join('');
+  return '<article class="lease-ledger-card"><div class="lease-ledger-head">'+
+   '<div><h3>'+E(owner)+'</h3><p>العقد '+E(numberedContract(lease.contract_number))+' · '+E(property)+'</p>'+
+   '<small>من '+E(lease.start_date)+' إلى '+E(lease.end_date)+' · '+E(labels[lease.payment_frequency]||lease.payment_frequency)+'</small></div>'+
+   '<span class="campaign-payment-status '+(remaining<=0?'settled':upfront+installmentsPaid>0?'partial':'unpaid')+'">'+status+'</span></div>'+
+   '<div class="lease-ledger-metrics">'+[
+    ['الإيجار الكامل',original],['المقدم المستلم',upfront],['مسدد من الأقساط',installmentsPaid],['المتبقي',remaining]
+   ].map(([label,value])=>'<div><small>'+label+'</small><strong>'+currencyAmount(value,lease.currency)+'</strong></div>').join('')+'</div>'+
+   '<div class="campaign-payment-progress" aria-label="نسبة تسديد الإيجار"><span style="width:'+progress+'%"></span></div>'+
+   '<div class="lease-ledger-lower"><details class="lease-ledger-details" open><summary>الأقساط المجدولة ('+rows.length+')</summary>'+
+   '<div class="lease-ledger-installments">'+(installmentRows||'<div class="notice">لا توجد أقساط مسجلة لهذا العقد.'+
+    (remaining>0?' راجع العقد، فهناك مبلغ متبقٍ غير مجدول.':' المبلغ مسدد بالكامل.')+'</div>')+'</div></details>'+
+   '<button class="btn secondary mini" data-edit="leases:'+E(lease.id)+'">'+uiIcon('file',16)+' تفاصيل عقد المالك</button></div></article>';
+ }).join('');
+ const box=(label,v,style)=>'<div class="lease-ledger-stat '+style+'"><small>'+label+'</small><strong>'+E(money(roundAmount(v),s.displayCurrency))+'</strong></div>';
+ return '<section class="lease-ledger-page">'+
+  '<div class="campaign-payments-intro"><h2>دفعات إيجار الأسطح</h2><p>الأقساط مرتّبة حسب عقد المالك. ابحث باسم المالك أو رقم العقد أو اسم السطح وسجّل التسديد من قسطه مباشرة.</p></div>'+
+  '<div class="lease-ledger-summary">'+box('الإيجارات المتعاقد عليها',totals.rent,'rent')+
+   box('المقدم المدفوع',totals.advance,'advance')+box('المسدد من الأقساط',totals.paid,'paid')+
+   box('المتبقي للاستحقاق',totals.due,'outstanding')+'</div>'+
+  '<div class="campaign-payments-toolbar"><input class="search" id="search" type="search" placeholder="بحث باسم المالك أو العقد أو السطح..." value="'+E(s.search)+'">'+
+  '<span class="campaign-payments-count">'+leases.length+' عقد من أصل '+s.data.leases.length+'</span></div>'+
+  '<div class="lease-ledger-list">'+(cards||'<div class="box empty">لا توجد عقود مطابقة. سجّل أول عقد من قسم عقود مالكي الأسطح.</div>')+'</div>'+
+  '<p class="subtle">كل القيم معروضة بعملة العرض المحددة بالأعلى، وتظهر قيمتها الأصلية تحت المبلغ المحوّل. العقود والأقساط القديمة محفوظة كما هي.</p>'+
+ '</section>';
+}
+
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
+ if(k==='lease_installments')return leaseInstallmentsOverview();
  const rows=visibleTable(k).filter(x=>{
   let q=s.search.trim().toLocaleLowerCase(),match=!q||JSON.stringify(x).toLocaleLowerCase().includes(q)||
    (x.landlord_id&&nameOf('landlords',x.landlord_id).toLocaleLowerCase().includes(q))||
-   (x.customer_id&&nameOf('customers',x.customer_id).toLocaleLowerCase().includes(q));
+   (x.customer_id&&nameOf('customers',x.customer_id).toLocaleLowerCase().includes(q))||
+   (x.property_id&&nameOf('properties',x.property_id).toLocaleLowerCase().includes(q));
   return match&&(k!=='customers'||s.filter==='all'||x.status===s.filter);
  });
- let labelsBy={lease_installments:'إضافة دفعة يدوية',campaign_payments:'تسجيل دفعة'};
- return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="بحث في السجلات..." value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">'+uiIcon('plus',16)+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">'+uiIcon('pencil',14)+' تفاصيل / تعديل</button>'+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'" >'+uiIcon('printer',15)+' طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
+ let labelsBy={campaign_payments:'تسجيل دفعة'};
+ return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="'+(k==='customers'?'ابحث باسم العميل أو رقم هاتفه...':k==='leases'?'ابحث باسم المالك أو رقم العقد أو اسم السطح...':k==='customer_contracts'?'ابحث باسم الزبون أو رقم العقد...':'بحث بالاسم أو الرقم أو الموقع...')+'" value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">'+uiIcon('plus',16)+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">'+uiIcon('pencil',14)+' تفاصيل / تعديل</button>'+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+(k==='leases'||k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'" >'+uiIcon('printer',15)+' طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
 }
 
 function reports(){
@@ -642,7 +707,7 @@ function render(){
  else{target.innerHTML=shell(content)+(s.modal?modalHtml():'');}
  bind();
 }
-function optionText(k,x){return k==='landlords'||k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+' / '+(labels[x.package_type]||x.package_type||'')+')':k==='ad_sites'?x.code+' — '+x.name:k==='leases'||k==='customer_contracts'?numberedContract(x.contract_number):k==='campaigns'?x.title+' — '+nameOf('customers',x.customer_id):'—';}
+function optionText(k,x){return k==='landlords'||k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+' / '+(labels[x.package_type]||x.package_type||'')+')':k==='ad_sites'?x.code+' — '+x.name:k==='leases'?numberedContract(x.contract_number)+' — '+nameOf('landlords',x.landlord_id):k==='customer_contracts'?numberedContract(x.contract_number)+' — '+nameOf('customers',x.customer_id):k==='campaigns'?x.title+' — '+nameOf('customers',x.customer_id):'—';}
 
 function fieldCurrency(k,v){
  if(k==='campaign_payments')return v.entry_currency||lookup('campaigns',v.campaign_id)?.currency||s.displayCurrency;
@@ -973,6 +1038,28 @@ function modalHtml(){
    relatedDetails(k,v)+'</div></div>';
  }
 
+ if(k==='lease_installments'){
+  const lease=lookup('leases',v.lease_id);
+  if(!lease)return '<div class="overlay"><div class="modal"><div class="notice">اختر قسطاً من جدول دفعات إيجار الأسطح أولاً.</div><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div></div>';
+  const balance=Math.max(0,roundAmount(Number(v.amount)-Number(v.paid_amount)));
+  return '<div class="overlay"><div class="modal lease-ledger-modal"><div class="modalhead"><h2>تسديد قسط إيجار السطح</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+   '<div class="lease-ledger-modal-owner"><b>'+E(nameOf('landlords',lease.landlord_id))+'</b><small>'+E(nameOf('properties',lease.property_id))+
+   ' · العقد '+E(numberedContract(lease.contract_number))+'</small></div>'+
+   '<div class="lease-ledger-metrics">'+[
+     ['قيمة القسط',v.amount],['المسدد سابقاً',v.paid_amount],['المتبقي',balance]
+   ].map(([label,n])=>'<div><small>'+label+'</small><strong>'+currencyAmount(n,lease.currency)+'</strong></div>').join('')+'</div>'+
+   '<form id="recordForm"><input type="hidden" name="lease_id" value="'+E(lease.id)+'">'+
+   '<input type="hidden" name="due_date" value="'+E(v.due_date||'')+'">'+
+   '<input type="hidden" name="amount" value="'+E(v.amount)+'">'+
+   '<div class="formgrid">'+[
+    ['entry_currency','عملة إدخال التسديد','select',true,['IQD','USD']],
+    ['paid_amount','إجمالي المبلغ المسدد لهذا القسط حتى الآن','number',true],
+    ['notes','ملاحظات الدفعة','textarea']
+   ].map(field=>fieldHtml(field,v,v)).join('')+'</div>'+
+   '<div class="notice" id="paymentParentInfo"></div>'+
+   '<div class="actions"><button class="btn" type="submit">حفظ التسديد</button></div></form>'+
+   '<p class="subtle">أدخل مجموع ما تم دفعه لهذا القسط حتى الآن، وليس إضافة مستقلة. لا يسمح النظام بتجاوز قيمة القسط.</p></div></div>';
+ }
  if(k==='lease_installments'||k==='campaign_payments'){
   fields=[k==='lease_installments'?['lease_id','العقد','lookup:leases',true]:['campaign_id','الحملة','lookup:campaigns',true],['entry_currency','عملة إدخال المبلغ','select',true,['IQD','USD']],...(k==='lease_installments'?[['due_date','تاريخ الاستحقاق','date',true]]:[['paid_at','تاريخ الدفع','date',true]]),['amount',k==='lease_installments'?'قيمة القسط':'قيمة الدفعة','number',true],...(k==='lease_installments'?[['paid_amount','المبلغ المسدد','number',true]]:[]),['notes','الملاحظات','textarea']];
  }
