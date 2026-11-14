@@ -27,7 +27,8 @@ test('package dimensions, client contract print and landlord individual rooftops
  assert.doesNotThrow(()=>formValidate('customers',{name:'زبون الاختبار',phone:'07701234567',national_id:'123456789012'}));
  assert.equal(clean('packages',{name:'باقة',code:'A',width_m:2,height_m:4,area_m2:8}).area_m2,undefined);
  assert.equal(clean('properties',{title:'سطح',width_m:10,height_m:8}).dimensions,'10 × 8 m');
- const contract={customer_id:'client1',package_id:'pkg1',contract_type:'cabin',start_date:'2026-11-14',end_date:'2027-02-13',amount:280,currency:'USD'};
+ s.data.campaigns=[{id:'cam1',customer_id:'client1',title:'حملة الزبون',package_id:'pkg1',start_date:'2026-11-14',months:3,quantity:2,locations:'تكريت',price:280,currency:'USD'}];
+ const contract={campaign_id:'cam1',customer_id:'client1',package_id:'pkg1',contract_type:'cabin',duration_months:3,site_id:'',rented_area_m2:null,start_date:'2026-11-14',end_date:'2027-02-13',amount:280,currency:'USD'};
  assert.doesNotThrow(()=>formValidate('customer_contracts',contract));
  const saved=await persist('customer_contracts',clean('customer_contracts',contract));
  assert.equal(saved.contract_number,'RC-1');
