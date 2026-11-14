@@ -462,3 +462,62 @@
  .lease-ledger-installment .btn{width:100%}
  .campaign-payment-history-row{grid-template-columns:62px minmax(0,1fr) auto}
 }
+
+
+/* Finance > Expenses: calm, dense daily cashbook, responsive on phones and laptops */
+.expense-page{max-width:1420px;margin-inline:auto;min-width:0;display:flex;flex-direction:column;gap:15px}
+.expense-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.expense-intro h2{color:#253e4f;font-size:21px;margin:0 0 5px}
+.expense-intro p{font-size:12px;color:#728898;line-height:1.8;margin:0}
+.expense-intro .btn{white-space:nowrap;display:inline-flex;align-items:center;gap:7px}
+.expense-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.expense-stat{min-width:0;background:#fff;border:1px solid #dce6ed;border-radius:15px;padding:17px 18px;display:flex;flex-direction:column;gap:11px;box-shadow:0 5px 22px #15304207}
+.expense-stat small{font-size:11px;font-weight:650;color:#728c9c}
+.expense-stat strong{font-size:19px;color:#274152;line-height:1.4;overflow-wrap:anywhere}
+.expense-stat.month strong{color:#26786d}
+.expense-stat.today strong{color:#297282}
+.expense-categories{background:#fff;border:1px solid #dfe8ee;border-radius:14px;padding:14px 16px}
+.expense-categories h3{font-size:13px;margin:0 0 12px;color:#294b5b}
+.expense-category-grid{display:flex;flex-wrap:wrap;gap:8px}
+.expense-category-chip{border:1px solid #dce8ec;background:#f5f9fa;border-radius:12px;padding:9px 12px;display:flex;flex-direction:column;gap:5px;min-width:130px}
+.expense-category-chip span{font-size:11px;color:#668193}
+.expense-category-chip b{font-size:13px;color:#2c5e6a}
+.expense-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.expense-toolbar input.search{width:min(385px,100%);min-width:0}
+.expense-toolbar select.search{width:min(220px,100%);min-width:0}
+.expense-count{margin-inline-start:auto;font-size:11px;color:#728c9a}
+.expense-record-list{display:flex;flex-direction:column;gap:10px}
+.expense-record{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;background:#fff;border:1px solid #e1e9ee;border-radius:15px;padding:15px 18px;min-width:0;box-shadow:0 4px 19px #223d4b06}
+.expense-record-main{display:flex;flex-direction:column;gap:6px;min-width:230px;flex:1}
+.expense-record-category{color:#267d75;background:#e8f4f2;padding:4px 10px;border-radius:99px;font-size:10px;font-weight:750;align-self:flex-start}
+.expense-record-main h3{color:#233f52;font-size:15px;margin:0;line-height:1.6;overflow-wrap:anywhere}
+.expense-record-meta{display:flex;gap:13px;align-items:center;flex-wrap:wrap;font-size:11px;color:#7c92a1}
+.expense-record-meta span{display:inline-flex;align-items:center;gap:5px}
+.expense-record-main p{margin:3px 0 0;font-size:11px;color:#6d8393;line-height:1.7;overflow-wrap:anywhere}
+.expense-record-side{display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:150px}
+.expense-record-side>strong{font-size:18px;color:#2a5f69;overflow-wrap:anywhere}
+.expense-record-actions{display:flex;flex-wrap:wrap;gap:7px}
+.expense-record-actions .linkbtn{display:inline-flex;align-items:center;gap:5px;font-size:11px}
+.expense-delete-link{color:#b83e51}
+.expense-footnote{font-size:11px;line-height:1.8}
+.expense-form-modal{width:min(720px,100%)}
+.landlord-delete-blocked{border:1px solid #f1b8ac;background:#fff1ed;color:#9c352d;padding:13px;border-radius:11px;margin-bottom:13px}
+.landlord-delete-blocked strong{display:block;margin-bottom:4px;font-size:13px}
+.landlord-delete-blocked p{font-size:12px;line-height:1.8;margin:0}
+@media(max-width:940px){.expense-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+ .expense-page{gap:11px}
+ .expense-stat-grid{grid-template-columns:1fr 1fr;gap:7px}
+ .expense-stat{padding:11px 12px;gap:5px}
+ .expense-stat strong{font-size:15px}
+ .expense-intro{align-items:stretch}
+ .expense-intro .btn{width:100%;justify-content:center}
+ .expense-toolbar input.search,.expense-toolbar select.search{width:100%}
+ .expense-count{margin-inline-start:0}
+ .expense-record{padding:12px 13px}
+ .expense-record-main{min-width:0;flex-basis:100%}
+ .expense-record-side{width:100%;flex-direction:row;align-items:center;justify-content:space-between}
+ .expense-record-side>strong{font-size:16px}
+ .expense-categories{padding:12px}
+ .expense-category-chip{min-width:calc(50% - 5px)}
+}
