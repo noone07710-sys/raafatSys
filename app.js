@@ -320,6 +320,15 @@ function bind(){
   }
   captureForm(form);s.modal.data.currency=next;updateMoneyHints();
  };
+ const entryCurrency=form.elements.namedItem('entry_currency');
+ if(entryCurrency)entryCurrency.onchange=()=>{
+  const previous=v.entry_currency||fieldCurrency(k,v),next=entryCurrency.value;
+  for(const name of ['amount','paid_amount']){
+   const input=form.elements.namedItem(name);
+   if(input&&input.value!=='')input.value=String(roundAmount(convert(input.value,previous,next)));
+  }
+  captureForm(form);v.entry_currency=next;updateMoneyHints();
+ };
  const owner=form.elements.namedItem('landlord_id');
  if(owner&&k==='leases')owner.onchange=()=>{captureForm(form);v.landlord_id=owner.value;v.property_id='';render()};
  const client=form.elements.namedItem('customer_id');
@@ -341,13 +350,29 @@ function bind(){
  };
  const parentCampaign=form.elements.namedItem('campaign_id');
  if(parentCampaign&&k==='campaign_payments')parentCampaign.onchange=()=>{
+  const old=lookup('campaigns',v.campaign_id),wasEmpty=!v.campaign_id;
+  const oldCurrency=v.entry_currency||old?.currency||s.displayCurrency;
   captureForm(form);v.campaign_id=parentCampaign.value;
-  const camp=lookup('campaigns',parentCampaign.value);
-  if(camp&&!v.id)v.amount=campaignBalance(camp);
+  const camp=lookup('campaigns',v.campaign_id);
+  if(camp){
+   if(!v.id&&(wasEmpty||Number(v.amount)===0))v.amount=campaignBalance(camp);
+   else v.amount=roundAmount(convert(v.amount,oldCurrency,camp.currency));
+   v.entry_currency=camp.currency;
+  }
   render();
  };
  const parentLease=form.elements.namedItem('lease_id');
- if(parentLease&&k==='lease_installments')parentLease.onchange=()=>{captureForm(form);v.lease_id=parentLease.value;render()};
+ if(parentLease&&k==='lease_installments')parentLease.onchange=()=>{
+  const old=lookup('leases',v.lease_id),oldCurrency=v.entry_currency||old?.currency||s.displayCurrency;
+  captureForm(form);v.lease_id=parentLease.value;
+  const lease=lookup('leases',v.lease_id);
+  if(lease){
+   v.amount=roundAmount(convert(v.amount,oldCurrency,lease.currency));
+   v.paid_amount=roundAmount(convert(v.paid_amount,oldCurrency,lease.currency));
+   v.entry_currency=lease.currency;
+  }
+  render();
+ };
  updateMoneyHints();
 }
 
