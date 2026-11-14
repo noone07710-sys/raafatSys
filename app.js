@@ -22,7 +22,32 @@ const defs={
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المرتبطة (اختياري)','lookup:campaigns'],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
-const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const COMPANY_DEFAULTS=Object.freeze({
+ company_name:'شركة رأفت للدعاية والإعلان والتجارة العامة',
+ company_short_name:'رأفت',
+ company_tagline:'للدعاية والإعلان والتجارة العامة',
+ company_phone:'',company_whatsapp:'',company_email:'',company_website:'',
+ company_address:'',company_governorate:'',company_city:'',company_registration:'',
+ logo_path:null
+});
+function companyValue(key){return s.settings?.[key]||COMPANY_DEFAULTS[key]||'';}
+function companyLogoUrl(path=s.settings?.logo_path){
+ if(!path||!/^company\/logos\/[a-zA-Z0-9_-]+\.(?:png|jpg|webp)$/.test(String(path)))return '';
+ if(!s.client||s.demo)return '';
+ return s.client.storage.from('raafat-branding').getPublicUrl(path).data?.publicUrl||'';
+}
+function companyLogoHtml(kind='sidebar'){
+ const url=companyLogoUrl();
+ return url?'<img class="company-logo company-logo-'+kind+'" src="'+E(url)+'" alt="شعار '+E(companyValue('company_short_name'))+'" loading="lazy">':
+ '<span class="company-logo-fallback" aria-hidden="true">'+E(String(companyValue('company_short_name')).trim().slice(0,1)||'ر')+'</span>';
+}
+function companyDocumentHeader(){
+ const address=[companyValue('company_governorate'),companyValue('company_city'),companyValue('company_address')].filter(Boolean).join(' — ');
+ const contacts=[companyValue('company_phone'),companyValue('company_email'),companyValue('company_website')].filter(Boolean).join(' | ');
+ return '<div class="contract-company-head">'+companyLogoHtml('contract')+'<div class="contract-company-copy"><h2>'+E(companyValue('company_name'))+'</h2><small>'+E([address,contacts].filter(Boolean).join(' · '))+'</small></div></div>';
+}
+
+const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 
 // Demo data matches the official price matrix; real staff load rows from Supabase.
 const OFFICIAL_PACKAGES=[
@@ -145,7 +170,7 @@ async function load(){
  s.loading=false;render();
 }
 function demo(){
- s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={usd_iqd:1500};
+ s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={...COMPANY_DEFAULTS,usd_iqd:1500};
  s.view='dashboard';s.error='';render();
 }
 async function connect(){
@@ -322,7 +347,41 @@ function reports(){
  return '<div class="cards">'+counts.map(([a,b])=>'<div class="box stat"><small>'+a+'</small><b>'+b+'</b></div>').join('')+'</div><div class="box"><h2>التقرير المالي المترابط</h2><div class="summary"><div><small>الدفعات المستلمة من الحملات</small><b>'+E(money(receipts,s.displayCurrency))+'</b></div><div><small>الذمم المتبقية على العملاء</small><b>'+E(money(outstanding,s.displayCurrency))+'</b></div><div><small>أقساط الإيجار غير المسددة</small><b>'+E(money(rents,s.displayCurrency))+'</b></div><div><small>أقساط إيجار مستحقة حتى اليوم</small><b>'+late.length+'</b></div></div><p class="subtle" style="margin-top:12px">التقرير يعرض بالعملة المختارة بالأعلى وبسعر الصرف المحدد في الإعدادات؛ العقود والدفعات تبقى بعملتها الأصلية.</p><hr><h2>تقرير العملاء</h2><p class="muted">تصدير CSV يتضمن بيانات هوية حساسة — احفظ التقرير بشكل آمن.</p><button class="btn" data-action="exportCustomers">تصدير العملاء CSV</button><hr><h2>التقارير المالية</h2><div class="inline"><button class="btn secondary" data-action="exportCampaigns">تصدير الحملات</button><button class="btn secondary" data-action="exportInstallments">تصدير أقساط الإيجار</button></div></div>';
 }
 
-function settings(){return '<div class="box" style="max-width:550px"><h2>أسعار الصرف</h2><p class="muted">سعر الدولار يتم تحديده يدوياً من إعدادات الشركة. يتغير تحويل العرض مباشرةً، ولا تتبدل المبالغ الأصلية المحفوظة.</p><form id="settingsForm"><label class="field"><span>قيمة 1 دولار أمريكي بالدينار العراقي</span><input name="usd_iqd" required type="number" min=".0001" step="any" value="'+E(s.settings.usd_iqd)+'"></label><button class="btn" type="submit">حفظ سعر الصرف</button></form><hr><p class="subtle">1 USD = '+fmt(s.settings.usd_iqd)+' IQD</p></div>';}
+function settings(){
+ const editable=s.demo||s.staff?.role==='admin';
+ const val=key=>E(s.settings?.[key]??COMPANY_DEFAULTS[key]??'');
+ const field=(name,label,type='text',placeholder='',required=false)=>
+  '<label class="field"><span>'+label+(required?' *':'')+'</span><input name="'+name+'" type="'+type+'" maxlength="250" '+(required?'required':'')+' value="'+val(name)+'" placeholder="'+E(placeholder)+'"></label>';
+ const logo=companyLogoUrl();
+ return '<div class="settings-page">'+
+  '<div class="settings-intro"><div><span class="settings-eyebrow">RAAFAT SYS · CONFIGURATION</span><h2>هوية الشركة وإعدادات النظام</h2><p>عدّل بيانات الشركة مرة واحدة، وتظهر في القائمة الرئيسية والعقود المطبوعة تلقائياً.</p></div><span class="settings-state">'+(s.demo?'وضع تجريبي':editable?'صلاحية المدير':'عرض فقط')+'</span></div>'+
+  '<div class="settings-layout"><div class="settings-main"><form id="settingsForm">'+
+   '<section class="settings-panel"><div class="settings-section-title"><span class="settings-section-icon">◈</span><div><h3>الهوية والعلامة التجارية</h3><p>الاسم الرسمي المختص بالعقود والاسم المختصر الظاهر بالقائمة</p></div></div>'+
+    '<div class="formgrid">'+field('company_name','اسم الشركة الرسمي','text','اسم الشركة كما يظهر على العقد',true)+field('company_short_name','الاسم المختصر','text','مثال: رأفت',true)+
+    '<label class="field full"><span>الوصف المختصر / الشعار النصي</span><input name="company_tagline" maxlength="250" type="text" value="'+val('company_tagline')+'" placeholder="للدعاية والإعلان والتجارة العامة"></label></div>'+
+    '<div class="settings-logo-row"><div class="settings-logo-visual" id="settingsLogoPreview">'+(logo?'<img id="settingsLogoImage" src="'+E(logo)+'" alt="شعار الشركة الحالي"><span id="settingsLogoFallback" hidden>'+E(String(companyValue('company_short_name')).trim().slice(0,1))+'</span>':'<img id="settingsLogoImage" alt="معاينة الشعار" hidden><span id="settingsLogoFallback">'+E(String(companyValue('company_short_name')).trim().slice(0,1))+'</span>')+'</div>'+
+    '<div class="settings-logo-fields"><h4>شعار الشركة</h4><p>ارفع شعار PNG أو JPG أو WebP بحجم حتى 4MB. يُفضّل شعار واضح بخلفية شفافة؛ سيظهر داخل النظام والعقود.</p>'+
+    '<label class="settings-file-button" for="companyLogoFile">اختيار ملف الشعار</label><input type="file" id="companyLogoFile" name="company_logo_file" accept="image/png,image/jpeg,image/webp" class="settings-file-input"'+(editable?'':' disabled')+'>'+
+    '<small id="settingsLogoFilename">'+(logo?'الشعار الحالي محفوظ':'لم يُرفع شعار بعد')+'</small>'+
+    (logo?'<button type="button" class="settings-remove-logo" data-action="removeCompanyLogo">إزالة الشعار</button>':'')+
+    '<input type="hidden" name="remove_logo" id="removeCompanyLogo" value="false"></div></div>'+
+   '</section>'+
+   '<section class="settings-panel"><div class="settings-section-title"><span class="settings-section-icon">⌖</span><div><h3>التواصل والموقع</h3><p>معلومات التواصل الرسمية التي تظهر في ترويسة العقد</p></div></div>'+
+    '<div class="formgrid">'+field('company_phone','رقم الهاتف','tel','07XXXXXXXXX')+field('company_whatsapp','رقم واتساب','tel','9647XXXXXXXXX')+
+    field('company_email','البريد الإلكتروني','email','company@example.com')+field('company_website','الموقع الإلكتروني','url','https://example.com')+
+    field('company_governorate','المحافظة','text','صلاح الدين')+field('company_city','المدينة','text','تكريت')+
+    '<label class="field full"><span>العنوان التفصيلي</span><textarea name="company_address" maxlength="500" rows="2" placeholder="الشارع، المنطقة، أقرب نقطة دالة">'+val('company_address')+'</textarea></label>'+
+    '<label class="field full"><span>رقم التسجيل / السجل التجاري (اختياري)</span><input name="company_registration" maxlength="250" type="text" value="'+val('company_registration')+'"></label></div>'+
+   '</section>'+
+   '<section class="settings-panel"><div class="settings-section-title"><span class="settings-section-icon">$</span><div><h3>المالية وسعر الصرف</h3><p>تحويل الدولار والدينار في الباقات والحملات والدفعات دون تغيير أصل المبلغ</p></div></div>'+
+    '<div class="formgrid"><label class="field"><span>سعر الدولار: 1 USD = كم IQD؟</span><input name="usd_iqd" type="number" min=".0001" step="any" required value="'+E(s.settings.usd_iqd)+'"></label><div class="settings-rate-note"><small>سعر الصرف المعتمد حالياً</small><strong>1 USD = '+E(fmt(s.settings.usd_iqd))+' IQD</strong></div></div>'+
+   '</section>'+
+   (editable?'<div class="settings-savebar"><div><strong>حفظ إعدادات الشركة</strong><small>التغييرات تُحدَّث على الواجهة والعقود بعد الحفظ.</small></div><button class="btn" type="submit">حفظ كل الإعدادات</button></div>':
+    '<div class="notice">عرض فقط: تعديل معلومات الشركة والشعار وسعر الصرف متاح للمدير الرئيسي.</div>')+
+  '</form></div>'+
+  '<aside class="settings-preview-column"><div class="settings-preview-card"><small class="settings-preview-kicker">LIVE PREVIEW</small><h3>معاينة هوية الشركة</h3><div class="settings-preview-logo" id="settingsBrandPreview">'+companyLogoHtml('preview')+'</div><b id="settingsPreviewName">'+E(companyValue('company_name'))+'</b><p id="settingsPreviewTagline">'+E(companyValue('company_tagline'))+'</p><div class="settings-preview-contact" id="settingsPreviewContact">'+E([companyValue('company_governorate'),companyValue('company_city'),companyValue('company_phone')].filter(Boolean).join(' • ')||'بيانات التواصل تظهر هنا بعد إضافتها')+'</div><hr><span class="settings-preview-note">تظهر الهوية عند الطباعة وفي القائمة الرئيسية.</span></div></aside>'+
+  '</div></div>';
+}
 function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>الصلاحية غير مفعلة</h1><p class="muted">تم تسجيل الدخول، لكن حسابك غير مضاف إلى موظفي نظام رأفت.</p><div class="notice">يجب إضافة معرّف حسابك إلى جدول staff_members من لوحة Supabase بدور admin أو staff، ثم تسجيل الدخول مجدداً.</div><button class="btn" data-action="logout">تسجيل خروج</button></div></div>'}
 function render(){
  let target=$('#app');
