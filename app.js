@@ -600,7 +600,7 @@ function openForm(k,row){
  if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
  if(k==='lease_installments'&&data.lease_id)data.entry_currency=lookup('leases',data.lease_id)?.currency||s.displayCurrency;
  if(k==='campaigns'&&!data.package_id&&data.customer_id){data.package_id=lookup('customers',data.customer_id)?.preferred_package_id||'';}
- if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.price=pack.price;data.currency=pack.currency;data.months=pack.default_months;}}
+ if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.currency=pack.currency;data.months=pack.default_months;const initial=quoteCampaign(data,data.siteIds||[]);data.price=initial?initial.total:0;}}
  if(k==='customer_contracts'){
   if(data.campaign_id&&!data.customer_id){const cam=lookup('campaigns',data.campaign_id);if(cam){data.customer_id=cam.customer_id;data.package_id=cam.package_id;data.site_id=linkedSites(cam.id)[0]?.id||'';data.amount=cam.price;data.currency=cam.currency;}}
   if(!data.package_id&&data.customer_id)data.package_id=lookup('customers',data.customer_id)?.preferred_package_id||'';
@@ -608,13 +608,16 @@ function openForm(k,row){
   if(!data.end_date&&data.start_date&&data.package_id){const p=lookup('packages',data.package_id);if(p)data.end_date=addDays(plusMonths(data.start_date,p.default_months||1),-1);}
  }
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
- s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id};
+ const drafts={};
+ if(k==='packages')packageRates(data).forEach(rate=>{drafts[rate.months]=roundAmount(convert(rate.usd_price,'USD',data.currency||'USD'));});
+ s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set()};
  s.formStep=0;render();
 }
 function captureForm(form){
  if(!s.modal||!form)return;
  const data=new FormData(form);
  for(let [k,v] of data.entries())if(!(v instanceof File))s.modal.data[k]=v;
+ if(s.modal.table==='packages')form.querySelectorAll('[data-package-rate-month]').forEach(input=>{s.modal.rateDraft[Number(input.dataset.packageRateMonth)]=input.value;});
  const siteInputs=[...form.querySelectorAll('[data-site-id]')];
  if(siteInputs.length)s.modal.siteIds=siteInputs.filter(el=>el.checked).map(el=>el.dataset.siteId);
 }
@@ -623,7 +626,7 @@ function formValidate(k,v){
   if(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id))throw Error('الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
   if(!v.preferred_package_id||!lookup('packages',v.preferred_package_id))throw Error('حدد باقة إعلانية مسجلة للزبون');
  }
- if(k==='packages'||k==='properties'){
+ if(k==='properties'||(k==='packages'&&v.pricing_mode!=='sqm_month')){
   if(!(Number(v.width_m)>0&&Number(v.height_m)>0))throw Error('أدخل طول وعرض أكبر من صفر بالمتر');
  }
  if(k==='customer_contracts'){
@@ -638,6 +641,11 @@ function formValidate(k,v){
  if(k==='landlords'&&(!/^[0-9]{11}$/.test(v.phone)||(v.national_id&&!/^[0-9]{12}$/.test(v.national_id))))throw Error('هاتف المالك 11 رقم، ورقم البطاقة عند إدخاله 12 رقم');
  if(k==='ad_sites'&&v.site_type==='rooftop'&&!v.rooftop_property_id)throw Error('موقع السطح لازم تربطه بعقار مسجل عند مالك');
  if(k==='campaigns'){
+  const pkg=lookup('packages',v.package_id);
+  if(pkg&&packageRates(pkg).length){
+   if(!packageRate(pkg,v.months))throw Error('هذه المدة غير مسعّرة في الباقة. اختر مدة من الخيارات الرسمية.');
+   if(pkg.pricing_mode==='sqm_month'&&!(Number(v.requested_area_m2)>0||campaignSiteArea(s.modal?.siteIds||[])>0))throw Error('أدخل مساحة إعلان الأسطح بالمتر المربع حتى نحتسب السعر الصحيح.');
+  }
   if(!lookup('customers',v.customer_id))throw Error('اختر عميلاً مسجلاً أولاً');
   if(v.package_id&&!lookup('packages',v.package_id))throw Error('الباقة غير موجودة في السجلات');
   if(!s.modal.siteIds?.length&&!String(v.locations||'').trim())throw Error('حدد موقعاً إعلانياً مسجلاً أو أضف موقعاً في الملاحظات النصية');
@@ -754,6 +762,7 @@ async function saveForm(form){
    }
   }
   let o=clean(k,normalized);
+  if(k==='packages'&&v.pricing_mode==='sqm_month'){o.width_m=null;o.height_m=null;o.package_type='rooftop';}
   if(k==='leases'&&!v.id)o.contract_number='';
   if(k==='landlords'){
    let file=form.elements.card_image?.files?.[0]||m.cardFile;
@@ -768,6 +777,15 @@ async function saveForm(form){
   }
   const wasNew=!v.id;
   const saved=await persist(k,o,v.id);
+  if(k==='packages'){
+   m.data.id=saved.id;
+   for(const month of m.rateChanged||[]){
+    const amount=Number(m.rateDraft?.[month]);
+    if(!Number.isFinite(amount)||amount<0)throw Error('تحقق من سعر الباقة لمدة '+month+' أشهر');
+    const current=packageRate(saved,month);
+    await persist('package_rates',{package_id:saved.id,months:Number(month),usd_price:roundAmount(convert(amount,v.currency||'USD','USD'))},current?.id);
+   }
+  }
   if(k==='landlords'){
    m.data.id=saved.id;
    for(const roof of m.roofs){
