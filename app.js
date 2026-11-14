@@ -1433,6 +1433,9 @@ async function saveForm(form){
  captureForm(form);
  if(k==='landlords')captureRoofDrafts();
  let v=m.data;
+ // Recompute the auto-quoted amount from the actual selected sites before the final save.
+ // This also covers a user going directly to review after choosing an E rooftop.
+ if(k==='campaigns'&&m.autoPrice&&s.formStep===4)refreshCampaignQuote();
  if(k==='campaigns'&&s.formStep<4){
   refreshCampaignQuote();
   if(s.formStep===1&&!lookup('packages',v.package_id)){toast('اختَر الباقة الإعلانية أولاً',true);return;}
