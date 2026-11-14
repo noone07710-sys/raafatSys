@@ -573,7 +573,7 @@ function bind(){
  };
  if(client&&k==='customer_contracts')client.onchange=()=>{
   captureForm(form);v.customer_id=client.value;
-  if(!v.id){const p=lookup('packages',lookup('customers',client.value)?.preferred_package_id);if(p){v.package_id=p.id;v.contract_type=p.package_type;v.amount=p.price;v.currency=p.currency;v.end_date=addDays(plusMonths(v.start_date||today(),p.default_months),-1);}}
+  if(!v.id){const p=lookup('packages',lookup('customers',client.value)?.preferred_package_id);if(p){v.package_id=p.id;v.contract_type=p.package_type;v.currency=p.currency;v.duration_months=p.default_months;refreshCustomerContractQuote();}}
   render();
  };
  const pack=form.elements.namedItem('package_id');
@@ -581,7 +581,7 @@ function bind(){
   captureForm(form);
   const p=lookup('packages',pack.value);
   v.package_id=pack.value;
-  if(p){v.contract_type=p.package_type;v.amount=p.price;v.currency=p.currency;if(!v.id)v.end_date=addDays(plusMonths(v.start_date||today(),p.default_months),-1);}
+  if(p){v.contract_type=p.package_type;v.currency=p.currency;if(!v.id){v.duration_months=p.default_months;refreshCustomerContractQuote();}}
   render();
  };
  const linkedCampaign=form.elements.namedItem('campaign_id');
@@ -589,7 +589,7 @@ function bind(){
   captureForm(form);
   const cam=lookup('campaigns',linkedCampaign.value);
   v.campaign_id=linkedCampaign.value;
-  if(cam){v.customer_id=cam.customer_id;if(cam.package_id){const pkg=lookup('packages',cam.package_id);v.package_id=cam.package_id;v.contract_type=pkg?.package_type||'cabin';}v.amount=cam.price;v.currency=cam.currency;}
+  if(cam){v.customer_id=cam.customer_id;if(cam.package_id){const pkg=lookup('packages',cam.package_id);v.package_id=cam.package_id;v.contract_type=pkg?.package_type||'cabin';}v.amount=cam.price;v.currency=cam.currency;v.duration_months=cam.months;v.rented_area_m2=cam.requested_area_m2||null;v.end_date=addDays(plusMonths(v.start_date||today(),cam.months),-1);}
   render();
  };
  if(pack&&k==='campaigns')pack.onchange=()=>{
@@ -640,6 +640,13 @@ function bind(){
   if(target)target.value=basePrice.value;
   updateMoneyHints();
  };
+ const contractMonths=form.elements.namedItem('duration_months'),contractArea=form.elements.namedItem('rented_area_m2');
+ if(contractMonths&&k==='customer_contracts')contractMonths.onchange=()=>{
+  captureForm(form);v.duration_months=Number(contractMonths.value);refreshCustomerContractQuote();render();
+ };
+ if(contractArea&&k==='customer_contracts')contractArea.onchange=()=>{
+  captureForm(form);refreshCustomerContractQuote();render();
+ };
  const parentCampaign=form.elements.namedItem('campaign_id');
  if(parentCampaign&&k==='campaign_payments')parentCampaign.onchange=()=>{
   const old=lookup('campaigns',v.campaign_id),wasEmpty=!v.campaign_id;
@@ -677,9 +684,9 @@ function openForm(k,row){
  if(k==='campaigns'&&!data.package_id&&data.customer_id){data.package_id=lookup('customers',data.customer_id)?.preferred_package_id||'';}
  if(k==='campaigns'&&data.package_id&&!row?.id){let pack=lookup('packages',data.package_id);if(pack){data.currency=pack.currency;data.months=pack.default_months;const initial=quoteCampaign(data,data.siteIds||[]);data.price=initial?initial.total:0;}}
  if(k==='customer_contracts'){
-  if(data.campaign_id&&!data.customer_id){const cam=lookup('campaigns',data.campaign_id);if(cam){data.customer_id=cam.customer_id;data.package_id=cam.package_id;data.site_id=linkedSites(cam.id)[0]?.id||'';data.amount=cam.price;data.currency=cam.currency;}}
+  if(data.campaign_id&&!data.customer_id){const cam=lookup('campaigns',data.campaign_id);if(cam){data.customer_id=cam.customer_id;data.package_id=cam.package_id;data.site_id=linkedSites(cam.id)[0]?.id||'';data.amount=cam.price;data.currency=cam.currency;data.duration_months=cam.months;data.rented_area_m2=cam.requested_area_m2||campaignSiteArea(linkedSites(cam.id).map(site=>site.id))||null;}}
   if(!data.package_id&&data.customer_id)data.package_id=lookup('customers',data.customer_id)?.preferred_package_id||'';
-  if(data.package_id&&!data.id){const p=lookup('packages',data.package_id);if(p){data.contract_type=p.package_type;data.amount=p.price;data.currency=p.currency;}}
+  if(data.package_id&&!data.id){const p=lookup('packages',data.package_id);if(p){data.contract_type=p.package_type;if(!data.campaign_id){data.duration_months=Number(data.duration_months||p.default_months);data.currency=p.currency;const q=quoteCustomerContract(data);data.amount=q?q.amount:0;}}}
   if(!data.end_date&&data.start_date&&data.package_id){const p=lookup('packages',data.package_id);if(p)data.end_date=addDays(plusMonths(data.start_date,p.default_months||1),-1);}
  }
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
@@ -708,6 +715,8 @@ function formValidate(k,v){
   const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id);
   if(!customer||!pkg)throw Error('اختر زبوناً وباقة إعلانية مسجلين');
   if((v.contract_type||pkg.package_type)!==pkg.package_type)throw Error('نوع عقد الزبون يجب أن يطابق نوع الباقة');
+  if(packageRates(pkg).length&&!packageRate(pkg,v.duration_months))throw Error('مدة العقد غير مدرجة بتعرفة الباقة');
+  if(pkg.pricing_mode==='sqm_month'&&!(Number(v.rented_area_m2)>0))throw Error('أدخل مساحة الأسطح المتعاقد عليها بالمتر المربع');
   if(v.end_date<v.start_date||!v.start_date||!v.end_date)throw Error('تأكد من تواريخ عقد الزبون');
   if(!(Number(v.amount)>=0))throw Error('مبلغ عقد الزبون غير صالح');
   if(v.campaign_id){const cam=lookup('campaigns',v.campaign_id);if(!cam||cam.customer_id!==v.customer_id||(cam.package_id&&cam.package_id!==v.package_id))throw Error('الحملة المختارة يجب أن تكون لنفس الزبون والباقة');}
