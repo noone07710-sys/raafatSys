@@ -1,4 +1,5 @@
--- Raafat Sys: secure initial schema. Execute on a NEW dedicated Supabase project.
+-- Raafat Sys: secure additive initial schema. Does not modify Layali application tables.
+-- Deployment target: gxredstctzkuwgsegykd (shared Supabase project, separate tables and RLS).
 create extension if not exists pgcrypto;
 create table if not exists public.staff_members (
  user_id uuid primary key references auth.users(id) on delete cascade,
@@ -87,8 +88,10 @@ create table if not exists public.leases(
 );
 create or replace function public.assign_lease_number() returns trigger language plpgsql set search_path = '' as $$
 begin
- if new.contract_number is null or new.contract_number='' then
+ if TG_OP = 'INSERT' then
    new.contract_number := 'RA-' || nextval('public.lease_number_sequence');
+ elsif new.contract_number is distinct from old.contract_number then
+   raise exception 'Contract number is immutable';
  end if;
  if not exists(select 1 from public.properties where id=new.property_id and landlord_id=new.landlord_id) then
    raise exception 'Property does not belong to the selected landlord';
@@ -96,7 +99,7 @@ begin
  return new;
 end $$;
 drop trigger if exists lease_number_trigger on public.leases;
-create trigger lease_number_trigger before insert or update of landlord_id,property_id on public.leases
+create trigger lease_number_trigger before insert or update on public.leases
 for each row execute function public.assign_lease_number();
 create table if not exists public.lease_installments(
  id uuid primary key default gen_random_uuid(),
@@ -140,11 +143,17 @@ begin
    execute format('alter table public.%I enable row level security',t);
    execute format('create policy %I on public.%I for select to authenticated using (public.is_staff())','staff_read_'||t,t);
    execute format('create policy %I on public.%I for insert to authenticated with check (public.is_staff())','staff_add_'||t,t);
-   execute format('create policy %I on public.%I for update to authenticated using (public.is_staff()) with check (public.is_staff())','staff_edit_'||t,t);
+   if t = 'settings' then
+     execute format('create policy %I on public.%I for update to authenticated using (public.is_admin()) with check (public.is_admin())','staff_edit_'||t,t);
+   else
+     execute format('create policy %I on public.%I for update to authenticated using (public.is_staff()) with check (public.is_staff())','staff_edit_'||t,t);
+   end if;
    execute format('create policy %I on public.%I for delete to authenticated using (public.is_admin())','admin_delete_'||t,t);
  end loop;
 end $$;
 -- Browser can use publishable/anon key with RLS enforcing auth and staff authorization.
+revoke all on public.staff_members,public.settings,public.customers,public.packages,public.landlords,public.properties,public.leases,public.lease_installments,public.campaigns,public.campaign_payments from anon;
+revoke all on public.staff_members,public.settings,public.customers,public.packages,public.landlords,public.properties,public.leases,public.lease_installments,public.campaigns,public.campaign_payments from public;
 grant usage on schema public to authenticated;
 grant select on public.staff_members to authenticated;
 grant select,insert,update,delete on public.settings,public.customers,public.packages,public.landlords,public.properties,public.leases,public.lease_installments,public.campaigns,public.campaign_payments to authenticated;
