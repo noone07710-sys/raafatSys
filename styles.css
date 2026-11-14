@@ -326,3 +326,55 @@
  .campaign-payment-history-row>.linkbtn{grid-column:2/-1}
 }
 @media(prefers-reduced-motion:reduce){.campaign-payment-progress>span{transition:none}}
+
+
+/* Consistent, accessible inline vector icons across the management UI */
+.ui-icon{display:inline-block;flex:none;vertical-align:middle;stroke:currentColor;overflow:visible}
+.nav-link-icon,.nav-group-icon,.settings-section-icon{display:flex;align-items:center;justify-content:center}
+.nav-link-icon .ui-icon{width:19px;height:19px}
+.nav-group-icon .ui-icon{width:20px;height:20px}
+.nav-group-chevron{display:flex;align-items:center;justify-content:center}
+.nav-group-chevron .ui-icon{transition:transform .18s ease}
+.nav .nav-group-toggle.expanded .nav-group-chevron .ui-icon{transform:rotate(180deg)}
+.nav .nav-group-toggle.expanded .nav-group-chevron{transform:none}
+.settings-section-icon .ui-icon{width:22px;height:22px}
+.btn,.linkbtn,.settings-file-button{align-items:center;gap:7px}
+.btn .ui-icon,.linkbtn .ui-icon,.settings-file-button .ui-icon{vertical-align:middle;margin-inline-end:5px}
+.linkbtn .ui-icon{stroke-width:1.75}
+.nav button:focus-visible,.btn:focus-visible,.linkbtn:focus-visible,
+.close:focus-visible,.customer-delete-confirm:focus-visible,
+.field select:focus-visible{outline:2px solid #0c9c9b;outline-offset:3px}
+.close .ui-icon{display:block}
+.field select{max-width:100%;cursor:pointer}
+
+/* Explicit destructive flow. A single record deletion removes its campaigns,
+   receipts and contracts but never the shared advertising sites or landlords. */
+.customer-delete-link{color:#bd3447;white-space:nowrap}
+.customer-delete-link:hover{color:#92273a;background:#fff1f3;border-radius:7px}
+.btn.danger{display:inline-flex;align-items:center;justify-content:center;border-color:#edb9c3;background:#fff4f5;color:#aa2538}
+.btn.danger:hover:not(:disabled){background:#ffe4e8;color:#90243a;filter:none}
+.customer-delete-modal{width:min(620px,100%);border:1px solid #efccd3}
+.customer-delete-modal .modalhead{gap:12px}
+.customer-delete-modal .modalhead h2{font-size:19px}
+.customer-delete-warning{border:1px solid #f0cad3;background:#fff4f6;border-radius:14px;padding:17px;color:#9a273b;margin-bottom:16px;line-height:1.8}
+.customer-delete-warning strong{font-weight:800;font-size:14px}
+.customer-delete-warning p{margin:7px 0 0;font-size:12px;line-height:1.9;color:#7c3f4d}
+.customer-delete-warning b{color:#8a1f32}
+.customer-delete-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:18px}
+.customer-delete-stats>div{min-width:0;border:1px solid #e4eaf0;background:#f8fafb;border-radius:11px;padding:12px 10px;display:flex;flex-direction:column;gap:6px;text-align:center}
+.customer-delete-stats small{font-size:10px;line-height:1.7;color:#667c8b}
+.customer-delete-stats strong{font-size:21px;color:#213c4d;font-weight:800}
+.customer-delete-modal .field>span strong{color:#a8293e}
+.customer-delete-modal #deleteCustomerConfirmation{border-color:#edc5cd;text-align:center;font-weight:800;letter-spacing:.2px}
+.customer-delete-modal #deleteCustomerConfirmation:focus{border-color:#c54e5f;box-shadow:0 0 0 3px #c54e5f19}
+.customer-delete-modal .actions{border-top:1px solid #edf1f4;padding-top:13px}
+.customer-delete-modal .actions .btn{font-size:12px}
+.customer-delete-modal .customer-delete-confirm:disabled{opacity:.48}
+@media(max-width:650px){
+ .customer-delete-modal{padding:17px 13px}
+ .customer-delete-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .customer-delete-modal .actions{flex-direction:column}
+ .customer-delete-modal .actions .btn{width:100%}
+ .nav-link-icon .ui-icon{width:17px;height:17px}
+}
+@media(prefers-reduced-motion:reduce){.nav-group-chevron .ui-icon{transition:none}}
