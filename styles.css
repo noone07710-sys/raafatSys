@@ -214,3 +214,33 @@
 .settings-page .formgrid>.field{min-width:0}
 .settings-page input,.settings-page textarea{min-width:0;max-width:100%}
 @media(max-width:650px){.settings-page{overflow-x:clip}.settings-intro{flex-wrap:wrap}}
+
+
+/* Customer contracts are generated from the selected campaign (not manually re-entered). */
+.contract-campaign-info{padding:18px;border:1px solid #d9e5ec;background:linear-gradient(150deg,#f9fcfd,#f3f7fa);border-radius:14px;min-width:0}
+.contract-campaign-info h3{font-size:15px;margin:0 0 16px;color:#1a4153}
+.contract-campaign-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.contract-campaign-item{display:flex;flex-direction:column;gap:6px;background:#fff;border:1px solid #e0e9ee;border-radius:10px;padding:12px;min-width:0}
+.contract-campaign-item small{color:#7891a1;font-size:11px}
+.contract-campaign-item b{color:#203c4e;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+.contract-campaign-sites{margin-top:16px}
+.contract-campaign-sites h4{margin:0 0 10px;font-size:13px}
+.contract-campaign-site,.contract-preview-board{background:#fff;border:1px solid #dfe9ed;padding:11px 13px;border-radius:10px;margin-bottom:7px;display:flex;gap:5px;flex-direction:column;min-width:0}
+.contract-campaign-site strong,.contract-preview-board b{font-size:12px;overflow-wrap:anywhere}
+.contract-campaign-site small,.contract-preview-board small{color:#7a8e9f;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+.contract-campaign-extra{font-size:12px;margin-top:10px;background:#e8f2f4;border-radius:10px;padding:12px;overflow-wrap:anywhere}
+.contract-campaign-info>.subtle{display:block;margin:14px 0 0;font-size:11px;line-height:1.8}
+.contract-preview-sites{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.contract-preview-sites .contract-preview-board{margin:0}
+@media(max-width:750px){
+ .contract-campaign-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .contract-preview-sites{grid-template-columns:1fr}
+}
+@media(max-width:460px){
+ .contract-campaign-info{padding:12px}
+ .contract-campaign-grid{grid-template-columns:1fr}
+}
+@media print{
+ .contract-campaign-info{break-inside:avoid}
+ .contract-preview-board{break-inside:avoid}
+}
