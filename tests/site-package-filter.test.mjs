@@ -83,7 +83,7 @@ test('A-E billboard categories filter sites and reject cross-package bookings',(
  assert.doesNotThrow(()=>formValidate('ad_sites',{id:'siteA',code:'A01',package_id:id('A'),site_type:'roadside'}));
  s.data.campaigns=[];s.data.campaign_sites=[];
 
- const campaign={customer_id:'customer-1',package_id:id('A'),months:3,locations:'تكريت',price:280,currency:'USD'};
+ const campaign={customer_id:'customer-1',package_id:id('A'),start_date:'2026-11-14',months:3,locations:'تكريت',price:280,currency:'USD'};
  assert.throws(()=>formValidate('campaigns',campaign),/لا تتبع الباقة/);
  s.modal.siteIds=['siteA','legacyA'];
  assert.doesNotThrow(()=>formValidate('campaigns',campaign));
@@ -91,14 +91,18 @@ test('A-E billboard categories filter sites and reject cross-package bookings',(
  assert.throws(()=>formValidate('campaigns',campaign),/لا تتبع الباقة/);
  s.modal.siteIds=[];
 
- assert.throws(()=>formValidate('customer_contracts',{
-  customer_id:'customer-1',package_id:id('A'),contract_type:'cabin',
-  site_id:'siteB',duration_months:3,start_date:'2026-11-14',end_date:'2027-02-13',amount:280
- }),/لا يتبع الباقة/);
- assert.doesNotThrow(()=>formValidate('customer_contracts',{
-  customer_id:'customer-1',package_id:id('A'),contract_type:'cabin',
-  site_id:'siteA',duration_months:3,start_date:'2026-11-14',end_date:'2027-02-13',amount:280
- }));
+ // A newly generated contract can only use the selected campaign's exact pieces.
+ const cam={id:'cam-A',customer_id:'customer-1',title:'حملة A',package_id:id('A'),
+  start_date:'2026-11-14',months:3,quantity:1,locations:'تكريت',price:280,currency:'USD'};
+ s.data.campaigns=[cam];
+ s.data.campaign_sites=[{campaign_id:cam.id,site_id:'siteA'}];
+ const expected={
+  campaign_id:cam.id,customer_id:cam.customer_id,package_id:cam.package_id,
+  contract_type:'cabin',site_id:'siteA',duration_months:3,rented_area_m2:null,
+  start_date:'2026-11-14',end_date:'2027-02-13',amount:280,currency:'USD'
+ };
+ assert.throws(()=>formValidate('customer_contracts',{...expected,site_id:'siteB'}),/بيانات العقد يجب أن تتطابق/);
+ assert.doesNotThrow(()=>formValidate('customer_contracts',expected));
 
  s.modal={table:'customer_contracts'};
  const siteField=defs.customer_contracts.fields.find(f=>f[0]==='site_id');
