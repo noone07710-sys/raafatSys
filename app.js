@@ -210,10 +210,11 @@ function relatedDetails(k,v){
  let parts='';
  if(k==='customers'){
   parts+=list('حملات هذا العميل',s.data.campaigns.filter(x=>x.customer_id===v.id),'campaigns',x=>x.title+' — '+displayMoneyText(x.price,x.currency));
-  parts+='<button type="button" class="btn secondary mini" data-new-linked="campaigns|customer_id|'+v.id+'">+ حملة لهذا العميل</button>';
+  parts+=list('عقود هذا الزبون',s.data.customer_contracts.filter(x=>x.customer_id===v.id),'customer_contracts',x=>x.contract_number+' — '+(labels[x.contract_type]||x.contract_type));
+  parts+='<div class="inline"><button type="button" class="btn secondary mini" data-new-linked="campaigns|customer_id|'+v.id+'">+ حملة لهذا العميل</button><button type="button" class="btn secondary mini" data-new-linked="customer_contracts|customer_id|'+v.id+'">+ عقد زبون</button></div>';
  }
  if(k==='landlords'){
-  parts+=list('عقارات المالك',s.data.properties.filter(x=>x.landlord_id===v.id),'properties',x=>x.title+' / '+x.dimensions);
+  parts+=list('الأسطح وأبعاد كل واحد',s.data.properties.filter(x=>x.landlord_id===v.id),'properties',x=>x.title+' / '+(x.width_m&&x.height_m?fmt(x.width_m)+' × '+fmt(x.height_m)+' م = '+fmt(x.area_m2)+' م²':x.dimensions));
   parts+=list('عقود المالك',s.data.leases.filter(x=>x.landlord_id===v.id),'leases',x=>x.contract_number+' — '+displayMoneyText(x.rent_total,x.currency));
   parts+='<button type="button" class="btn secondary mini" data-new-linked="properties|landlord_id|'+v.id+'">+ إضافة عقار للمالك</button>';
  }
@@ -222,12 +223,21 @@ function relatedDetails(k,v){
   parts+=list('عقود هذا العقار',s.data.leases.filter(x=>x.property_id===v.id),'leases',x=>x.contract_number);
   parts+='<button type="button" class="btn secondary mini" data-new-linked="leases|property_id|'+v.id+'">+ عقد للعقار</button>';
  }
- if(k==='packages')parts+=list('حملات الباقة',s.data.campaigns.filter(x=>x.package_id===v.id),'campaigns',x=>x.title);
+ if(k==='packages'){
+  parts+=list('الزبائن الراغبون بهذه الباقة',s.data.customers.filter(x=>x.preferred_package_id===v.id),'customers',x=>x.name+' — '+x.phone);
+  parts+=list('حملات الباقة',s.data.campaigns.filter(x=>x.package_id===v.id),'campaigns',x=>x.title);
+  parts+=list('عقود الزبائن على الباقة',s.data.customer_contracts.filter(x=>x.package_id===v.id),'customer_contracts',x=>x.contract_number);
+  parts+='<button type="button" class="btn secondary mini" data-new-linked="customers|preferred_package_id|'+v.id+'">+ إضافة زبون لهذه الباقة</button>';
+ }
  if(k==='ad_sites')parts+=list('حملات هذا الموقع',s.data.campaign_sites.filter(x=>x.site_id===v.id).map(x=>lookup('campaigns',x.campaign_id)).filter(Boolean),'campaigns',x=>x.title);
  if(k==='campaigns'){
+  parts+=list('عقود الزبائن التابعة للحملة',s.data.customer_contracts.filter(x=>x.campaign_id===v.id),'customer_contracts',x=>x.contract_number);
   parts+=list('دفعات الحملة',s.data.campaign_payments.filter(x=>x.campaign_id===v.id),'campaign_payments',x=>x.paid_at+' — '+displayMoneyText(x.amount,v.currency));
   parts+='<div class="notice">المدفوع: '+E(money(campaignPaid(v.id),v.currency))+' · المتبقي: '+E(money(campaignBalance(v),v.currency))+'</div>';
-  parts+='<button type="button" class="btn secondary mini" data-new-linked="campaign_payments|campaign_id|'+v.id+'">+ تسجيل دفعة للحملة</button>';
+  parts+='<div class="inline"><button type="button" class="btn secondary mini" data-new-linked="campaign_payments|campaign_id|'+v.id+'">+ تسجيل دفعة للحملة</button><button type="button" class="btn secondary mini" data-new-linked="customer_contracts|campaign_id|'+v.id+'">+ إنشاء عقد زبون لهذه الحملة</button></div>';
+ }
+ if(k==='customer_contracts'){
+   parts+='<div class="notice">هذا عقد بين الشركة والزبون، وليس عقد استئجار السطح من مالك البناية.</div><button type="button" class="btn secondary mini" data-customer-preview="'+v.id+'">معاينة وطباعة عقد الزبون</button>';
  }
  if(k==='leases'){
   parts+=list('استحقاقات العقد',s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date)),'lease_installments',x=>x.due_date+' — '+displayMoneyText(x.paid_amount,v.currency)+' / '+displayMoneyText(x.amount,v.currency));
