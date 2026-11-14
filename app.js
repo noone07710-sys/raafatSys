@@ -473,7 +473,7 @@ function campaignPaymentOverview(){
    '<div><small>الواصل</small><b>'+currencyAmount(paid,cam.currency)+'</b></div>'+
    '<div><small>المتبقي</small><b>'+currencyAmount(balance,cam.currency)+'</b></div></div>';
   const history=payments.length?payments.map((payment,i)=>
-   '<div class="campaign-payment-history-row"><span class="campaign-payment-history-index">'+E(receiptNumber(payment))+'</span>'+
+   '<div class="campaign-payment-history-row"><span class="campaign-payment-history-index">وصل '+E(receiptNumber(payment))+'</span>'+
    '<span class="campaign-payment-history-date">'+E(payment.paid_at||'—')+'</span>'+
    '<span class="campaign-payment-history-amount">'+currencyAmount(payment.amount,cam.currency)+'</span>'+
    '<span class="campaign-payment-history-notes">'+E(payment.notes||'—')+'</span>'+
@@ -959,6 +959,7 @@ function updateAreaOutputs(form){
 }
 
 function leasePlanSummary(v){
+ if(!v.start_date||!v.end_date)return '<div class="lease-plan-preview full"><strong>جدول الأقساط المتوقع</strong><small>حدد تاريخ بداية ونهاية العقد حتى تظهر الأقساط بدقة قبل الحفظ.</small></div>';
  const rows=leaseInstallmentPlan(v);
  const upfront=leaseAdvance(v),total=Number(v.rent_total||0);
  const currency=v.currency||'USD';
@@ -1000,7 +1001,7 @@ function modalHtml(){
    ['notes','ملاحظات على الدفعة','textarea']
   ];
   return '<div class="overlay"><div class="modal campaign-payment-modal"><div class="modalhead"><h2>'+(v.id?'تعديل دفعة مسجلة':'تسجيل دفعة للحملة')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
-   '<div class="campaign-payment-modal-parent"><strong>'+E(parent.title)+'</strong><span>الزبون: '+E(nameOf('customers',parent.customer_id))+'</span></div>'+
+   '<div class="campaign-payment-modal-parent"><strong>'+E(parent.title)+'</strong><span>الزبون: '+E(nameOf('customers',parent.customer_id))+(v.id?' · رقم الوصل: '+E(receiptNumber(v)):'')+'</span></div>'+
    '<div class="campaign-payment-modal-balances">'+
    '<div><small>إجمالي الحملة</small><b>'+currencyAmount(parent.price,parent.currency)+'</b></div>'+
    '<div><small>المبلغ الواصل سابقاً'+(v.id?' باستثناء الدفعة الحالية':'')+'</small><b>'+currencyAmount(paidOthers,parent.currency)+'</b></div>'+
