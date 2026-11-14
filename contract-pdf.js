@@ -117,7 +117,7 @@
    print(sheet.ctx,'صفحة '+sheet.pageNumber,AREA.left+7,safeBottom+11,8.3,500,COLOR.muted,'left');
   }
   function begin(){
-   if(page)drawPageNumber(page);
+   if(page)return; // A contract always uses a single A4 sheet.
    page=makePage();
    page.y=AREA.top;
    const {ctx}=page;
@@ -130,10 +130,10 @@
    page.y+=43;
   }
   function keep(height){
+   // The document is laid out completely in logical units first, then the
+   // text overlay is uniformly fitted inside the template's white area.
+   // NEVER open a second page: a too-dense contract is rejected instead.
    if(!page)begin();
-   if(page.y+height>safeBottom){
-    begin();
-   }
   }
   function section(title){
    keep(41);
@@ -141,7 +141,7 @@
    page.y+=4;
    rect(ctx,AREA.right-4,page.y-1,4,21,COLOR.orange);
    print(ctx,title,AREA.right-16,page.y+15,12.3,800,COLOR.navy);
-   page.y+=32;
+   page.y+=26;
   }
   // Cards are clean and compact, with labels above values and a gutter
   // separating RTL columns. Long entries are flowed rather than truncated.
@@ -157,47 +157,47 @@
     return;
    }
    const maxRows=Math.max(...prepared.map(x=>x.lines.length),1);
-   const height=Math.max(52,27+maxRows*15);
-   keep(height+7);
+   const height=Math.max(40,22+maxRows*13);
+   keep(height+5);
    const {ctx}=page,top=page.y;
    for(let i=0;i<prepared.length;i++){
     const item=prepared[i];
     const x=i===0?AREA.right-cellWidth:AREA.left;
     rect(ctx,x,top,cellWidth,height,COLOR.subtle);
     rect(ctx,x+cellWidth-3,top+10,2,12,COLOR.orange);
-    print(ctx,item.name,x+cellWidth-14,top+15,8.8,600,COLOR.muted);
-    let y=top+33;
-    item.lines.forEach(line=>{print(ctx,line,x+cellWidth-14,y,10.6,700,COLOR.ink);y+=15});
+    print(ctx,item.name,x+cellWidth-14,top+12,8.8,600,COLOR.muted);
+    let y=top+27;
+    item.lines.forEach(line=>{print(ctx,line,x+cellWidth-14,y,10.6,700,COLOR.ink);y+=13});
    }
-   page.y+=height+7;
+   page.y+=height+5;
   }
   function field(name,value){
    // A single entry spans the full page width and keeps long names readable.
    const lines=measureLines(page.ctx,label(value),w-28,10.7,700);
    if(lines.length>6){block(name,value);return}
-   const height=Math.max(47,27+lines.length*15);
-   keep(height+7);
+   const height=Math.max(38,22+lines.length*13);
+   keep(height+5);
    rect(page.ctx,AREA.left,page.y,w,height,COLOR.subtle);
    rect(page.ctx,AREA.right-3,page.y+10,2,12,COLOR.orange);
-   print(page.ctx,name,AREA.right-14,page.y+15,8.8,600,COLOR.muted);
-   let baseline=page.y+33;
-   for(const line of lines){print(page.ctx,line,AREA.right-14,baseline,10.7,700);baseline+=15}
-   page.y+=height+7;
+   print(page.ctx,name,AREA.right-14,page.y+12,8.8,600,COLOR.muted);
+   let baseline=page.y+27;
+   for(const line of lines){print(page.ctx,line,AREA.right-14,baseline,10.7,700);baseline+=13}
+   page.y+=height+5;
   }
   function block(title,value){
    if(!String(value??'').trim())return;
    keep(43);
    const {ctx}=page;
    print(ctx,title,AREA.right-5,page.y+13,10,800,COLOR.navy);
-   page.y+=26;
+   page.y+=20;
    const raw=String(value).replace(/\r/g,'');
    const lines=measureLines(ctx,raw,w-20,10.4,500);
    for(const line of lines){
-    keep(22);
-    print(page.ctx,line,AREA.right-10,page.y+10,10.4,500,COLOR.ink);
-    page.y+=17.5;
+    keep(17);
+    print(page.ctx,line,AREA.right-10,page.y+9,10.4,500,COLOR.ink);
+    page.y+=14;
    }
-   page.y+=6;
+   page.y+=4;
   }
   function site(site,index){
    const code=label(site.code,'—'),name=label(site.name,'موقع إعلاني');
@@ -208,20 +208,20 @@
    if(titleLines.length+addressLines.length>8){
     block('القطعة '+code,name+(address?' — '+address:''));return;
    }
-   const height=Math.max(43,18+titleLines.length*15+addressLines.length*13);
-   keep(height+5);
+   const height=Math.max(31,12+titleLines.length*13+addressLines.length*11);
+   keep(height+4);
    const {ctx}=page,x=AREA.left,y=page.y;
    rect(ctx,x,y,w,height,index%2===0?COLOR.subtle:COLOR.subtleAlt);
-   rect(ctx,AREA.right-75,y+9,60,20,COLOR.navy);
-   print(ctx,code,AREA.right-45,y+23,10,800,COLOR.white,'center');
-   let pos=y+16;
-   for(const line of titleLines){print(ctx,line,AREA.right-91,pos,10.7,700,COLOR.ink);pos+=15}
-   for(const line of addressLines){print(ctx,line,AREA.right-91,pos,9.6,500,COLOR.muted);pos+=13}
-   page.y+=height+5;
+   rect(ctx,AREA.right-75,y+6,60,19,COLOR.navy);
+   print(ctx,code,AREA.right-45,y+20,10,800,COLOR.white,'center');
+   let pos=y+13;
+   for(const line of titleLines){print(ctx,line,AREA.right-91,pos,10.7,700,COLOR.ink);pos+=13}
+   for(const line of addressLines){print(ctx,line,AREA.right-91,pos,9.6,500,COLOR.muted);pos+=11}
+   page.y+=height+4;
   }
   function signature(){
-   keep(105);
-   page.y+=12;rule(page.ctx,page.y);page.y+=17;
+   keep(74);
+   page.y+=8;rule(page.ctx,page.y);page.y+=13;
    const half=(w-10)/2;
    const sides=[
     {x:AREA.right-8,text:'توقيع ممثل الشركة'},
@@ -229,13 +229,13 @@
    ];
    for(const side of sides){
     print(page.ctx,side.text,side.x,page.y+4,11,700,COLOR.navy);
-    print(page.ctx,'____________________',side.x,page.y+45,10,600,COLOR.muted);
+    print(page.ctx,'____________________',side.x,page.y+34,10,600,COLOR.muted);
    }
-   page.y+=74;
+   page.y+=52;
   }
   function end(){
    if(!page)begin();
-   drawPageNumber(page);
+   // A4 is a single signed page; no page numbering is necessary.
   }
   return {begin,section,fields,field,block,site,signature,end,get current(){return page}};
  }
@@ -252,13 +252,9 @@
   out.setTitle('عقد رأفت '+payload.number);
   out.setSubject('عقد إعلان — '+label(payload.customerName));
   out.setCreator('Raafat Sys');
-  const pages=[];
-  const painter=createPainter(size,()=>{
-   const p=pageCanvas(size);
-   p.pageNumber=pages.length+1;
-   pages.push(p);
-   return p;
-  },payload);
+  // Measure the entire agreement first. Never create a second A4 page.
+  // A small reduction of vertical gaps keeps common contracts comfortably legible.
+  function renderContent(painter){
   painter.begin();
 
   painter.section('أطراف العقد');
@@ -305,16 +301,27 @@
   }
   painter.signature();
   painter.end();
-
-  // The original PDF is copied on every page, never replaced by an image.
-  // Only a transparent layer of Arabic typography sits in the safe white area.
-  for(const p of pages){
-   const pngUri=p.canvas.toDataURL('image/png');
-   const pngData=await fetch(pngUri).then(res=>res.arrayBuffer());
-   const image=await out.embedPng(pngData);
-   const [background]=await out.copyPages(original,[0]);
-   out.addPage(background).drawImage(image,{x:0,y:0,width:size.width,height:size.height});
   }
+  const measurement=pageCanvas(size);
+  const measurePainter=createPainter(size,()=>({...measurement,pageNumber:1}),payload);
+  renderContent(measurePainter);
+  const naturalHeight=Math.max(1,measurePainter.current.y-AREA.top);
+  const availableHeight=Math.min(AREA.bottom,size.height-70)-AREA.top;
+  const fit=Math.min(1,availableHeight/naturalHeight);
+  // Readability is more important than squeezing a legal agreement into
+  // unreadable microscopic text. In that case, ask to shorten the agreement.
+  if(fit<0.72)throw Error('تفاصيل العقد كثيرة ولا تكفي صفحة A4 واحدة بخط واضح. اختصر الملاحظات أو الشروط أو عدد تفاصيل المواقع ثم أعد التحميل.');
+  const overlay=pageCanvas(size);
+  const middle=(AREA.left+AREA.right)/2;
+  overlay.ctx.translate(middle*(1-fit),AREA.top*(1-fit));
+  overlay.ctx.scale(fit,fit);
+  const painter=createPainter(size,()=>({...overlay,pageNumber:1}),payload);
+  renderContent(painter);
+  const pngUri=overlay.canvas.toDataURL('image/png');
+  const pngData=await fetch(pngUri).then(res=>res.arrayBuffer());
+  const image=await out.embedPng(pngData);
+  const [background]=await out.copyPages(original,[0]);
+  out.addPage(background).drawImage(image,{x:0,y:0,width:size.width,height:size.height});
   return new Blob([await out.save({useObjectStreams:false})],{type:'application/pdf'});
  }
  function saveBlob(blob,file){
