@@ -17,7 +17,7 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
   createElement(tag){
    if(tag==='canvas'){
     const ctx={
-     scale(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){},
+     scale(){},translate(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){},
      measureText(v){return {width:String(v).length*5.8}},
      fillText(v){calls.canvasTexts.push(String(v));},
      fillStyle:'',strokeStyle:'',font:'',direction:'rtl'
@@ -72,25 +72,25 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
   months:6,startDate:'2026-11-14',endDate:'2027-05-13',amount:4200,currency:'USD',
   specifications:'مضيئة وجوه متعددة',terms:'يتم تنفيذ العمل وفق المواد والمواصفات المتفق عليها',
   notes:'اللوحات يتم تسليمها في الموعد',campaignNotes:'نقل وطباعة',
-  sites:Array.from({length:80},(_,i)=>({code:'A'+String(i+1).padStart(3,'0'),
+  sites:Array.from({length:4},(_,i)=>({code:'A'+String(i+1).padStart(3,'0'),
    name:'لوحة إعلانية تجريبية رقم '+(i+1),
    governorate:'صلاح الدين',address:'شارع الزهور تكريت العراق'})),
   additionalLocations:'مواقع إضافية عند الاتفاق'
  };
  const blob=await pdf.generate(data);
  assert.equal(blob.type,'application/pdf');
- assert.ok(calls.added>1,'80 boards must paginate onto multiple copies of the same PDF template');
- assert.equal(calls.added,calls.copied,'every page must originate from the uploaded Photoshop template');
- assert.equal(calls.images,calls.added,'each page gets a transparent writing layer');
+ assert.equal(calls.added,1,'every generated customer contract must be one A4 page');
+ assert.equal(calls.copied,1,'use the original Photoshop A4 background exactly once');
+ assert.equal(calls.images,1,'the single page gets its transparent writing overlay');
  assert.equal(calls.out,1);
  assert.match(calls.title,/RC-0007/);
  assert.ok(calls.canvasTexts.some(x=>x.includes('مكتبة حبر')));
- assert.ok(calls.canvasTexts.some(x=>x.includes('A080')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('A004')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('4,200')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('الشروط')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('توقيع')));
- assert.ok(calls.canvasTexts.some(x=>x.includes('صفحة 2')),'pagination should show page numbers');
+ assert.ok(!calls.canvasTexts.some(x=>x.includes('صفحة 2')),'no second page is permitted');
  assert.ok(!calls.canvasTexts.some(x=>x.includes('123456789012')),'identity-card values must never be written anywhere on a PDF page');
  assert.ok(!calls.canvasTexts.some(x=>x.includes('البطاقة')||x.includes('الرقم الوطني')),'identity-card labels must never appear on the PDF');
  assert.ok(calls.templateFetches.some(x=>x==='https://example.test/raafatSys/customer-contract-template.pdf'));
