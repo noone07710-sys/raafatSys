@@ -5,6 +5,7 @@ const fmt=(n)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(N
 const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
+const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
 const keys=['customers','packages','landlords','properties','leases','lease_installments','campaigns','campaign_payments'];
 const defs={
  customers:{title:'العملاء',icon:'♟',fields:[['name','اسم العميل','text',true],['phone','رقم الهاتف الأساسي (11 رقم)','tel',true],['alternate_phone','الهاتف البديل','tel'],['national_id','رقم البطاقة الموحدة (12 رقم)','text',true],['rental_address','عنوان الاستئجار','text',true],['status','الحالة','select',true,['active','inactive','inquiry']],['notes','الملاحظات','textarea']]},
@@ -17,7 +18,7 @@ const defs={
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي'};
-const s={client:null,session:null,staff:null,config:JSON.parse(localStorage.getItem('raafat-config')||'null'),demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const s={client:null,session:null,staff:null,config:PUBLIC_CONFIG,demo:false,view:'dashboard',data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{usd_iqd:1500},search:'',filter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 const lookup=(table,id)=>s.data[table].find(x=>x.id===id);
 const nameOf=(table,id)=>lookup(table,id)?.name||lookup(table,id)?.title||'—';
 const convert=(v,from,to)=>from===to?Number(v):Number(v)*(from==='USD'?Number(s.settings.usd_iqd):1/Number(s.settings.usd_iqd));
@@ -56,7 +57,7 @@ async function bootstrap(){
  else render();
 }
 function authPage(){return '<div class="welcome"><div class="authbox"><h1>رأفت <span style="color:#167683">Sys.</span></h1><p class="muted">نظام الإدارة المتكامل للدعاية والإعلان</p><p class="subtle">ربط قاعدة البيانات الخاصة بالشركة وتسجيل دخول الموظفين</p>'+ (s.error?'<div class="error">'+E(s.error)+'</div>':'')+
- '<form id="connectForm"><label class="field"><span>Supabase Project URL</span><input id="url" type="url" required placeholder="https://project.supabase.co" value="'+E(s.config?.url||'')+'"></label><label class="field"><span>Publishable / anon key (ليس secret)</span><input id="key" required type="password" value="'+E(s.config?.key||'')+'"></label><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
+ '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
 function nav(){return [['dashboard','الرئيسية','◫'],['customers','العملاء','♟'],['campaigns','المشاريع والحملات','✦'],['packages','الباقات الإعلانية','◈'],['landlords','مالكو الأسطح','▣'],['properties','العقارات والمساحات','▤'],['leases','عقود الإيجار','▧'],['campaign_payments','دفعات الحملات','◉'],['lease_installments','دفعات الإيجار','◉'],['reports','التقارير','▥'],['settings','الإعدادات','⚙']].map(([id,label,icon])=>'<button data-nav="'+id+'" class="'+(id===s.view?'active':'')+'">'+icon+' &nbsp;'+label+'</button>').join('')}
 function shell(content){return '<div class="shell"><aside class="sidebar"><div class="brand">رأفت <span style="color:#8fd6c8">SYS</span><small>الدعاية والإعلان والتجارة العامة</small></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>نظام إدارة شركة رأفت</small></div><div class="inline"><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. اربط Supabase قبل إدخال أي بيانات فعلية.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>'}
 const visibleTable=(k)=>s.data[k]||[];
@@ -144,7 +145,7 @@ function bind(){
  if($('#recordForm'))$('#recordForm').onsubmit=e=>{e.preventDefault();saveForm(e.target)};
  if($('#settingsForm'))$('#settingsForm').onsubmit=e=>{e.preventDefault();saveSettings(e.target)};
  if($('#recordForm')&&s.modal?.table==='leases'){
- let owner=$('[name=landlord_id]');if(owner)owner.onchange=()=>{s.modal.data.landlord_id=owner.value;s.modal.data.property_id='';captureForm($('#recordForm'));render()};
+ let owner=$('[name=landlord_id]');if(owner)owner.onchange=()=>{captureForm($('#recordForm'));s.modal.data.landlord_id=owner.value;s.modal.data.property_id='';render()};
  }
  if($('#recordForm')&&s.modal?.table==='campaigns'){
   let cust=$('[name=customer_id]');if(cust)cust.onchange=()=>{s.modal.data.customer_id=cust.value;render()};
