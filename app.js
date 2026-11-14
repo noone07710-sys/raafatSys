@@ -438,17 +438,19 @@ async function saveForm(form){
     o.card_image_path=path;
    }
   }
+  const wasNew=!v.id;
   const saved=await persist(k,o,v.id);
   if(k==='campaigns'){
    // The parent record is saved first to get its id; all site records point to that id.
    // Keep the existing record open on partial failure to prevent accidental duplicate creation.
    m.data.id=saved.id;
    await syncCampaignSites(saved.id,m.siteIds);
-   if(!v.id&&Number(v.initial_payment_amount)>0)await persist('campaign_payments',{
-    campaign_id:saved.id,paid_at:v.initial_payment_date||today(),amount:Number(v.initial_payment_amount)
-   });
+   if(wasNew&&Number(v.initial_payment_amount)>0&&!m.initialPaymentSaved){
+    await persist('campaign_payments',{campaign_id:saved.id,paid_at:v.initial_payment_date||today(),amount:Number(v.initial_payment_amount)});
+    m.initialPaymentSaved=true;
+   }
   }
-  if(k==='leases'&&!v.id){
+  if(k==='leases'&&wasNew){
    m.data.id=saved.id;
    try{await generateInstallments(saved)}
    catch(e){toast('تم إنشاء العقد لكن بعض الأقساط لم تُنشأ: '+e.message,true)}
