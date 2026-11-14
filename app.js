@@ -102,6 +102,26 @@ function siteMatchesPackage(site,packageId){
  return Boolean(site&&packageId&&sitePackageId(site)===packageId);
 }
 
+// For new or edited boards: category A-E supplies the prefix; user enters a number.
+function siteNumberFromCode(code){
+ const raw=String(code??'').trim()
+  .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-0x0660))
+  .replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-0x06f0));
+ const match=raw.match(/^(?:[A-E]\s*[-_.\/\s]?\s*)?(\d+)$/i);
+ return match?match[1].replace(/^0+(?=\d)/,''):'';
+}
+function siteCodeForPackage(number,packageId){
+ const prefix=String(lookup('packages',packageId)?.code||'').trim().toUpperCase();
+ const digits=siteNumberFromCode(number);
+ return /^[A-E]$/.test(prefix)&&/^[1-9]\d*$/.test(digits)?prefix+'-'+digits:'';
+}
+// Keep original booked IDs, look up their current codes and descriptions.
+function liveContractSite(snapshot){
+ if(!snapshot)return null;
+ const site=snapshot.id?lookup('ad_sites',snapshot.id):null;
+ return site?{...snapshot,...site}:snapshot;
+}
+
 const lookup=(table,id)=>s.data[table].find(x=>x.id===id);
 const nameOf=(table,id)=>lookup(table,id)?.name||lookup(table,id)?.title||'—';
 const convert=(v,from,to)=>from===to?Number(v):Number(v)*(from==='USD'?Number(s.settings.usd_iqd):1/Number(s.settings.usd_iqd));
@@ -969,8 +989,9 @@ function campaignContractData(campaign){
 }
 function contractCampaignDetails(contract){
  const cam=lookup('campaigns',contract.campaign_id);
- const sites=Array.isArray(contract.campaign_sites_snapshot)?contract.campaign_sites_snapshot:
+ const snapshots=Array.isArray(contract.campaign_sites_snapshot)?contract.campaign_sites_snapshot:
   cam?linkedSites(cam.id):[];
+ const sites=snapshots.map(liveContractSite).filter(Boolean);
  const qty=Number(contract.campaign_quantity_snapshot||cam?.quantity||0);
  const total=Math.max(qty,sites.length,0);
  const locations=contract.campaign_locations_snapshot??cam?.locations??'';
@@ -992,8 +1013,8 @@ function contractCampaignSummary(v){
  const siteList=sites.map(site=>'<div class="contract-campaign-site"><strong>'+E((site.code||'')+' — '+(site.name||''))+'</strong><small>'+E([site.governorate,site.address].filter(Boolean).join('، '))+'</small></div>').join('');
  return '<section class="contract-campaign-info full"><h3>تفاصيل الحملة المنقولة تلقائياً إلى العقد</h3>'+
   '<div class="contract-campaign-grid">'+
-  line('العميل',v.id?(v.customer_name_snapshot||customer?.name):(customer?.name||'—'))+
-  line('الباقة',v.id?(v.package_name_snapshot||pack?.name):(pack?.name||'—'))+
+  line('العميل',customer?.name||v.customer_name_snapshot||'—')+
+  line('الباقة',pack?.name||v.package_name_snapshot||'—')+
   line('عدد القطع المتفق عليها',total)+
   line('المواقع المعيّنة فعلياً',sites.length)+
   line('مدة الحملة',current.duration_months+' أشهر')+
@@ -1005,7 +1026,7 @@ function contractCampaignSummary(v){
   (siteList||'<p>لم تسجّل قطع محددة على الحملة.</p>')+
   (locations?'<div class="contract-campaign-extra">مواقع إضافية مسجلة: '+E(locations)+'</div>':'')+
   '</div>'+(warnings.length?'<div class="notice">'+warnings.map(E).join(' ')+'</div>':'')+
-  '<p class="subtle">هذه المعلومات تُسحب من الحملة ولا تُحرّر من العقد. التعديلات على الحملة لاحقاً لا تغيّر بيانات عقد محفوظ سابقاً.</p></section>';
+  '<p class="subtle">رموز وأسماء وعناوين القطع تُعرض بأحدث تعديل. الأسعار والتواريخ والشروط المسجلة لا تتغير تلقائياً.</p></section>';
 }
 
 function quoteCustomerContract(v){
@@ -1034,6 +1055,15 @@ function fieldHtml(f,v,all){
  let [id,label,type,required,opts]=f, val=v?.[id]??'',req=required?'required':'',k=s.modal?.table;
  if(k==='packages'&&v.pricing_mode==='sqm_month'&&['width_m','height_m','area_m2'].includes(id))return '';
  if(k==='customer_contracts'&&id==='rented_area_m2'&&lookup('packages',v.package_id)?.pricing_mode!=='sqm_month')return '';
+ if(k==='ad_sites'&&id==='code'){
+  const prefix=String(lookup('packages',v.package_id)?.code||'').trim().toUpperCase();
+  const number=siteNumberFromCode(val);
+  return '<label class="field site-code-field"><span>رقم القطعة * (حرف الفئة تلقائياً)</span>'+
+   '<span class="site-code-control"><b data-site-code-prefix>'+E(/^[A-E]$/.test(prefix)?prefix+'-':'اختر الفئة')+'</b>'+
+   '<input name="site_number" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="10" required placeholder="1" value="'+E(number)+'" aria-label="رقم القطعة فقط"></span>'+
+   '<input type="hidden" name="code" value="'+E(siteCodeForPackage(number,v.package_id))+'">'+
+   '<small class="subtle" data-site-code-example>'+(prefix&&number?'الرمز النهائي: '+E(prefix+'-'+number):'اختر الفئة ثم اكتب الرقم، مثلاً A-1')+'</small></label>';
+ }
  if(k==='customer_contracts'&&id==='duration_months'&&v.package_id){const pack=lookup('packages',v.package_id);return '<label class="field"><span>مدة عقد الزبون</span><select name="duration_months" required>'+packageMonths(pack).map(m=>'<option value="'+m+'" '+(Number(val)===m?'selected':'')+'>'+m+' '+(m===1?'شهر':'أشهر')+'</option>').join('')+'</select></label>';}
  if(k==='campaigns'&&id==='quantity'&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month')return '';
  if(k==='campaigns'&&id==='requested_area_m2')return ''; // E takes the area directly from selected registered rooftops.
@@ -1147,6 +1177,23 @@ function updateAreaOutputs(form){
   const target=row.querySelector('[data-roof-area]');
   if(target)target.textContent=fmt(w*h)+' م²';
  });
+}
+
+function updateSiteCodeInput(form){
+ const number=form?.elements.namedItem('site_number'),code=form?.elements.namedItem('code');
+ if(!number||!code)return;
+ const digits=String(number.value||'')
+  .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-0x0660))
+  .replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-0x06f0))
+  .replace(/[^0-9]/g,'').replace(/^0+(?=\d)/,'');
+ number.value=digits;
+ const packageId=form.elements.namedItem('package_id')?.value;
+ const prefix=String(lookup('packages',packageId)?.code||'').trim().toUpperCase();
+ code.value=siteCodeForPackage(digits,packageId);
+ const label=form.querySelector('[data-site-code-prefix]');
+ if(label)label.textContent=/^[A-E]$/.test(prefix)?prefix+'-':'اختر الفئة';
+ const hint=form.querySelector('[data-site-code-example]');
+ if(hint)hint.textContent=code.value?'الرمز النهائي: '+code.value:'اختر الفئة واكتب رقم القطعة، مثلاً A-1';
 }
 
 function leasePlanSummary(v){
@@ -1344,12 +1391,12 @@ function customerContractPdfPayload(v){
   site?[{id:site.id,code:site.code,name:site.name,address:site.address,governorate:site.governorate}]:[];
  return {
   number:numberedContract(v.contract_number),
-  customerName:v.customer_name_snapshot||customer?.name||'—',
+  customerName:customer?.name||v.customer_name_snapshot||'—',
   customerPhone:customer?.phone||'—',
   companyRepresentative:v.company_representative||'—',
   customerRepresentative:v.customer_representative||'—',
-  campaignTitle:v.campaign_title_snapshot||campaign?.title||'—',
-  packageName:v.package_name_snapshot||pkg?.name||'—',
+  campaignTitle:campaign?.title||v.campaign_title_snapshot||'—',
+  packageName:pkg?.name||v.package_name_snapshot||'—',
   dimensions:dimension,
   area:effectiveArea,
   quantity:details.total||1,
@@ -1399,7 +1446,7 @@ function customerContractPreview(v){
  const selectedLocations=sites.map(x=>(x.code||'')+' — '+(x.name||'')).join('، ');
  const siteCards=sites.map(x=>'<div class="contract-preview-board"><b>'+E((x.code||'')+' — '+(x.name||''))+'</b><small>'+E([x.governorate,x.address].filter(Boolean).join('، ')||'—')+'</small></div>').join('');
  const record=(label,value)=>'<div><small>'+E(label)+'</small><strong>'+E(value??'—')+'</strong></div>';
- return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(numberedContract(v.contract_number))+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',v.customer_name_snapshot||customer?.name||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('اسم الباقة',v.package_name_snapshot||pkg?.name||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||v.site_name_snapshot||site?.name||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button type="button" class="btn" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',17)+' تحميل عقد PDF بتصميم رأفت</button><button type="button" class="btn secondary" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة القالب الأصلي</button><button type="button" class="btn secondary" data-action="close">إغلاق</button></div><p class="subtle contract-pdf-source-note noprint">المحتوى المعروض أعلاه للمراجعة فقط؛ زر التحميل يُولّد ملف PDF من القالب الأصلي الذي رفعته الشركة، وليس من تنسيق هذه المعاينة.</p></div></div>';
+ return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><strong>'+E(numberedContract(v.contract_number))+'</strong><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',customer?.name||v.customer_name_snapshot||'—')+record('رقم هاتف الزبون',customer?.phone||'—')+record('اسم الباقة',pkg?.name||v.package_name_snapshot||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||site?.name||v.site_name_snapshot||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('ممثل الشركة',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط المتفق عليها</h3><p class="legal-text">'+E(v.terms||'لم تسجّل شروط إضافية')+'</p><h3>ملاحظات</h3><p class="legal-text">'+E(v.notes||'—')+'</p><div class="contract-sign"><div>توقيع ممثل الشركة<br>____________________</div><div>توقيع الزبون أو ممثله<br>____________________</div></div><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button type="button" class="btn" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',17)+' تحميل عقد PDF بتصميم رأفت</button><button type="button" class="btn secondary" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة القالب الأصلي</button><button type="button" class="btn secondary" data-action="close">إغلاق</button></div><p class="subtle contract-pdf-source-note noprint">المحتوى المعروض أعلاه للمراجعة فقط؛ زر التحميل يُولّد ملف PDF من القالب الأصلي الذي رفعته الشركة، وليس من تنسيق هذه المعاينة.</p></div></div>';
 }
 
 function previewHtml(v){
@@ -1541,6 +1588,13 @@ function bind(){
   if(el)el.addEventListener('input',()=>updateAreaOutputs(form));
  }
  updateAreaOutputs(form);
+ if(k==='ad_sites'){
+  const number=form.elements.namedItem('site_number');
+  if(number)number.addEventListener('input',()=>updateSiteCodeInput(form));
+  const category=form.elements.namedItem('package_id');
+  if(category)category.onchange=()=>{captureForm(form);v.package_id=category.value;updateSiteCodeInput(form)};
+  updateSiteCodeInput(form);
+ }
  document.querySelectorAll('[data-site-id]').forEach(x=>x.onchange=()=>{
   captureForm(form);
   s.modal.siteIds=[...document.querySelectorAll('[data-site-id]:checked')].map(a=>a.dataset.siteId);
@@ -1789,6 +1843,7 @@ function formValidate(k,v){
   if(!classified)throw Error('حدد باقة الموقع الإعلاني A أو B أو C أو D أو E');
   const prefix=codedSitePackage(v.code);
   if(prefix&&String(classified.code||'').trim().toUpperCase()!==prefix)throw Error('رمز القطعة '+v.code+' لا يطابق الباقة '+classified.code+' المحددة');
+  if(!siteCodeForPackage(v.code,v.package_id))throw Error('اكتب رقم القطعة بالأرقام فقط، مثلاً 1 ليصبح A-1');
   if(v.id&&s.data.campaign_sites.some(link=>link.site_id===v.id&&lookup('campaigns',link.campaign_id)?.package_id&&lookup('campaigns',link.campaign_id).package_id!==v.package_id))
    throw Error('القطعة مرتبطة بحملة من باقة أخرى. غيّر مواقع تلك الحملة قبل تعديل باقة القطعة.');
  }
@@ -1948,6 +2003,13 @@ async function saveForm(form){
  }
  try{
   const normalized={...v};
+  if(k==='ad_sites'){
+   normalized.code=siteCodeForPackage(v.code,v.package_id);
+   if(!normalized.code)throw Error('اختَر فئة A–E واكتب رقم القطعة فقط، مثلاً A-1');
+   const already=s.data.ad_sites.find(site=>site.id!==v.id&&
+    siteCodeForPackage(site.code,sitePackageId(site))===normalized.code);
+   if(already)throw Error('رمز القطعة '+normalized.code+' موجود مسبقاً. اختر رقماً آخر.');
+  }
   if(k==='leases')normalized.advance_amount=v.advance_amount===''||v.advance_amount==null?0:Number(v.advance_amount);
   if(k==='campaigns'){
    const pkg=lookup('packages',v.package_id);
