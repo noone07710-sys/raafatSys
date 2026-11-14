@@ -64,7 +64,7 @@ test('customer deletion requires admin role and an explicit irreversible confirm
  app.openCustomerDelete('a');
  assert.equal(app.s.modal.kind,'deleteCustomer');
  assert.match(root.innerHTML,/حذف الزبون وجميع سجلاته/);
- assert.match(root.innerHTML,/disabled>حذف الزبون وكل سجلاته نهائياً/);
+ assert.match(root.innerHTML,/id="deleteCustomerSubmit" disabled/);
  assert.match(root.innerHTML,/لا يمكن التراجع عنها/);
 
  // A cancelled/mistyped attempt cannot erase any data.
@@ -117,7 +117,7 @@ test('Iraq governorate dropdown lists all 19 provinces and preserves legacy save
  const field=app.governorateField('governorate','المحافظة','صلاح الدين',true);
  assert.match(field,/<select name="governorate" required>/);
  assert.match(field,/value="صلاح الدين" selected/);
- assert.equal((field.match(/<option value="[^"]+"/g)||[]).length,20,'19 choices and placeholder');
+ assert.equal((field.match(/<option value="/g)||[]).length,20,'19 choices and placeholder');
  assert.match(app.governorateField('governorate','المحافظة','اسم قديم',true),/القيمة المحفوظة سابقاً: اسم قديم/);
  app.s.modal={kind:'edit',table:'landlords',data:{}};
  assert.match(app.fieldHtml(['governorate','المحافظة','text',true],{governorate:'كركوك'},{governorate:'كركوك'}),/<select name="governorate"/);
