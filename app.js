@@ -34,7 +34,7 @@ const defs={
  properties:{title:'عقارات ومساحات الأسطح',icon:'▤',fields:[['landlord_id','صاحب العقار','lookup:landlords',true],['title','اسم السطح / العقار','text',true],['width_m','عرض السطح بالمتر','number',true],['height_m','طول السطح بالمتر','number',true],['area_m2','إجمالي مساحة السطح م²','computed'],['quantity','العدد','number',true],['notes','الملاحظات','textarea']]},
  leases:{title:'عقود مالكي البنايات — الأسطح',icon:'▧',fields:[['landlord_id','اسم المالك','lookup:landlords',true],['property_id','عقار المالك','lookup:properties',true],['rent_total','إجمالي الإيجار المتفق عليه','number',true],['advance_amount','المبلغ المقدم عند التعاقد','number'],['currency','عملة العقد','select',true,['IQD','USD']],['start_date','تاريخ البداية','date',true],['end_date','تاريخ النهاية','date',true],['grace_days','فترة السماح بالأيام','number',true],['payment_frequency','دورية الدفع','select',true,['annual','semiannual']],['company_representative','ممثل الشركة','text'],['landlord_representative','ممثل المالك','text'],['notes','الملاحظات','textarea']]},
  ad_sites:{title:'المواقع الإعلانية',icon:'⌖',fields:[['package_id','الباقة / نوع الإعلان A–E','lookup:packages',true],['code','رمز الموقع','text',true],['name','اسم الموقع','text',true],['site_type','نوع الموقع','select',true,['roadside','rooftop','building','other']],['governorate','المحافظة','text',true],['address','الموقع والعنوان','text',true],['rooftop_property_id','العقار المرتبط (إذا كان سطحاً)','lookup:properties'],['active','حالة الموقع','select',true,['true','false']],['notes','الملاحظات','textarea']]},
- campaigns:{title:'المشاريع والحملات',icon:'✦',fields:[['customer_id','العميل','lookup:customers',true],['title','اسم الحملة','text',true],['package_id','نوع الإعلان / الباقة (A–E)','lookup:packages',true],['months','عدد الأشهر','number',true],['start_date','تاريخ بدء الحملة','date',true],['quantity','عدد القطع','number',true],['requested_area_m2','مساحة الإعلان بالمتر المربع (لباقة E)','number'],['locations','المواقع الإعلانية (أسماء أو رموز المواقع)','textarea'],['price','السعر الإجمالي','number',true],['currency','العملة','select',true,['IQD','USD']],['notes','الملاحظات','textarea']]},
+ campaigns:{title:'المشاريع والحملات',icon:'✦',fields:[['customer_id','العميل','lookup:customers',true],['title','اسم الحملة','text',true],['package_id','نوع الإعلان / الباقة (A–E)','lookup:packages',true],['months','عدد الأشهر','number',true],['start_date','تاريخ بدء الحملة','date',true],['quantity','عدد القطع','number',true],['requested_area_m2','مساحة الإعلان بالمتر المربع (لباقة E)','number'],['locations','المواقع الإعلانية (أسماء أو رموز المواقع)','textarea'],['price','السعر الإجمالي','number',true],['currency','العملة','select',true,['IQD','USD']],['next_payment_due_date','موعد الدفعة القادمة للزبون (اختياري)','date'],['notes','الملاحظات','textarea']]},
  lease_installments:{title:'دفعات عقود الإيجار',icon:'◉',fields:[]},
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
@@ -64,7 +64,7 @@ function companyLogoHtml(kind='sidebar'){
  '<span class="company-logo-fallback" aria-hidden="true">'+E(String(companyValue('company_short_name')).trim().slice(0,1)||'ر')+'</span>';
 }
 
-const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',expenseCategory:'',editing:null,modal:null,formStep:0,error:'',loading:false};
+const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',expenseCategory:'',alertFilter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 
 // Demo data matches the official price matrix; real staff load rows from Supabase.
 const OFFICIAL_PACKAGES=[
@@ -1226,7 +1226,7 @@ function modalHtml(){
    '<div class="actions"><button class="btn" type="submit">'+uiIcon('save',16)+(v.id?' حفظ التعديلات':' حفظ المصروف')+'</button></div></form></div></div>';
  }
  if(k==='campaigns'){
-  const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity']],['الأسعار والأشهر',['months','price','currency']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
+  const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity']],['الأسعار والأشهر',['months','price','currency','next_payment_due_date']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
   const stepFields=s.formStep<4?fields.filter(x=>steps[s.formStep][1].includes(x[0])).map(f=>fieldHtml(f,v,v)).join('')+(s.formStep===2?packagePricingInfo(v):''):review(v);
   const client=lookup('customers',v.customer_id);
   const extra=s.formStep===0&&client?'<div class="notice full"><b>بيانات العميل:</b> '+E(client.name)+' · '+E(client.phone)+' · '+E(client.rental_address)+' · '+E(labels[client.status]||client.status)+'</div>':
@@ -1865,6 +1865,7 @@ function formValidate(k,v){
   if(s.modal.siteIds?.some(id=>!lookup('ad_sites',id)))throw Error('أحد المواقع المختارة غير مسجل');
   if(s.modal.siteIds?.some(id=>!siteMatchesPackage(lookup('ad_sites',id),v.package_id)))throw Error('بعض القطع المختارة لا تتبع الباقة '+pkg.code+'، اختر قطعاً من نفس الباقة فقط');
   if(!(Number(v.months)>0)||Number(v.price)<0)throw Error('أدخل عدد أشهر وسعراً صحيحين');
+  if(v.next_payment_due_date&&(!/^\d{4}-\d{2}-\d{2}$/.test(String(v.next_payment_due_date))||v.next_payment_due_date<v.start_date))throw Error('موعد الدفعة القادمة لازم يكون بتاريخ صحيح بعد بداية الحملة');
   if(Number(v.initial_payment_amount||0)>Number(v.price))throw Error('الدفعة الأولى أكبر من سعر الحملة');
   if(v.id&&Number(v.price)<campaignPaid(v.id))throw Error('سعر الحملة أقل من الدفعات المسددة سابقاً');
   const old=lookup('campaigns',v.id);
@@ -1906,7 +1907,7 @@ function clean(k,v){
    (['campaign_payments','lease_installments'].includes(k)&&['amount','paid_amount'].includes(f));
   if(numericField&&(val===''||val===null))val=null;
   if(numericField&&val!==null&&(!Number.isFinite(Number(val))))throw Error('قيمة رقمية غير صالحة في '+f);
-  if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','company_representative','landlord_representative','locations'].includes(f))val=null;
+  if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','next_payment_due_date','company_representative','landlord_representative','locations'].includes(f))val=null;
   if(f==='active')val=(val===true||val==='true');
   o[f]=val;
  }});
