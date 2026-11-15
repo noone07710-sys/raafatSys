@@ -416,6 +416,93 @@ function bindNav(){
 function shell(content){
  return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
 }
+// Alerts are derived from live balances and contracts; they do not mutate records.
+function alertsLocalDate(){
+ const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Baghdad',
+  year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+ return parts.year+'-'+parts.month+'-'+parts.day;
+}
+function alertDayDistance(date,reference=alertsLocalDate()){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date||'')))return null;
+ const a=Date.parse(date+'T00:00:00Z'),b=Date.parse(reference+'T00:00:00Z');
+ return Number.isFinite(a)&&Number.isFinite(b)?Math.round((a-b)/86400000):null;
+}
+function alertsList(reference=alertsLocalDate()){
+ const result=[];
+ function add(row){
+  const days=alertDayDistance(row.date,reference);
+  if(days===null||days>30)return;
+  if(row.kind==='expiry'&&days< -30)return;
+  result.push({...row,days});
+ }
+ for(const installment of s.data.lease_installments){
+  const lease=lookup('leases',installment.lease_id),owner=lookup('landlords',lease?.landlord_id);
+  const balance=roundAmount(Number(installment.amount||0)-Number(installment.paid_amount||0));
+  if(!lease||!owner||balance<=0)continue;
+  add({key:'lease-payment:'+installment.id,kind:'payment',party:'landlord',table:'lease_installments',id:installment.id,
+   date:installment.due_date,name:owner.name,phone:owner.phone,subject:nameOf('properties',lease.property_id),
+   contractNumber:numberedContract(lease.contract_number),title:'دفعة إيجار سطح',
+   description:'دفعة للشركة لصالح مالك السطح',amount:balance,currency:lease.currency});
+ }
+ for(const campaign of s.data.campaigns){
+  const customer=lookup('customers',campaign.customer_id),balance=campaignBalance(campaign);
+  if(!customer||balance<=0||!campaign.next_payment_due_date)continue;
+  add({key:'customer-payment:'+campaign.id,kind:'payment',party:'customer',table:'campaigns',id:campaign.id,
+   date:campaign.next_payment_due_date,name:customer.name,phone:customer.phone,subject:campaign.title,
+   title:'دفعة زبون مستحقة',description:'الرصيد المتبقي على الحملة',amount:balance,currency:campaign.currency});
+ }
+ for(const lease of s.data.leases){
+  if(s.data.leases.some(next=>next.renewed_from===lease.id))continue;
+  const owner=lookup('landlords',lease.landlord_id);
+  if(!owner)continue;
+  add({key:'lease-expiry:'+lease.id,kind:'expiry',party:'landlord',table:'leases',id:lease.id,
+   date:lease.end_date,name:owner.name,phone:owner.phone,subject:nameOf('properties',lease.property_id),
+   contractNumber:numberedContract(lease.contract_number),title:'انتهاء عقد إيجار سطح',
+   description:'التنسيق حول تجديد عقد المالك'});
+ }
+ for(const contract of s.data.customer_contracts){
+  const customer=lookup('customers',contract.customer_id);
+  if(!customer)continue;
+  add({key:'customer-expiry:'+contract.id,kind:'expiry',party:'customer',table:'customer_contracts',id:contract.id,
+   date:contract.end_date,name:customer.name,phone:customer.phone,
+   subject:lookup('campaigns',contract.campaign_id)?.title||contract.campaign_title_snapshot||'إعلان',
+   contractNumber:numberedContract(contract.contract_number),title:'انتهاء عقد زبون',
+   description:'التنسيق بخصوص تجديد الإعلان'});
+ }
+ return result.sort((a,b)=>a.days-b.days||a.key.localeCompare(b.key));
+}
+function alertWhen(item){
+ return item.days===0?'اليوم':item.days<0?
+  (item.kind==='expiry'?'منتهي منذ ':'متأخر ')+Math.abs(item.days)+' يوم':
+  'بعد '+item.days+' '+(item.days===1?'يوم':'أيام');
+}
+function whatsappIraqNumber(phone){
+ let digits=String(phone||'').replace(/\D/g,'');
+ if(digits.startsWith('00964'))digits=digits.slice(2);
+ if(/^07\d{9}$/.test(digits))digits='964'+digits.slice(1);
+ else if(/^7\d{9}$/.test(digits))digits='964'+digits;
+ return /^9647\d{9}$/.test(digits)?digits:'';
+}
+function reminderText(item){
+ const intro='السلام عليكم '+item.name+'،\nتحية طيبة من شركة رأفت للدعاية والإعلان والتجارة العامة.\n';
+ const contract=item.contractNumber?' رقم '+item.contractNumber:'';
+ if(item.key.startsWith('customer-payment:'))return intro+
+  'نود تذكيركم بموعد الدفعة القادمة لحملة «'+item.subject+'» بتاريخ '+item.date+
+  '. الرصيد المتبقي على الحملة '+money(item.amount,item.currency)+
+  '. نرجو التنسيق معنا بشأن الدفعة، ولكم جزيل الشكر.';
+ if(item.key.startsWith('lease-payment:'))return intro+
+  'نود التنسيق معكم بشأن دفعة إيجار السطح «'+item.subject+'» للعقد'+contract+
+  ' بتاريخ '+item.date+'، والمبلغ المتبقي من هذه الدفعة '+money(item.amount,item.currency)+
+  '. يرجى التواصل معنا لتأكيد إجراءات التسديد، مع الشكر.';
+ if(item.party==='landlord')return intro+
+  'نود إعلامكم بأن عقد استئجار السطح «'+item.subject+'»'+contract+
+  (item.days<0?' انتهى بتاريخ ':' ينتهي بتاريخ ')+item.date+
+  '. يرجى التنسيق معنا بخصوص التجديد، مع فائق الاحترام.';
+ return intro+'نود تذكيركم بأن عقدكم الإعلاني'+contract+' الخاص بـ«'+item.subject+'»'+
+  (item.days<0?' انتهى بتاريخ ':' سينتهي بتاريخ ')+item.date+
+  '. يسعدنا التنسيق معكم بخصوص تجديد العقد واستمرار الإعلان، شكراً لثقتكم.';
+}
+
 const EXPENSE_CATEGORY_LABELS={hospitality:'ضيافة ومشروبات',office:'قرطاسية ومكتبية',transport:'نقل ووقود',maintenance:'صيانة',supplies:'مستلزمات',utilities:'خدمات وفواتير',other:'أخرى'};
 const visibleTable=(k)=>s.data[k]||[];
 function dashboard(){
