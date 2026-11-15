@@ -575,3 +575,13 @@
  .reminder-modal .actions .btn{flex:1}
  .reminder-recipient{flex-wrap:wrap}
 }
+
+
+/* On compact phones keep the alert bell beside the title, not within a crowded control row. */
+@media(max-width:650px){
+ .top{position:relative}
+ .top .inline .reminder-bell{position:absolute;top:13px;left:15px;z-index:1}
+ .top>div:first-child{padding-left:46px}
+ .top>.inline{gap:8px;justify-content:flex-start}
+ .top .currency-switch{margin-inline-end:4px}
+}
