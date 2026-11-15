@@ -807,10 +807,10 @@ const TABLE_ACCESS={
 };
 function canAccess(module,action='read'){
  if(s.demo||s.staff?.role==='admin')return true;
- if(!s.staff?.active)return false;
+ if(!s.staff||s.staff.active===false)return false;
  const perms=s.staff.permissions||[];
  if(s.staff.role==='custom_admin')return perms.includes(module+'.'+action)||
-  action==='read'&&perms.includes(module+'.edit');
+  ['read','create'].includes(action)&&perms.includes(module+'.edit');
  if(s.staff.role==='staff'){
   if(action==='read')return !['employees','payroll','activity_logs'].includes(module);
   if(action==='create')return !['employees','payroll','activity_logs','settings'].includes(module);
