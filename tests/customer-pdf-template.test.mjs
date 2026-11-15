@@ -194,7 +194,7 @@ test('live saved-contract data drives PDF fields without replacing original comp
  assert.equal(payload.terms,'شرط خاص محفوظ');
  assert.equal(payload.additionalLocations,'موقع إضافي داخل تكريت');
  assert.ok(!Object.hasOwn(payload,'companyLogo'),'settings branding must never replace original PDF artwork');
- assert.match(app.customerContractPreview(contract),/data-pdf-mode="download"/);
+ assert.match(app.customerContractPreview(contract),/data-edit="customer_contracts:/);
  assert.match(app.customerContractPreview(contract),/data-pdf-mode="preview"/);
  assert.doesNotMatch(app.customerContractPreview(contract),/الرقم الوطني|رقم البطاقة الموحدة/,'the HTML contract preview must never display an ID number');
  assert.doesNotMatch(app.customerContractPreview(contract),/data-action="print"/);
