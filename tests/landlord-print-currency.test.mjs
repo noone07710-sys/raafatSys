@@ -79,7 +79,7 @@ test('switching lease PDF draft USD to IQD converts rent, upfront payment, insta
  assert.equal(d.advanceAmount,167000);
  assert.equal(d.remainingAfterAdvance,668000);
  assert.equal(d.installments[0].amount,668000);
- assert.match(d.clauses[0].text,/835,000 دينار عراقي/);
+ assert.match(d.clauses[0].text,/835,000 د\.ع — ثمانمئة وخمسة وثلاثون ألف دينار عراقي لا غير/);
  assert.doesNotMatch(d.clauses[0].text,/500 \$/);
  const html=app.landlordPdfEditorHtml();
  assert.match(html,/سعر الصرف المعتمد/);
@@ -98,7 +98,7 @@ test('operator can enter one million Iraqi dinars as the exact print amount, upd
  const result=app.s.modal.printDraft;
  assert.equal(result.rentTotal,1000000);
  assert.equal(result.remainingAfterAdvance,833000);
- assert.match(result.clauses[0].text,/1,000,000 دينار عراقي/);
+ assert.match(result.clauses[0].text,/1,000,000 د\.ع — مليون دينار عراقي لا غير/);
  assert.match(result.clauses[0].text,/مليون دينار عراقي/);
  assert.doesNotMatch(result.clauses[0].text,/\$/);
  // A manually revised clause is respected even after later amount edits.
