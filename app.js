@@ -379,6 +379,16 @@ function toast(text,bad=false){
   stack.setAttribute?.('aria-live',bad?'assertive':'polite');
   document.body.append(stack);
  }
+ // Headless test environments and older embedded webviews might implement
+ // append() on body but not on generated nodes. Keep notifications functional.
+ if(typeof stack?.append!=='function'){
+  const fallback=document.createElement('div');
+  fallback.className=bad?'error toast':'notice toast';
+  fallback.textContent=text;
+  document.body.append(fallback);
+  setTimeout(()=>fallback.remove?.(),bad?7000:4800);
+  return;
+ }
  const x=document.createElement('div');
  x.className='raafat-toast'+(bad?' is-error':' is-success');
  x.setAttribute?.('role',bad?'alert':'status');
