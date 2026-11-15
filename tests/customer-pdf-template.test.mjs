@@ -92,7 +92,7 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد كالتالي')),'terms have their own sheet title');
  assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول المؤجر')),'signature left party caption is included');
  assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول')));
- assert.ok(calls.canvasTexts.some(x=>x.includes('الشروط')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('توقيع')));
  assert.ok(!calls.canvasTexts.some(x=>x.includes('صفحة 2')),'no second page is permitted');
  assert.ok(!calls.canvasTexts.some(x=>x.includes('123456789012')),'identity-card values must never be written anywhere on a PDF page');
