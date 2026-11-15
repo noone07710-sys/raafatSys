@@ -102,7 +102,7 @@ test('saving a new lease with manual plan commits the selected dates into real i
  assert.match(html,/2027-03-15/);
  assert.match(html,/مراجعة العقد|مراجعة العقد وإضافة بنود/);
  assert.match(app.listing('leases'),/data-landlord-pdf=/);
- assert.match(app.previewHtml(app.s.data.leases[0]),/مراجعة عقد السطح/);
+ assert.match(app.previewHtml(app.s.data.leases[0]),/مراجعة البنود وتجهيز PDF/);
  app.openLandlordPdfEditor(id);
  const editor=app.landlordPdfEditorHtml();
  assert.match(editor,/data-print-clause-add/);
