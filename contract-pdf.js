@@ -117,15 +117,17 @@
    print(sheet.ctx,'صفحة '+sheet.pageNumber,AREA.left+7,safeBottom+11,8.3,500,COLOR.muted,'left');
   }
   function begin(){
-   if(page)return; // A contract always uses a single A4 sheet.
+   if(page)return; // This painter owns one template-backed contract page.
    page=makePage();
    page.y=AREA.top;
    const {ctx}=page;
    const onFirst=page.pageNumber===1;
    print(ctx,payload.kind==='landlord'?'عقد استئجار سطح إعلاني':onFirst?'عقد حجز مساحات إعلانية':'تابع عقد حجز المساحات الإعلانية',
     AREA.right,page.y+15,onFirst?17:15,800,COLOR.navy);
-   print(ctx,label(payload.number),AREA.left+10,page.y+15,11,800,COLOR.navy,'left');
-   print(ctx,'رقم العقد',AREA.left+10,page.y-1,9,600,COLOR.muted,'left');
+   if(payload.kind==='landlord'){
+    print(ctx,label(payload.number),AREA.left+10,page.y+15,11,800,COLOR.navy,'left');
+    print(ctx,'رقم العقد',AREA.left+10,page.y-1,9,600,COLOR.muted,'left');
+   }
    rule(ctx,page.y+25);
    page.y+=43;
   }
@@ -219,6 +221,42 @@
    for(const line of addressLines){print(ctx,line,AREA.right-91,pos,9.6,500,COLOR.muted);pos+=11}
    page.y+=height+4;
   }
+
+  function compactSites(sites){
+   const items=Array.isArray(sites)?sites:[];
+   if(!items.length){block('المواقع الإعلانية','لا توجد قطع محددة بالرموز ضمن سجل العقد.');return}
+   const gap=7,cellWidth=(w-gap)/2,large=items.length>14,medium=items.length>7;
+   const nameSize=large?8.0:medium?8.5:9.2;
+   const addressSize=large?7.0:medium?7.5:8.0;
+   const lineGap=large?9.1:10.1,addrGap=large?7.9:8.8;
+   const prepared=items.map((item,i)=>{
+    const name=label(item.name,'موقع إعلاني');
+    const code=label(item.code,'—');
+    const address=[item.governorate,item.address].filter(Boolean).join('، ');
+    const titleLines=measureLines(page.ctx,name,cellWidth-59,nameSize,700);
+    const addressLines=address?measureLines(page.ctx,address,cellWidth-18,addressSize,500):[];
+    const height=Math.max(29,7+titleLines.length*lineGap+addressLines.length*addrGap+4);
+    return {code,titleLines,addressLines,height,i};
+   });
+   for(let i=0;i<prepared.length;i+=2){
+    const row=prepared.slice(i,i+2);
+    const height=Math.max(...row.map(item=>item.height));
+    keep(height+4);
+    const y=page.y,ctx=page.ctx;
+    row.forEach((item,index)=>{
+     const x=index===0?AREA.right-cellWidth:AREA.left;
+     rect(ctx,x,y,cellWidth,height,item.i%4===0||item.i%4===1?COLOR.subtle:COLOR.subtleAlt);
+     rect(ctx,x+cellWidth-45,y+6,38,15,COLOR.navy);
+     print(ctx,item.code,x+cellWidth-26,y+16,7.9,800,COLOR.white,'center');
+     let next=y+13;
+     for(const line of item.titleLines){print(ctx,line,x+cellWidth-52,next,nameSize,700,COLOR.ink);next+=lineGap}
+     next+=1;
+     for(const line of item.addressLines){print(ctx,line,x+cellWidth-9,next,addressSize,500,COLOR.muted);next+=addrGap}
+    });
+    page.y+=height+4;
+   }
+  }
+
   function signature(){
    keep(74);
    page.y+=8;rule(page.ctx,page.y);page.y+=13;
@@ -237,7 +275,74 @@
    if(!page)begin();
    // A4 is a single signed page; no page numbering is necessary.
   }
-  return {begin,section,fields,field,block,site,signature,end,get current(){return page}};
+  return {begin,section,fields,field,block,site,compactSites,signature,end,get current(){return page}};
+ }
+
+
+ const DEFAULT_CUSTOMER_CLAUSES=Object.freeze([
+  {number:'1',text:'تتعهد شركتنا بحماية إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'},
+  {number:'2',text:'تتعهد شركتنا بتوفير إنارة الكابينة وإدامتها وحسب الحاجة.'},
+  {number:'4',text:'في حالة تلف إعلان المشترك من قبل العناصر المجهولة تتعهد الشركة بإعادة تصميم وطبع إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'},
+  {number:'5',text:'تتعهد الشركة بترويج إعلان المشترك على مشروع الشاشات العملاقة ولمدة 30 يوم وبسعر 25$ فقط من تاريخ التشغيل التابع لنا.'},
+  {number:'6',text:'تتعهد الشركة بترويج إعلان المشترك على مواقع التواصل الاجتماعي التابعة لنا.'},
+  {number:'7',text:'يتعهد المشترك بدفع جميع أجور الإعلان الخاصة به.'},
+  {number:'8',text:'ترفع جميع الإعلانات التجارية في وقت الانتخابات المحددة ويتم إعادتها من قبلنا بعد انتهاء فترة الانتخابات.'},
+  {number:'9',text:'يتعهد المشترك بتصميم وتبديل الإعلان الخاص به كل ستة أشهر ويكون مع الشركة حصراً.'},
+  {number:'10',text:'حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.'}
+ ]);
+ function drawTermsSheet(sheet,payload){
+  const ctx=sheet.ctx,width=AREA.right-AREA.left;
+  const print=(value,x,y,size=10,weight=600,color=COLOR.ink,align='right')=>{
+   setFont(ctx,size,weight);ctx.textAlign=align;ctx.fillStyle=color;
+   ctx.fillText(String(value??''),x,y);ctx.textAlign='right';
+  };
+  const clauses=Array.isArray(payload.clauses)?payload.clauses:DEFAULT_CUSTOMER_CLAUSES;
+  let y=AREA.top+10;
+  print('شروط العقد كالتالي:',AREA.right-12,y+22,17.5,800,'#b8323b');
+  y+=47;
+  const clauseSize=clauses.length>10?10.3:11.2,leading=clauseSize+4.8;
+  for(const clause of clauses){
+   const number=String(clause.number??'');
+   const lines=measureLines(ctx,String(clause.text||''),width-49,clauseSize,650);
+   const height=Math.max(24,lines.length*leading+6);
+   print(number+'.',AREA.right-8,y+clauseSize+2,11.6,800,'#bd3941');
+   lines.forEach((line,i)=>print(line,AREA.right-37,y+clauseSize+2+i*leading,clauseSize,650));
+   y+=height+3;
+  }
+  const sections=[
+   ['شروط خاصة',payload.extraTerms||payload.terms],
+   ['مواصفات الإعلان',payload.specifications],
+   ['ملاحظات الحملة',payload.campaignNotes],
+   ['ملاحظات العقد',payload.notes]
+  ];
+  for(const [heading,value] of sections){
+   if(!String(value||'').trim())continue;
+   y+=7;
+   print(heading,AREA.right-12,y+10,10.6,800,COLOR.navy);y+=17;
+   const lines=measureLines(ctx,value,width-28,9.4,500);
+   for(const line of lines){print(line,AREA.right-16,y+9,9.4,500,COLOR.ink);y+=12}
+  }
+  // The signature table is on the terms page, never on the first contract.
+  const signatureTop=Math.max(AREA.top+493,y+20);
+  const middle=(AREA.left+AREA.right)/2,half=width/2;
+  ctx.strokeStyle=COLOR.line;ctx.lineWidth=.8;
+  ctx.beginPath();ctx.moveTo(AREA.left,signatureTop-10);ctx.lineTo(AREA.right,signatureTop-10);ctx.stroke();
+  const left=AREA.left+half-17,right=AREA.right-10;
+  const blocks=[
+   {x:left,label:label(payload.firstSignatureLabel,'الطرف الأول المؤجر'),
+    name:label(payload.firstSignatureName,payload.customerRepresentative||payload.customerName),
+    date:label(payload.firstSignatureDate,payload.startDate)},
+   {x:right,label:label(payload.secondSignatureLabel,'الطرف الثاني — ممثل الشركة'),
+    name:label(payload.secondSignatureName,payload.companyRepresentative),
+    date:label(payload.secondSignatureDate,payload.startDate)}
+  ];
+  for(const item of blocks){
+   print(item.label,item.x,signatureTop+10,10.8,800,COLOR.navy);
+   print('الاسم: '+item.name,item.x,signatureTop+33,9.8,600,COLOR.ink);
+   print('التاريخ: '+item.date,item.x,signatureTop+54,9.8,600,COLOR.ink);
+   print('التوقيع: ___________________',item.x,signatureTop+77,9.5,600,COLOR.muted);
+  }
+  return signatureTop+90;
  }
 
  async function generate(payload){
@@ -252,8 +357,8 @@
   out.setTitle('عقد رأفت '+payload.number);
   out.setSubject(payload.kind==='landlord'?'عقد إيجار سطح — '+label(payload.landlordName):'عقد إعلان — '+label(payload.customerName));
   out.setCreator('Raafat Sys');
-  // Measure the entire agreement first. Never create a second A4 page.
-  // A small reduction of vertical gaps keeps common contracts comfortably legible.
+  // The original company template remains the background of both customer pages;
+  // landlord contracts keep their historical single-page layout.
   function renderContent(painter){
    painter.begin();
    if(payload.kind==='landlord'){
@@ -313,20 +418,24 @@
    }
    painter.section('أطراف العقد وبيانات التواصل');
    painter.fields([
-    {name:'الطرف الأول',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
+    {name:'الطرف الأول — شركة رأفت',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
     {name:'الطرف الثاني — الزبون',value:payload.customerName}
    ]);
    painter.fields([
-    {name:'هاتف الزبون',value:payload.customerPhone},
-    {name:'ممثل الزبون',value:payload.customerRepresentative}
+    {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')},
+    {name:'رقم عقد الزبون',value:payload.number}
    ]);
-   if(payload.companyRepresentative&&payload.companyRepresentative!=='—')
-    painter.field('ممثل الشركة',payload.companyRepresentative);
-
-   painter.section('بيانات الحملة الإعلانية');
    painter.fields([
-    {name:'اسم الحملة',value:payload.campaignTitle},
-    {name:'الباقة الإعلانية',value:payload.packageName}
+    {name:'ممثل الشركة',value:payload.companyRepresentative},
+    {name:'هاتف الزبون',value:payload.customerPhone}
+   ]);
+   if(payload.customerRepresentative&&payload.customerRepresentative!=='—')
+    painter.field('ممثل الزبون',payload.customerRepresentative);
+
+   painter.section('تفاصيل الحملة الإعلانية');
+   painter.fields([
+    {name:'الحملة الإعلانية',value:payload.campaignTitle},
+    {name:'الباقة',value:payload.packageName}
    ]);
    painter.fields([
     {name:'عدد القطع',value:payload.quantity},
@@ -337,29 +446,15 @@
     {name:'تاريخ النهاية',value:payload.endDate}
    ]);
    painter.fields([
-    {name:'قياسات الإعلان',value:payload.dimensions},
+    {name:'القياسات',value:payload.dimensions},
     {name:'المساحة م²',value:payload.area}
    ]);
    painter.field('القيمة الإجمالية المتفق عليها',amount(payload.amount,payload.currency));
 
    painter.section('القطع والمواقع الإعلانية');
-   if(Array.isArray(payload.sites)&&payload.sites.length){
-    for(let i=0;i<payload.sites.length;i+=2){
-     const items=payload.sites.slice(i,i+2).map(site=>({
-      name:label(site.code,'—')+' — '+label(site.name,'موقع إعلاني'),
-      value:[site.governorate,site.address].filter(Boolean).join('، ')||'—'
-     }));
-     painter.fields(items);
-    }
-   }else painter.block('المواقع','لا توجد قطع محددة بالرموز ضمن سجل العقد.');
+   painter.compactSites(payload.sites);
    if(payload.additionalLocations)painter.block('مواقع إضافية',payload.additionalLocations);
-
-   painter.section('المواصفات والشروط والملاحظات');
-   if(payload.specifications)painter.block('مواصفات الإعلان',payload.specifications);
-   if(payload.campaignNotes)painter.block('ملاحظات الحملة',payload.campaignNotes);
-   painter.block('الشروط المتفق عليها',payload.terms||'لم تُسجّل شروط إضافية ضمن العقد.');
-   if(payload.notes)painter.block('ملاحظات العقد',payload.notes);
-   painter.signature();
+   // Customer legal terms, signatures and lengthy notes are on page 2 only.
    painter.end();
   }
 
@@ -369,9 +464,7 @@
   const naturalHeight=Math.max(1,measurePainter.current.y-AREA.top);
   const availableHeight=Math.min(AREA.bottom,size.height-70)-AREA.top;
   const fit=Math.min(1,availableHeight/naturalHeight);
-  // Readability is more important than squeezing a legal agreement into
-  // unreadable microscopic text. In that case, ask to shorten the agreement.
-  if(fit<0.64)throw Error('تفاصيل العقد كثيرة ولا تكفي صفحة A4 واحدة بخط واضح. اختصر الملاحظات أو الشروط أو عدد تفاصيل المواقع ثم أعد التحميل.');
+  if(fit<0.65)throw Error('تفاصيل القطع والمواقع الإعلانية لا تكفي صفحة A4 الأولى بخط مقروء. اختصر العناوين الطويلة أو قسّم قائمة المواقع.');
   const overlay=pageCanvas(size);
   const middle=(AREA.left+AREA.right)/2;
   overlay.ctx.translate(middle*(1-fit),AREA.top*(1-fit));
@@ -383,6 +476,25 @@
   const image=await out.embedPng(pngData);
   const [background]=await out.copyPages(original,[0]);
   out.addPage(background).drawImage(image,{x:0,y:0,width:size.width,height:size.height});
+
+  if(payload.kind!=='landlord'){
+   // Page two is a fresh copy of the company's *original* PDF template,
+   // never the customer's illustrative screenshot.
+   const measureTerms=pageCanvas(size);
+   const naturalTermsBottom=drawTermsSheet(measureTerms,payload);
+   const termsHeight=naturalTermsBottom-AREA.top;
+   const fitTerms=Math.min(1,availableHeight/Math.max(1,termsHeight));
+   if(fitTerms<0.7)throw Error('الشروط والملاحظات أطول من المساحة المتاحة في صفحة الشروط. اختصر النص قبل الطباعة.');
+   const termsOverlay=pageCanvas(size);
+   termsOverlay.ctx.translate(middle*(1-fitTerms),AREA.top*(1-fitTerms));
+   termsOverlay.ctx.scale(fitTerms,fitTerms);
+   drawTermsSheet(termsOverlay,payload);
+   const termsUri=termsOverlay.canvas.toDataURL('image/png');
+   const termsData=await fetch(termsUri).then(res=>res.arrayBuffer());
+   const termsImage=await out.embedPng(termsData);
+   const [secondOriginal]=await out.copyPages(original,[0]);
+   out.addPage(secondOriginal).drawImage(termsImage,{x:0,y:0,width:size.width,height:size.height});
+  }
   return new Blob([await out.save({useObjectStreams:false})],{type:'application/pdf'});
  }
  function saveBlob(blob,file){
@@ -403,5 +515,5 @@
   saveBlob(blob,'Raafat-Contract-'+filename(payload.number)+'.pdf');
   return blob;
  }
- scope.RaafatContractPdf=Object.freeze({generate,download,preview,TEMPLATE_URL});
+ scope.RaafatContractPdf=Object.freeze({generate,download,preview,TEMPLATE_URL,defaultClauses:DEFAULT_CUSTOMER_CLAUSES});
 })(window);
