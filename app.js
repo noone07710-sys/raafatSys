@@ -1908,9 +1908,70 @@ function updateSiteCodeInput(form){
  if(hint)hint.textContent=code.value?'الرمز النهائي: '+code.value:'اختر الفئة واكتب رقم القطعة، مثلاً A-1';
 }
 
+
+function leasePlanControls(v){
+ if(s.modal?.table!=='leases')return '';
+ if(v.id){
+  const rows=s.data.lease_installments.filter(r=>r.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date));
+  return '<section class="lease-custom-plan full"><h3>تعديل مواعيد الأقساط المسجّلة</h3>'+
+   '<p class="subtle">غيّر موعد أي قسط غير مسدّد؛ القسط الذي بدأ تسديده يبقى محميّاً.</p><div class="lease-custom-rows">'+
+   rows.map((r,i)=>'<div class="lease-custom-row"><b>القسط '+serial4(i+1)+'</b>'+
+    '<label class="field"><span>تاريخ الاستحقاق</span><input type="date" data-lease-saved-due="'+E(r.id)+'" value="'+E(r.due_date)+
+    '"'+(Number(r.paid_amount||0)>0?' disabled':'')+'></label>'+
+    '<span>المبلغ: <b>'+E(money(r.amount,v.currency))+'</b></span>'+
+    (Number(r.paid_amount||0)>0?'<small>قسط مدفوع — موعد محمي</small>':
+     '<button type="button" class="btn secondary mini" data-lease-save-due="'+E(r.id)+'">حفظ الموعد</button>')+
+    '</div>').join('')+'</div></section>';
+ }
+ const manual=s.modal.leasePlanMode==='manual';
+ const plan=manual?s.modal.leaseDraft||[]:leaseInstallmentPlan(v);
+ const remaining=Math.max(0,roundAmount(Number(v.rent_total||0)-Number(v.advance_amount||0)));
+ const sum=plan.reduce((n,r)=>n+Number(r.amount||0),0);
+ return '<section class="lease-custom-plan full"><div class="lease-custom-head"><div><h3>مواعيد الأقساط قبل حفظ العقد</h3>'+
+   '<p class="subtle">اختَر حساب تلقائي أو حدّد تاريخ وقيمة كل قسط بنفسك.</p></div>'+
+   '<div class="lease-plan-mode"><button type="button" class="btn mini '+(manual?'secondary':'')+
+    '" data-lease-mode="auto">تلقائي</button><button type="button" class="btn mini '+(manual?'':'secondary')+
+    '" data-lease-mode="manual">تحديد يدوي</button></div></div>'+
+   '<p class="lease-custom-balance">المتبقي بعد المقدم: <strong>'+E(money(remaining,v.currency))+'</strong>'+
+   (manual?' • مجموع الأقساط: <strong>'+E(money(sum,v.currency))+'</strong>':'')+'</p>'+
+   '<div class="lease-custom-rows">'+plan.map((r,i)=>'<div class="lease-custom-row"'+(manual?' data-lease-draft-row':'')+'>'+
+    '<b>القسط '+serial4(i+1)+'</b><label class="field"><span>تاريخ الاستحقاق</span>'+
+    (manual?'<input type="date" data-lease-due value="'+E(r.due_date||'')+'">':
+     '<strong>'+E(r.due_date||'—')+'</strong>')+'</label>'+
+    '<label class="field"><span>المبلغ</span>'+
+    (manual?'<input type="number" data-lease-amount min=".01" step=".01" value="'+E(r.amount??'')+'">':
+     '<strong>'+E(money(r.amount,v.currency))+'</strong>')+'</label>'+
+    (manual?'<button type="button" class="linkbtn" data-lease-remove-row="'+i+'" aria-label="حذف القسط">'+uiIcon('trash',15)+'</button>':'')+
+    '</div>').join('')+'</div>'+
+   (manual?'<div class="lease-custom-footer"><button type="button" class="btn secondary mini" data-lease-add-row>'+
+    uiIcon('plus',15)+' إضافة قسط</button><small>يجب أن يساوي مجموع الأقساط المتبقي بعد المقدم حتى ينحفظ العقد.</small></div>':
+    '<p class="subtle">اضغط «تحديد يدوي» حتى تختار المواعيد والمبالغ المتفق عليها مع المالك.</p>')+'</section>';
+}
+async function saveLeaseDueDate(id,form){
+ if(s.leaseSavingDue)return;
+ const row=lookup('lease_installments',id),lease=s.modal?.table==='leases'?s.modal.data:null;
+ if(!row||!lease?.id||row.lease_id!==lease.id)return toast('القسط غير مرتبط بالعقد.',true);
+ if(Number(row.paid_amount||0)>0)return toast('لا يمكن تغيير موعد قسط مسدّد جزئياً أو كلياً.',true);
+ const date=form?.querySelector?.('[data-lease-saved-due="'+id+'"]')?.value||'';
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+'T00:00:00Z')))return toast('اختر موعداً صحيحاً.',true);
+ if(date===row.due_date)return toast('الموعد مسجّل بالفعل.');
+ s.leaseSavingDue=true;
+ try{
+  if(s.demo)await persist('lease_installments',{due_date:date},id);
+  else{
+   const {data,error}=await s.client.from('lease_installments').update({due_date:date}).eq('id',id)
+    .eq('lease_id',lease.id).eq('paid_amount',0).select('id,due_date').single();
+   if(error||!data)throw Error(error?.message||'تعذر تأكيد التحديث.');
+  }
+  if(s.demo)render();else await load();
+  toast('تم حفظ الموعد الجديد في دفعات إيجار الأسطح.');
+ }catch(e){toast(e.message||String(e),true)}
+ finally{s.leaseSavingDue=false}
+}
 function leasePlanSummary(v){
  if(!v.start_date||!v.end_date)return '<div class="lease-plan-preview full"><strong>جدول الأقساط المتوقع</strong><small>حدد تاريخ بداية ونهاية العقد حتى تظهر الأقساط بدقة قبل الحفظ.</small></div>';
- const rows=leaseInstallmentPlan(v);
+ const rows=s.modal?.table==='leases'&&s.modal.leasePlanMode==='manual'&&!v.id?
+  (s.modal.leaseDraft||[]).map(r=>({due_date:r.due_date,amount:Number(r.amount)||0})):leaseInstallmentPlan(v);
  const upfront=leaseAdvance(v),total=Number(v.rent_total||0);
  const currency=v.currency||'USD';
  const pieces=rows.length;
@@ -2177,7 +2238,7 @@ function modalHtml(){
    '<p class="subtle">تُحفظ الدفعة بعملة الحملة الأصلية، ويُحتسب المبلغ المقابل تلقائياً عند اختلاف عملة الاستلام.</p></div></div>';
  }
  if(k==='leases'){
-  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)+(f[0]==='property_id'?leasePropertyPicker(v):'')).join('')+leasePlanSummary(v)+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الأقساط')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+E(v.id)+'">معاينة بيانات العقد</button><button type="button" class="btn" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',16)+' تحميل عقد PDF بقالب رأفت</button><button type="button" class="btn secondary" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة PDF</button><button class="btn secondary" data-renew="'+E(v.id)+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
+  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)+(f[0]==='property_id'?leasePropertyPicker(v):'')).join('')+leasePlanSummary(v)+leasePlanControls(v)+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الأقساط')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+E(v.id)+'">معاينة بيانات العقد</button><button type="button" class="btn" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',16)+' تحميل عقد PDF بقالب رأفت</button><button type="button" class="btn secondary" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة PDF</button><button class="btn secondary" data-renew="'+E(v.id)+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
 
  if(k==='customer_contracts'){
