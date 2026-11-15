@@ -302,13 +302,43 @@
   {number:'8',text:'يتعهد المشترك بتصميم وتبديل الإعلان الخاص به كل ستة أشهر ويكون مع الشركة حصراً.'},
   {number:'9',text:'حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.'}
  ]);
+
+ function landlordPeriodLabel(start,end){
+  const a=Date.parse(String(start||'')+'T00:00:00Z'),b=Date.parse(String(end||'')+'T00:00:00Z');
+  if(!Number.isFinite(a)||!Number.isFinite(b)||b<a)return 'المدة المحددة في هذا العقد';
+  const days=Math.round((b-a)/86400000)+1;
+  if(days>=358&&days<=372)return 'سنة واحدة';
+  const months=Math.round(days/30.44);
+  return months>0?months+' شهراً':'المدة المحددة في هذا العقد';
+ }
+ function landlordClauses(payload){
+  const rent=amount(payload.rentTotal,payload.currency);
+  const days=Math.max(0,Number(payload.graceDays)||0);
+  const grace=days===14?'أسبوعان':days===7?'أسبوع واحد':days+' يوماً';
+  const start=label(payload.startDate).replace(/-/g,'/');
+  const end=label(payload.endDate).replace(/-/g,'/');
+  const period=landlordPeriodLabel(payload.startDate,payload.endDate);
+  return [
+   {number:'1',text:'يقوم الطرف الثاني بدفع إيجار السنة الأولى من المبلغ وقدره '+rent+' لا غيرها.'},
+   {number:'2',text:'تكون مدة العقد '+period+' قابلة للتجديد على أن يدفع الطرف الثاني الإيجار كل سنة مقدماً.'},
+   {number:'3',text:'يقدم الطرف الأول فترة سماح مدتها '+grace+' للمواد الإعلانية ويبدأ الإيجار بتاريخ '+start+' إلى '+end+'.'},
+   {number:'4',text:'يتعهد الطرف الثاني في حالة اضطراره لفسخ العقد لظروف قاهرة بأن يزيل الإعلان على نفقته الخاصة.'},
+   {number:'5',text:'لا يحق للطرف الأول فسخ هذا العقد قبل موعد انتهائه.'},
+   {number:'6',text:'لا يجوز لأي طرف من الأطراف خرق بنود العقد، وفي حالة الخرق يلجأ الطرفان إلى المحاكم العراقية للبت بالخلاف.'},
+   {number:'7',text:'على الطرف الثاني عدم وضع صور نساء أو خمور أو سجائر أو صور مخلة بالآداب.'},
+   {number:'8',text:'يتعهد الطرف الأول بتسهيل مهام الطرف الثاني لتركيب الهيكل ولتغيير المواد الإعلانية بحسب ما تدعو إليه الحاجة، وفي أي وقت كان غير أوقات الليل بعد الساعة 10 ليلاً ومنع التجول.'},
+   {number:'9',text:'للطرف الثاني الأحقية بتجديد العقد من غيره، علماً أن الهيكل الحديدي تابع للشركة (الطرف الثاني).'}
+  ];
+ }
+
  function drawTermsSheet(sheet,payload){
   const ctx=sheet.ctx,width=AREA.right-AREA.left;
   const print=(value,x,y,size=10,weight=600,color=COLOR.ink,align='right')=>{
    setFont(ctx,size,weight);ctx.textAlign=align;ctx.fillStyle=color;
    ctx.fillText(String(value??''),x,y);ctx.textAlign='right';
   };
-  const clauses=Array.isArray(payload.clauses)?payload.clauses:DEFAULT_CUSTOMER_CLAUSES;
+  const clauses=Array.isArray(payload.clauses)?payload.clauses:
+   payload.kind==='landlord'?landlordClauses(payload):DEFAULT_CUSTOMER_CLAUSES;
   let y=AREA.top+10;
   // Exactly the same editable contract number as the page-one header.
   print('رقم العقد',AREA.left+10,AREA.top-1,9,600,COLOR.muted,'left');
@@ -325,12 +355,12 @@
    lines.forEach((line,i)=>print(line,AREA.right-37,y+clauseSize+2+i*leading,clauseSize,650));
    y+=height+3;
   }
-  const sections=[
-   ['شروط خاصة',payload.extraTerms||payload.terms],
-   ['مواصفات الإعلان',payload.specifications],
-   ['ملاحظات الحملة',payload.campaignNotes],
-   ['ملاحظات العقد',payload.notes]
-  ];
+  const sections=payload.kind==='landlord'?
+   [['شروط خاصة إضافية',payload.extraTerms],['ملاحظات عقد الإيجار',payload.notes]]:
+   [['شروط خاصة',payload.extraTerms||payload.terms],
+    ['مواصفات الإعلان',payload.specifications],
+    ['ملاحظات الحملة',payload.campaignNotes],
+    ['ملاحظات العقد',payload.notes]];
   for(const [heading,value] of sections){
    if(!String(value||'').trim())continue;
    y+=7;
@@ -344,14 +374,15 @@
   ctx.strokeStyle=COLOR.line;ctx.lineWidth=.8;
   ctx.beginPath();ctx.moveTo(AREA.left,signatureTop-10);ctx.lineTo(AREA.right,signatureTop-10);ctx.stroke();
   const left=AREA.left+half-17,right=AREA.right-10;
-  // Keep legal parties in the same RTL columns on both sheets.
-  // Party one is Raafat (right); party two is the customer (left).
+  // The label, representative and date are fully editable per party.
+  // First party (right) = owner for leases / Raafat for customer contracts.
+  // Second party (left) = Raafat for leases / customer for customer contracts.
   const blocks=[
-   {x:right,label:label(payload.firstSignatureLabel,'الطرف الأول — ممثل الشركة'),
-    name:label(payload.firstSignatureName,payload.companyRepresentative),
+   {x:right,label:label(payload.firstSignatureLabel,payload.kind==='landlord'?'الطرف الأول — مالك السطح':'الطرف الأول — ممثل الشركة'),
+    name:label(payload.firstSignatureName,payload.kind==='landlord'?payload.landlordRepresentative:payload.companyRepresentative),
     date:label(payload.firstSignatureDate,payload.startDate)},
-   {x:left,label:label(payload.secondSignatureLabel,'الطرف الثاني — الزبون'),
-    name:label(payload.secondSignatureName,payload.customerRepresentative||payload.customerName),
+   {x:left,label:label(payload.secondSignatureLabel,payload.kind==='landlord'?'الطرف الثاني — شركة رأفت':'الطرف الثاني — الزبون'),
+    name:label(payload.secondSignatureName,payload.kind==='landlord'?payload.companyRepresentative:payload.customerRepresentative||payload.customerName),
     date:label(payload.secondSignatureDate,payload.startDate)}
   ];
   for(const item of blocks){
@@ -375,25 +406,26 @@
   out.setTitle('عقد رأفت '+payload.number);
   out.setSubject(payload.kind==='landlord'?'عقد إيجار سطح — '+label(payload.landlordName):'عقد إعلان — '+label(payload.customerName));
   out.setCreator('Raafat Sys');
-  // The original company template remains the background of both customer pages;
-  // landlord contracts keep their historical single-page layout.
+  // Both customer and landlord agreements use two copies of the original
+  // Photoshop template: agreement on page 1, numbered legal terms on page 2.
   function renderContent(painter){
    painter.begin();
    if(payload.kind==='landlord'){
-    painter.section('أطراف عقد استئجار السطح');
+    painter.section('أطراف عقد إيجار السطح');
     painter.fields([
-     {name:'الطرف الأول — المستأجر',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
-     {name:'الطرف الثاني — المالك',value:payload.landlordName}
+     {name:'الطرف الأول — المؤجر (المالك)',value:payload.landlordName},
+     {name:'الطرف الثاني — المستأجر',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'}
     ]);
     painter.fields([
      {name:'هاتف المالك',value:payload.landlordPhone},
-     {name:'عنوان المالك',value:payload.landlordAddress}
+     {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')}
     ]);
     painter.fields([
-     {name:'ممثل الشركة',value:payload.companyRepresentative},
-     {name:'ممثل المالك',value:payload.landlordRepresentative}
+     {name:'ممثل المالك',value:payload.landlordRepresentative},
+     {name:'ممثل الشركة',value:payload.companyRepresentative}
     ]);
-    painter.section('السطح والعقار المستأجر');
+    painter.field('محافظة وعنوان المالك',payload.landlordAddress);
+    painter.section('السطح والعقار المؤجر');
     painter.field('اسم السطح / البناية',payload.propertyName);
     painter.fields([
      {name:'الطول × العرض',value:payload.dimensions},
@@ -403,7 +435,7 @@
      {name:'عدد المساحات',value:payload.quantity},
      {name:'المحافظة',value:payload.governorate}
     ]);
-    painter.section('مدة العقد والمبالغ');
+    painter.section('مدة العقد والأجرة');
     painter.fields([
      {name:'تاريخ بداية الإيجار',value:payload.startDate},
      {name:'تاريخ نهاية الإيجار',value:payload.endDate}
@@ -426,11 +458,7 @@
       })));
      }
     }else painter.block('الأقساط','لا توجد أقساط مجدولة لهذا العقد.');
-    if(payload.notes){
-     painter.section('الملاحظات والشروط المسجلة');
-     painter.block('ملاحظات عقد الإيجار',payload.notes);
-    }
-    painter.signature();
+    // No notes, legal conditions or signatures on this agreement sheet.
     painter.end();
     return;
    }
@@ -495,9 +523,9 @@
   const [background]=await out.copyPages(original,[0]);
   out.addPage(background).drawImage(image,{x:0,y:0,width:size.width,height:size.height});
 
-  if(payload.kind!=='landlord'){
-   // Page two is a fresh copy of the company's *original* PDF template,
-   // never the customer's illustrative screenshot.
+  {
+   // Page two is a fresh copy of the company's *original* PDF template
+   // for leases and customer agreements alike; no illustrative screenshots.
    const measureTerms=pageCanvas(size);
    const naturalTermsBottom=drawTermsSheet(measureTerms,payload);
    const termsHeight=naturalTermsBottom-AREA.top;
@@ -533,5 +561,6 @@
   saveBlob(blob,'Raafat-Contract-'+filename(payload.number)+'.pdf');
   return blob;
  }
- scope.RaafatContractPdf=Object.freeze({generate,download,preview,TEMPLATE_URL,defaultClauses:DEFAULT_CUSTOMER_CLAUSES});
+ scope.RaafatContractPdf=Object.freeze({generate,download,preview,TEMPLATE_URL,
+  defaultClauses:DEFAULT_CUSTOMER_CLAUSES,defaultLandlordClauses:landlordClauses});
 })(window);
