@@ -33,9 +33,9 @@ test('package dimensions, client contract print and landlord individual rooftops
  const saved=await persist('customer_contracts',clean('customer_contracts',contract));
  assert.equal(saved.contract_number,'RC-0001');
  assert.match(customerContractPreview(saved),/عقد حجز وتأجير مساحة إعلانية للزبون/);
- assert.match(customerContractPreview(saved),/مراجعة وتعديل ثم تنزيل PDF/);
+ assert.match(customerContractPreview(saved),/مراجعة البنود وتجهيز PDF/);
  assert.match(customerContractPreview(saved),/data-customer-pdf="/);
- assert.match(listing('customer_contracts'),/طباعة العقد/);
+ assert.match(listing('customer_contracts'),/مراجعة وطباعة/);
  assert.match(relatedDetails('customers',s.data.customers[0]),/RC-0001/);
  const roofContract={id:'lease1',contract_number:'RA-1',landlord_id:'owner',property_id:'roof',rent_total:500,
   currency:'USD',payment_frequency:'annual',grace_days:5,start_date:'2026-11-14',end_date:'2027-11-13'};
