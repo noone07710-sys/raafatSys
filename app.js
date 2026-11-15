@@ -445,7 +445,7 @@ function alertsList(reference=alertsLocalDate()){
   add({key:'lease-payment:'+installment.id,kind:'payment',party:'landlord',table:'lease_installments',id:installment.id,
    date:installment.due_date,name:owner.name,phone:owner.phone,subject:nameOf('properties',lease.property_id),
    contractNumber:numberedContract(lease.contract_number),title:'دفعة إيجار سطح',
-   description:'دفعة للشركة لصالح مالك السطح',amount:balance,currency:lease.currency});
+   description:'دفعة مستحقة لمالك السطح',amount:balance,currency:lease.currency});
  }
  for(const campaign of s.data.campaigns){
   const customer=lookup('customers',campaign.customer_id),balance=campaignBalance(campaign);
@@ -490,12 +490,12 @@ function reminderText(item){
  const intro='السلام عليكم '+item.name+'،\nتحية طيبة من شركة رأفت للدعاية والإعلان والتجارة العامة.\n';
  const contract=item.contractNumber?' رقم '+item.contractNumber:'';
  if(item.key.startsWith('customer-payment:'))return intro+
-  'نود تذكيركم بموعد الدفعة القادمة لحملة «'+item.subject+'» بتاريخ '+item.date+
+  'نود تذكيركم بأن موعد دفعة حملة «'+item.subject+'» '+(item.days<0?'كان بتاريخ ':'هو بتاريخ ')+item.date+
   '. الرصيد المتبقي على الحملة '+money(item.amount,item.currency)+
   '. نرجو التنسيق معنا بشأن الدفعة، ولكم جزيل الشكر.';
  if(item.key.startsWith('lease-payment:'))return intro+
   'نود التنسيق معكم بشأن دفعة إيجار السطح «'+item.subject+'» للعقد'+contract+
-  ' بتاريخ '+item.date+'، والمبلغ المتبقي من هذه الدفعة '+money(item.amount,item.currency)+
+  '+(item.days<0?'وكان موعدها ':'وموعدها ')+item.date+'، والمبلغ المتبقي من هذه الدفعة '+money(item.amount,item.currency)+
   '. يرجى التواصل معنا لتأكيد إجراءات التسديد، مع الشكر.';
  if(item.party==='landlord')return intro+
   'نود إعلامكم بأن عقد استئجار السطح «'+item.subject+'»'+contract+
@@ -524,7 +524,7 @@ function alertsView(){
   '<button type="button" class="btn mini secondary" data-reminder-open="'+E(a.key)+'">فتح السجل</button></div></article>').join('');
  return '<section class="reminders-page">'+
   '<div class="reminder-title"><div><h2>التنبيهات والمواعيد</h2>'+
-  '<p>مواعيد من بيانات الشركة، والرسائل تُرسل يدوياً بعد مراجعتها.</p></div>'+
+  '<p>مواعيد من بيانات الشركة؛ دفعات الزبائن تظهر بعد تحديد موعدها بالحملة. كل الرسائل تُراجع قبل الإرسال.</p></div>'+
   '<span class="reminder-total">'+all.length+' تنبيه'+(urgent?' · '+urgent+' مستحق':'')+'</span></div>'+
   '<div class="reminder-filters">'+tabs.map(([value,title])=>
   '<button type="button" data-reminder-filter="'+value+'" class="reminder-filter '+(value===filter?'selected':'')+'">'+title+'</button>').join('')+'</div>'+
