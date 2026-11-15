@@ -1668,6 +1668,7 @@ function bindExpenseInvoiceForm(form){
 function modalHtml(){
  if(s.modal?.kind==='reminderMessage')return reminderMessageDialog();
  if(s.modal?.kind==='customerPdfEditor')return customerPdfEditorHtml();
+ if(s.modal?.kind==='landlordPdfEditor')return landlordPdfEditorHtml();
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
@@ -1788,6 +1789,14 @@ function landlordContractPdfPayload(v){
   governorate:landlord?.governorate||'—',
   companyRepresentative:v.company_representative||'—',
   landlordRepresentative:v.landlord_representative||'—',
+  companyPhones:'07766663304 - 07866663304',
+  firstSignatureLabel:'الطرف الأول — المؤجر (مالك السطح)',
+  firstSignatureName:v.landlord_representative||landlord?.name||'—',
+  firstSignatureDate:v.start_date||'',
+  secondSignatureLabel:'الطرف الثاني — شركة رأفت (المستأجر)',
+  secondSignatureName:v.company_representative||'—',
+  secondSignatureDate:v.start_date||'',
+  extraTerms:'',
   propertyName:property?.title||'—',
   dimensions:width>0&&height>0?fmt(width)+' × '+fmt(height)+' م':property?.dimensions||'—',
   area:area==null?'—':fmt(area),quantity:Number(property?.quantity)||1,
@@ -1800,7 +1809,7 @@ function landlordContractPdfPayload(v){
   notes:v.notes||''
  };
 }
-async function generateLandlordContractPdf(id,mode='download'){
+async function generateLandlordContractPdf(id,mode='download',editablePayload=null){
  const lease=lookup('leases',id);
  if(!lease){toast('عقد المالك غير موجود أو لم يتم حفظه',true);return}
  const generator=typeof window!=='undefined'?window.RaafatContractPdf:null;
@@ -1811,7 +1820,7 @@ async function generateLandlordContractPdf(id,mode='download'){
  s.generatingContractPdf=true;
  document.querySelectorAll('[data-landlord-pdf]').forEach(button=>{button.disabled=true});
  try{
-  const payload=landlordContractPdfPayload(lease);
+  const payload=editablePayload||landlordContractPdfPayload(lease);
   if(mode==='preview')await generator.preview(payload,win);
   else await generator.download(payload);
   toast(mode==='preview'?'تم إعداد معاينة عقد المالك بالقالب الأصلي':'تم تحميل عقد إيجار السطح بقالب رأفت');
@@ -1895,6 +1904,103 @@ async function generateCustomerContractPdf(id,mode='download',editablePayload=nu
  }
 }
 
+
+
+function openLandlordPdfEditor(id,preferredMode='preview'){
+ const lease=lookup('leases',id);
+ if(!lease)return toast('عقد إيجار السطح غير موجود أو لم يُحفظ.',true);
+ const generator=typeof window!=='undefined'?window.RaafatContractPdf:null;
+ if(typeof generator?.defaultLandlordClauses!=='function')
+  return toast('مكوّن شروط الإيجار لم يكتمل تحميله. حدّث الصفحة وحاول مجدداً.',true);
+ const payload=landlordContractPdfPayload(lease);
+ payload.clauses=generator.defaultLandlordClauses(payload).map((clause,index)=>({...clause,number:String(index+1)}));
+ s.modal={kind:'landlordPdfEditor',table:'leases',data:lease,
+  printDraft:payload,preferredMode};
+ render();
+}
+function landlordPrintField(payload,[name,title,type='text']){
+ const value=payload[name]??'';
+ let input;
+ if(type==='textarea')
+  input='<textarea name="'+E(name)+'" rows="2">'+E(value)+'</textarea>';
+ else if(type==='currency')
+  input='<select name="'+E(name)+'">'+[['IQD','دينار عراقي (IQD)'],['USD','دولار أمريكي (USD)']]
+   .map(([code,label])=>'<option value="'+code+'"'+(value===code?' selected':'')+'>'+label+'</option>').join('')+'</select>';
+ else input='<input name="'+E(name)+'" type="'+E(type)+'" '+(type==='number'?'min="0" step="any" ':'')+
+  'value="'+E(value)+'">';
+ return '<label class="field '+(type==='textarea'?'full':'')+'"><span>'+E(title)+'</span>'+input+'</label>';
+}
+function landlordPdfEditorHtml(){
+ const m=s.modal,v=m.printDraft,field=tuple=>landlordPrintField(v,tuple);
+ const clauses=(v.clauses||[]).map((clause,index)=>
+  '<div class="customer-print-clause" data-print-clause="'+index+'"><b>'+(index+1)+'.</b>'+
+  '<textarea rows="2" aria-label="نص الشرط '+(index+1)+'">'+E(clause.text||'')+'</textarea>'+
+  '<button type="button" class="linkbtn customer-print-clause-remove" data-print-clause-remove="'+index+
+  '" aria-label="حذف الشرط '+(index+1)+'">'+uiIcon('trash',14)+'</button></div>').join('');
+ const installments=(v.installments||[]).map((item,index)=>
+  '<div class="landlord-print-installment" data-print-installment>'+
+   '<strong>القسط '+serial4(index+1)+'</strong>'+
+   '<label class="field"><span>تاريخ الاستحقاق</span><input data-print-installment-field="dueDate" type="date" value="'+E(item.dueDate||'')+'"></label>'+
+   '<label class="field"><span>المبلغ</span><input data-print-installment-field="amount" type="number" min="0.01" step="any" value="'+E(item.amount??'')+'"></label>'+
+   '<button type="button" class="linkbtn" data-print-installment-remove="'+index+'" title="إزالة قسط من نسخة الطباعة">'+uiIcon('trash',15)+'</button>'+
+  '</div>').join('');
+ const party=(first,title,entries)=>'<div class="customer-signature-party">'+
+  '<strong>'+E(title)+'</strong>'+entries.map(field).join('')+'</div>';
+ return '<div class="overlay"><div class="modal customer-pdf-editor landlord-pdf-editor" role="dialog" aria-modal="true" aria-labelledby="landlordPdfEditorTitle">'+
+  '<div class="modalhead"><div><h2 id="landlordPdfEditorTitle">مراجعة وتحرير عقد إيجار السطح للطباعة</h2>'+
+  '<p class="subtle">صفحتان بقالب رأفت الأصلي: عقد السطح أولاً، ثم شروط الإيجار والتواقيع. التعديلات تخص PDF فقط ولا تغيّر العقد أو الأقساط المحفوظة.</p></div>'+
+  '<button type="button" class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+  '<form id="landlordPdfEditorForm">'+
+  '<section class="customer-print-section"><h3>رقم العقد</h3><div class="customer-print-fields">'+
+   field(['number','رقم العقد الموحد في الصفحتين'])+'</div></section>'+
+  '<section class="customer-print-section"><h3>بيانات طرفي عقد السطح</h3>'+
+    '<div class="customer-signature-parties">'+
+     party(true,'الطرف الأول — يمين: المؤجر (مالك السطح)',[
+      ['landlordName','اسم مالك السطح'],['landlordPhone','هاتف المالك'],
+      ['landlordRepresentative','ممثل المالك'],['landlordAddress','عنوان المالك']])+
+     party(false,'الطرف الثاني — يسار: المستأجر (شركة رأفت)',[
+      ['companyRepresentative','ممثل الشركة'],['companyPhones','أرقام هواتف الشركة']])+
+    '</div></section>'+
+  '<section class="customer-print-section"><h3>بيانات السطح والمساحات</h3>'+
+   '<div class="customer-print-fields">'+[
+    ['propertyName','اسم السطح / البناية'],['governorate','المحافظة'],
+    ['dimensions','الطول × العرض'],['area','مساحة السطح م²'],
+    ['quantity','عدد المساحات','number']
+   ].map(field).join('')+'</div></section>'+
+  '<section class="customer-print-section"><h3>مدة الإيجار والسداد</h3>'+
+   '<div class="customer-print-fields">'+[
+    ['startDate','تاريخ بدء الإيجار','date'],['endDate','تاريخ انتهاء الإيجار','date'],
+    ['paymentFrequency','دورية تسديد الإيجار'],['graceDays','أيام فترة السماح','number'],
+    ['rentTotal','الإيجار الإجمالي','number'],['currency','عملة العقد','currency'],
+    ['advanceAmount','المقدم عند التعاقد','number']
+   ].map(field).join('')+'</div>'+
+   '<p class="subtle">تُحدّث الأجرة وفترة السماح وتواريخ الإيجار داخل الشروط تلقائياً عند تغييرها، ويمكن مراجعة صياغة كل شرط قبل الطباعة.</p>'+
+   '<div class="customer-print-section-head"><h3>الأقساط الواردة في نسخة العقد</h3>'+
+    '<button type="button" class="btn secondary mini" data-print-installment-add>'+uiIcon('plus',15)+' إضافة قسط</button></div>'+
+   '<div class="landlord-print-installments">'+installments+'</div></section>'+
+  '<section class="customer-print-section"><h3>شروط عقد السطح — الصفحة الثانية</h3>'+
+   '<div class="customer-print-section-head"><p class="subtle">تسعة شروط أساسية قابلة للتعديل والإضافة والحذف، مع ترقيم متسلسل تلقائي.</p>'+
+    '<button class="btn secondary mini" type="button" data-print-clause-add>'+uiIcon('plus',15)+' إضافة شرط</button></div>'+
+   '<div class="customer-print-clauses">'+clauses+'</div>'+
+   '<div class="customer-print-fields">'+[
+    ['extraTerms','شروط خاصة إضافية','textarea'],
+    ['notes','ملاحظات عقد الإيجار','textarea']
+   ].map(field).join('')+'</div></section>'+
+  '<section class="customer-print-section"><h3>التواقيع والتواريخ — الصفحة الثانية</h3>'+
+   '<div class="customer-signature-parties">'+
+    party(true,'الطرف الأول — يمين: المؤجر (المالك)',[
+     ['firstSignatureLabel','عنوان توقيع المالك'],['firstSignatureName','اسم ممثل المالك للتوقيع'],
+     ['firstSignatureDate','تاريخ توقيع المالك','date']])+
+    party(false,'الطرف الثاني — يسار: المستأجر (شركة رأفت)',[
+     ['secondSignatureLabel','عنوان توقيع الشركة'],['secondSignatureName','اسم ممثل الشركة للتوقيع'],
+     ['secondSignatureDate','تاريخ توقيع الشركة','date']])+
+   '</div></section>'+
+  '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-preview>'+
+   uiIcon('file',16)+' معاينة ملف PDF</button>'+
+   '<button type="button" class="btn" data-pdf-editor-download>'+uiIcon('download',16)+' تنزيل نسخة الطباعة</button>'+
+   '<button type="button" class="btn secondary" data-action="close">إغلاق</button></div>'+
+  '</form></div></div>';
+}
 
 function openCustomerPdfEditor(id,preferredMode='preview'){
  const contract=lookup('customer_contracts',id);
@@ -1990,15 +2096,27 @@ function customerPdfEditorHtml(){
 }
 function captureCustomerPdfEditor(form){
  const modal=s.modal;
- if(modal?.kind!=='customerPdfEditor'||!form)return;
+ if(!['customerPdfEditor','landlordPdfEditor'].includes(modal?.kind)||!form)return;
  const payload={...modal.printDraft};
  for(const [name,val] of new FormData(form).entries()){
   if(!(val instanceof File))payload[name]=String(val).trim();
  }
- payload.sites=[...form.querySelectorAll('[data-print-site]')].map(row=>{
-  const get=name=>row.querySelector('[data-print-site-field="'+name+'"]')?.value?.trim()||'';
-  return {code:get('code'),name:get('name'),governorate:get('governorate'),address:get('address')};
- });
+ if(modal.kind==='customerPdfEditor'){
+  payload.sites=[...form.querySelectorAll('[data-print-site]')].map(row=>{
+   const get=name=>row.querySelector('[data-print-site-field="'+name+'"]')?.value?.trim()||'';
+   return {code:get('code'),name:get('name'),governorate:get('governorate'),address:get('address')};
+  });
+ }else{
+  payload.installments=[...form.querySelectorAll('[data-print-installment]')].map(row=>{
+   const get=name=>row.querySelector('[data-print-installment-field="'+name+'"]')?.value||'';
+   return {dueDate:get('dueDate'),amount:Number(get('amount')||0)};
+  });
+  payload.rentTotal=Number(payload.rentTotal);
+  payload.advanceAmount=Number(payload.advanceAmount);
+  payload.graceDays=Number(payload.graceDays);
+  payload.remainingAfterAdvance=Math.max(0,Math.round((payload.rentTotal-payload.advanceAmount)*100)/100);
+  payload.quantity=Number(payload.quantity)||0;
+ }
  payload.clauses=[...form.querySelectorAll('[data-print-clause]')].map((row,index)=>({
   number:String(index+1),text:row.querySelector('textarea')?.value?.trim()||''
  }));
@@ -2008,20 +2126,31 @@ function captureCustomerPdfEditor(form){
  modal.printDraft=payload;
 }
 function bindCustomerPdfEditor(){
- const form=$('#customerPdfEditorForm');
+ const form=$('#customerPdfEditorForm')||$('#landlordPdfEditorForm');
  if(!form)return;
  document.querySelectorAll('[data-pdf-editor-preview],[data-pdf-editor-download]').forEach(button=>button.onclick=async()=>{
   captureCustomerPdfEditor(form);
   const m=s.modal,mode=button.hasAttribute('data-pdf-editor-preview')?'preview':'download';
-  if(!m||m.kind!=='customerPdfEditor')return;
+  if(!m||!['customerPdfEditor','landlordPdfEditor'].includes(m.kind))return;
   const draft=m.printDraft;
-  if(!draft.customerName||!draft.number||!draft.campaignTitle)return toast('تأكد من رقم العقد واسم الزبون وعنوان الحملة.',true);
-  if(draft.amount<0||!Number.isFinite(draft.amount))return toast('القيمة المتفق عليها غير صالحة.',true);
+  if(m.kind==='customerPdfEditor'){
+   if(!draft.customerName||!draft.number||!draft.campaignTitle)return toast('تأكد من رقم العقد واسم الزبون وعنوان الحملة.',true);
+   if(draft.amount<0||!Number.isFinite(draft.amount))return toast('القيمة المتفق عليها غير صالحة.',true);
+  }else{
+   if(!draft.number||!draft.landlordName||!draft.propertyName)return toast('راجع رقم العقد واسم المالك واسم السطح.',true);
+   if(!Number.isFinite(draft.rentTotal)||draft.rentTotal<=0)return toast('أدخل قيمة إيجار صحيحة أكبر من صفر.',true);
+   if(!Number.isFinite(draft.advanceAmount)||draft.advanceAmount<0||draft.advanceAmount>draft.rentTotal)
+    return toast('المبلغ المقدم يجب أن يكون بين صفر والإيجار الإجمالي.',true);
+   if(draft.installments.some(x=>!x.dueDate||!Number.isFinite(x.amount)||x.amount<=0))
+    return toast('راجع تواريخ ومبالغ أقساط الإيجار في نسخة الطباعة.',true);
+  }
   const blankClause=draft.clauses.findIndex(item=>!item.text.trim());
   if(blankClause>=0)return toast('أدخل نص الشرط رقم '+(blankClause+1)+' أو احذف الشرط الفارغ قبل الطباعة.',true);
   button.disabled=true;
-  try{await generateCustomerContractPdf(m.data.id,mode,draft);}
-  finally{if(button.isConnected)button.disabled=false;}
+  try{
+   if(m.kind==='landlordPdfEditor')await generateLandlordContractPdf(m.data.id,mode,draft);
+   else await generateCustomerContractPdf(m.data.id,mode,draft);
+  }finally{if(button.isConnected)button.disabled=false;}
  });
  const addClause=form.querySelector('[data-print-clause-add]');
  if(addClause)addClause.onclick=()=>{
@@ -2039,6 +2168,19 @@ function bindCustomerPdfEditor(){
   if(clauses.length<=1)return toast('يجب إبقاء شرط واحد على الأقل.',true);
   clauses.splice(Number(button.dataset.printClauseRemove),1);
   clauses.forEach((item,index)=>item.number=String(index+1));
+  render();
+ });
+ const addInstallment=form.querySelector('[data-print-installment-add]');
+ if(addInstallment)addInstallment.onclick=()=>{
+  captureCustomerPdfEditor(form);
+  const installments=s.modal.printDraft.installments;
+  if(installments.length>=30)return toast('الحد الأقصى 30 قسطاً في نسخة الطباعة.',true);
+  installments.push({dueDate:'',amount:0});
+  render();
+ };
+ form.querySelectorAll('[data-print-installment-remove]').forEach(button=>button.onclick=()=>{
+  captureCustomerPdfEditor(form);
+  s.modal.printDraft.installments.splice(Number(button.dataset.printInstallmentRemove),1);
   render();
  });
  const add=form.querySelector('[data-print-site-add]');
@@ -2174,7 +2316,7 @@ function bind(){
  document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
  document.querySelectorAll('[data-customer-pdf]').forEach(button=>button.onclick=()=>openCustomerPdfEditor(button.dataset.customerPdf,button.dataset.pdfMode||'preview'));
  bindCustomerPdfEditor();
- document.querySelectorAll('[data-landlord-pdf]').forEach(button=>button.onclick=()=>generateLandlordContractPdf(button.dataset.landlordPdf,button.dataset.pdfMode||'download'));
+ document.querySelectorAll('[data-landlord-pdf]').forEach(button=>button.onclick=()=>openLandlordPdfEditor(button.dataset.landlordPdf,button.dataset.pdfMode||'preview'));
  document.querySelectorAll('[data-print-record]').forEach(x=>x.onclick=()=>{const [table,id]=x.dataset.printRecord.split('|');s.modal={kind:'preview',table,data:lookup(table,id)};render()});
  document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total,advance_amount:0})});
  document.querySelectorAll('[data-card]').forEach(x=>x.onclick=()=>showCard(lookup('landlords',x.dataset.card)));
