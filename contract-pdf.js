@@ -124,10 +124,9 @@
    const onFirst=page.pageNumber===1;
    print(ctx,payload.kind==='landlord'?'عقد استئجار سطح إعلاني':onFirst?'عقد حجز مساحات إعلانية':'تابع عقد حجز المساحات الإعلانية',
     AREA.right,page.y+15,onFirst?17:15,800,COLOR.navy);
-   if(payload.kind==='landlord'){
-    print(ctx,label(payload.number),AREA.left+10,page.y+15,11,800,COLOR.navy,'left');
-    print(ctx,'رقم العقد',AREA.left+10,page.y-1,9,600,COLOR.muted,'left');
-   }
+   // The same contract reference is displayed at the top of both customer sheets.
+   print(ctx,label(payload.number),AREA.left+10,page.y+15,11,800,COLOR.navy,'left');
+   print(ctx,'رقم العقد',AREA.left+10,page.y-1,9,600,COLOR.muted,'left');
    rule(ctx,page.y+25);
    page.y+=43;
   }
@@ -222,38 +221,51 @@
    page.y+=height+4;
   }
 
+  // The code stays on the right; names and addresses occupy distinct text lanes.
+  // Their heights are measured before drawing, so no address can paint on a title.
   function compactSites(sites){
    const items=Array.isArray(sites)?sites:[];
    if(!items.length){block('المواقع الإعلانية','لا توجد قطع محددة بالرموز ضمن سجل العقد.');return}
    const gap=7,cellWidth=(w-gap)/2,large=items.length>14,medium=items.length>7;
-   const nameSize=large?8.0:medium?8.5:9.2;
-   const addressSize=large?7.0:medium?7.5:8.0;
-   const lineGap=large?9.1:10.1,addrGap=large?7.9:8.8;
+   const nameSize=large?7.7:medium?8.3:9;
+   const addressSize=large?6.9:medium?7.4:7.9;
+   const lineGap=large?9.1:medium?9.8:10.4;
+   const addrGap=large?8.0:8.8;
    const prepared=items.map((item,i)=>{
-    const name=label(item.name,'موقع إعلاني');
     const code=label(item.code,'—');
+    const name=label(item.name,'موقع إعلاني');
     const address=[item.governorate,item.address].filter(Boolean).join('، ');
-    const titleLines=measureLines(page.ctx,name,cellWidth-59,nameSize,700);
-    const addressLines=address?measureLines(page.ctx,address,cellWidth-18,addressSize,500):[];
-    const height=Math.max(29,7+titleLines.length*lineGap+addressLines.length*addrGap+4);
-    return {code,titleLines,addressLines,height,i};
+    // Reserve the rightmost 51 points for the code badge on the first title line.
+    const titleLines=measureLines(page.ctx,name,cellWidth-67,nameSize,700);
+    const addressLines=address?measureLines(page.ctx,address,cellWidth-20,addressSize,500):[];
+    const nameBottom=16+(titleLines.length-1)*lineGap;
+    const addressBaseline=Math.max(31,nameBottom+12);
+    const bottom=addressLines.length?addressBaseline+(addressLines.length-1)*addrGap+8:
+      Math.max(27,nameBottom+6);
+    return {code,titleLines,addressLines,addressBaseline,height:bottom+4,i};
    });
    for(let i=0;i<prepared.length;i+=2){
     const row=prepared.slice(i,i+2);
-    const height=Math.max(...row.map(item=>item.height));
-    keep(height+4);
+    const height=Math.max(34,...row.map(item=>item.height));
+    keep(height+3);
     const y=page.y,ctx=page.ctx;
     row.forEach((item,index)=>{
      const x=index===0?AREA.right-cellWidth:AREA.left;
-     rect(ctx,x,y,cellWidth,height,item.i%4===0||item.i%4===1?COLOR.subtle:COLOR.subtleAlt);
-     rect(ctx,x+cellWidth-45,y+6,38,15,COLOR.navy);
-     print(ctx,item.code,x+cellWidth-26,y+16,7.9,800,COLOR.white,'center');
-     let next=y+13;
-     for(const line of item.titleLines){print(ctx,line,x+cellWidth-52,next,nameSize,700,COLOR.ink);next+=lineGap}
-     next+=1;
-     for(const line of item.addressLines){print(ctx,line,x+cellWidth-9,next,addressSize,500,COLOR.muted);next+=addrGap}
+     rect(ctx,x,y,cellWidth,height,item.i%4<2?COLOR.subtle:COLOR.subtleAlt);
+     const badgeX=x+cellWidth-49;
+     rect(ctx,badgeX,y+5,41,17,COLOR.navy);
+     setFont(ctx,7.8,800);
+     const codeWidth=ctx.measureText(item.code).width;
+     const codeSize=Math.max(5.3,Math.min(7.8,7.8*35/Math.max(35,codeWidth)));
+     print(ctx,item.code,badgeX+20.5,y+17,codeSize,800,COLOR.white,'center');
+     // Names are right-aligned to a point left of the badge, never under it.
+     const nameX=x+cellWidth-59;
+     item.titleLines.forEach((line,j)=>print(ctx,line,nameX,y+16+j*lineGap,nameSize,700,COLOR.ink));
+     // Address always starts strictly below the final title line and badge.
+     const addressX=x+cellWidth-10;
+     item.addressLines.forEach((line,j)=>print(ctx,line,addressX,y+item.addressBaseline+j*addrGap,addressSize,500,COLOR.muted));
     });
-    page.y+=height+4;
+    page.y+=height+3;
    }
   }
 
@@ -282,13 +294,13 @@
  const DEFAULT_CUSTOMER_CLAUSES=Object.freeze([
   {number:'1',text:'تتعهد شركتنا بحماية إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'},
   {number:'2',text:'تتعهد شركتنا بتوفير إنارة الكابينة وإدامتها وحسب الحاجة.'},
-  {number:'4',text:'في حالة تلف إعلان المشترك من قبل العناصر المجهولة تتعهد الشركة بإعادة تصميم وطبع إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'},
-  {number:'5',text:'تتعهد الشركة بترويج إعلان المشترك على مشروع الشاشات العملاقة ولمدة 30 يوم وبسعر 25$ فقط من تاريخ التشغيل التابع لنا.'},
-  {number:'6',text:'تتعهد الشركة بترويج إعلان المشترك على مواقع التواصل الاجتماعي التابعة لنا.'},
-  {number:'7',text:'يتعهد المشترك بدفع جميع أجور الإعلان الخاصة به.'},
-  {number:'8',text:'ترفع جميع الإعلانات التجارية في وقت الانتخابات المحددة ويتم إعادتها من قبلنا بعد انتهاء فترة الانتخابات.'},
-  {number:'9',text:'يتعهد المشترك بتصميم وتبديل الإعلان الخاص به كل ستة أشهر ويكون مع الشركة حصراً.'},
-  {number:'10',text:'حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.'}
+  {number:'3',text:'في حالة تلف إعلان المشترك من قبل العناصر المجهولة تتعهد الشركة بإعادة تصميم وطبع إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'},
+  {number:'4',text:'تتعهد الشركة بترويج إعلان المشترك على مشروع الشاشات العملاقة ولمدة 30 يوم وبسعر 25$ فقط من تاريخ التشغيل التابع لنا.'},
+  {number:'5',text:'تتعهد الشركة بترويج إعلان المشترك على مواقع التواصل الاجتماعي التابعة لنا.'},
+  {number:'6',text:'يتعهد المشترك بدفع جميع أجور الإعلان الخاصة به.'},
+  {number:'7',text:'ترفع جميع الإعلانات التجارية في وقت الانتخابات المحددة ويتم إعادتها من قبلنا بعد انتهاء فترة الانتخابات.'},
+  {number:'8',text:'يتعهد المشترك بتصميم وتبديل الإعلان الخاص به كل ستة أشهر ويكون مع الشركة حصراً.'},
+  {number:'9',text:'حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.'}
  ]);
  function drawTermsSheet(sheet,payload){
   const ctx=sheet.ctx,width=AREA.right-AREA.left;
@@ -298,11 +310,15 @@
   };
   const clauses=Array.isArray(payload.clauses)?payload.clauses:DEFAULT_CUSTOMER_CLAUSES;
   let y=AREA.top+10;
+  // Exactly the same editable contract number as the page-one header.
+  print('رقم العقد',AREA.left+10,AREA.top-1,9,600,COLOR.muted,'left');
+  print(label(payload.number),AREA.left+10,AREA.top+15,11,800,COLOR.navy,'left');
   print('شروط العقد كالتالي:',AREA.right-12,y+22,17.5,800,'#b8323b');
   y+=47;
   const clauseSize=clauses.length>10?10.3:11.2,leading=clauseSize+4.8;
-  for(const clause of clauses){
-   const number=String(clause.number??'');
+  for(const [index,clause] of clauses.entries()){
+   // Source order is authoritative; numbering never skips 3, even after edits.
+   const number=String(index+1);
    const lines=measureLines(ctx,String(clause.text||''),width-49,clauseSize,650);
    const height=Math.max(24,lines.length*leading+6);
    print(number+'.',AREA.right-8,y+clauseSize+2,11.6,800,'#bd3941');
@@ -417,20 +433,20 @@
     return;
    }
    painter.section('أطراف العقد وبيانات التواصل');
+   // Right column is always the customer's side; left is the company.
+   // Customer representative is a standard-sized cell, never a full-width block.
    painter.fields([
-    {name:'الطرف الأول — شركة رأفت',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
-    {name:'الطرف الثاني — الزبون',value:payload.customerName}
+    {name:'الطرف الثاني — الزبون',value:payload.customerName},
+    {name:'الطرف الأول — شركة رأفت',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'}
    ]);
    painter.fields([
-    {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')},
-    {name:'رقم عقد الزبون',value:payload.number}
+    {name:'هاتف الزبون',value:payload.customerPhone},
+    {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')}
    ]);
    painter.fields([
-    {name:'ممثل الشركة',value:payload.companyRepresentative},
-    {name:'هاتف الزبون',value:payload.customerPhone}
+    {name:'ممثل الزبون',value:payload.customerRepresentative},
+    {name:'ممثل الشركة',value:payload.companyRepresentative}
    ]);
-   if(payload.customerRepresentative&&payload.customerRepresentative!=='—')
-    painter.field('ممثل الزبون',payload.customerRepresentative);
 
    painter.section('تفاصيل الحملة الإعلانية');
    painter.fields([
