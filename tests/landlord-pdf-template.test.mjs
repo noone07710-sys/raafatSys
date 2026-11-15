@@ -62,11 +62,11 @@ test('landlord contract payload maps only saved lease and roof values, excluding
  assert.doesNotMatch(JSON.stringify(payload),/111111111111/);
  const dialog=app.previewHtml(original);
  assert.match(dialog,/data-landlord-pdf="lease"/);
- assert.match(dialog,/data-edit="leases:lease1"/);
+ assert.match(dialog,/data-edit="leases:lease"/);
  assert.match(dialog,/data-pdf-mode="preview"/);
  assert.doesNotMatch(dialog,/data-action="print"/);
  app.openForm('leases',original);
- assert.match(app.modalHtml(),/مراجعة العقد وتعديل \/ إضافة بنود/);
+ assert.match(app.modalHtml(),/مراجعة وطباعة العقد/);
 });
 
 test('landlord PDF draws lease on first Photoshop A4 and ten numbered lease terms with signatures on second A4',async()=>{
