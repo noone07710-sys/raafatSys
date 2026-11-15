@@ -69,7 +69,7 @@ test('landlord contract payload maps only saved lease and roof values, excluding
  assert.match(app.modalHtml(),/مراجعة العقد وتعديل \/ إضافة بنود/);
 });
 
-test('landlord PDF draws lease on first Photoshop A4 and nine numbered lease terms with signatures on second A4',async()=>{
+test('landlord PDF draws lease on first Photoshop A4 and ten numbered lease terms with signatures on second A4',async()=>{
  const {app}=model();
  const payload=app.landlordContractPdfPayload(app.s.data.leases[0]);
  const trace={text:[],draws:[],pages:0,backgrounds:0,overlays:0,canvasCount:0};
@@ -124,17 +124,17 @@ test('landlord PDF draws lease on first Photoshop A4 and nine numbered lease ter
  assert.match(trace.subject,/عقد إيجار سطح/);
  for(const expected of ['عقد استئجار سطح إعلاني','مالك السطح','سطح عمارة الرافدين',
   '1,200','200','1,000','2026-11-19','2027-05-19','شروط العقد كالتالي',
-  'الطرف الأول — المؤجر (مالك السطح)','الطرف الثاني — شركة رأفت (المستأجر)'])
+  'الطرف الأول — المؤجر (مالك السطح)','المدير المفوض — شركة رأفت (الطرف الثاني)'])
   assert.ok(trace.text.some(x=>x.includes(expected)),expected);
  assert.ok(!trace.text.some(x=>x.includes('111111111111')||x.includes('البطاقة الموحدة')));
  assert.equal(trace.text.filter(x=>x==='RA-0007').length,4,'matching reference across both rendered and measurement sheets');
  const numbers=trace.draws.filter(d=>d.canvasId===3&&/^\d+\.$/.test(d.text)).map(d=>d.text);
- assert.deepEqual(numbers,['1.','2.','3.','4.','5.','6.','7.','8.','9.']);
+ assert.deepEqual(numbers,['1.','2.','3.','4.','5.','6.','7.','8.','9.','10.']);
  const owner=trace.draws.find(d=>d.canvasId===1&&d.text==='الطرف الأول — المؤجر (المالك)');
  const tenant=trace.draws.find(d=>d.canvasId===1&&d.text==='الطرف الثاني — المستأجر');
  assert.ok(owner&&tenant&&owner.x>tenant.x,'the owner must be right and Raafat left on page one');
  const ownerSig=trace.draws.find(d=>d.canvasId===3&&d.text==='الطرف الأول — المؤجر (مالك السطح)');
- const tenantSig=trace.draws.find(d=>d.canvasId===3&&d.text==='الطرف الثاني — شركة رأفت (المستأجر)');
+ const tenantSig=trace.draws.find(d=>d.canvasId===3&&d.text==='المدير المفوض — شركة رأفت (الطرف الثاني)');
  assert.ok(ownerSig&&tenantSig&&ownerSig.x>tenantSig.x,'owner signature right and Raafat signature left');
  assert.ok(trace.text.some(x=>x.includes('1,200')),'rent clause uses the actual lease amount');
  assert.ok(trace.text.some(x=>x.includes('5 يوماً')),'grace clause must use actual saved days rather than fixed two weeks');
@@ -143,7 +143,7 @@ test('landlord PDF draws lease on first Photoshop A4 and nine numbered lease ter
 });
 
 
-test('lease editor mirrors customer two-page review with editable nine conditions, signatures, owner and tenant, rent and installment details',()=>{
+test('lease editor mirrors customer two-page review with editable ten conditions, signatures, owner and tenant, rent and installment details',()=>{
  const {app,s,win,doc}=model();
  win.RaafatContractPdf=new Function('window','document','URL',
   generatorSource+'\nreturn window.RaafatContractPdf;'
@@ -156,7 +156,7 @@ test('lease editor mirrors customer two-page review with editable nine condition
  assert.equal(draft.firstSignatureName,'ممثل المالك');
  assert.equal(draft.secondSignatureName,'ممثل رأفت');
  assert.equal(draft.companyPhones,'07766663304 - 07866663304');
- assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','3','4','5','6','7','8','9']);
+ assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','3','4','5','6','7','8','9','10']);
  assert.match(draft.clauses[0].text,/1,200 \$/);
  assert.match(draft.clauses[2].text,/5 يوماً/);
  assert.match(draft.clauses[2].text,/2026\/11\/14/);
@@ -170,7 +170,7 @@ test('lease editor mirrors customer two-page review with editable nine condition
  assert.ok(html.indexOf('الطرف الأول — يمين: المؤجر')<html.indexOf('الطرف الثاني — يسار: المستأجر'),
   'first party owner must render in RTL first/right card');
  draft.rentTotal=1500000;
- draft.clauses.push({number:'10',text:'شرط إضافي لأغراض الطباعة'});
+ draft.clauses.push({number:'11',text:'شرط إضافي لأغراض الطباعة'});
  assert.equal(JSON.stringify(s.data.leases[0]),stored,'PDF editor cannot mutate stored lease');
  assert.equal(JSON.stringify(s.data.lease_installments),storedInstallments,'PDF editor cannot mutate stored installments');
  const generated=win.RaafatContractPdf.defaultLandlordClauses(draft);
