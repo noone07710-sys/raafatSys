@@ -8,11 +8,12 @@ const generatorSource=readFileSync(new URL('../contract-pdf.js',import.meta.url)
 
 function model(){
  const root={innerHTML:''};
- const doc={title:'',querySelector:q=>q==='#app'?root:null,querySelectorAll:()=>[],
+ const doc={title:'',baseURI:'https://example.test/raafatSys/',querySelector:q=>q==='#app'?root:null,querySelectorAll:()=>[],
   createElement:()=>({style:{},remove(){}}),body:{append(){}}};
+ const win={};
  const app=new Function('localStorage','document','crypto','createClient','window',
-  appSource+'\nreturn {s,landlordContractPdfPayload,generateLandlordContractPdf,modalHtml,previewHtml,openForm,render};'
- )({getItem:()=>null,setItem:()=>{}},doc,{randomUUID:()=> 'id1'},()=>{},{});
+  appSource+'\nreturn {s,landlordContractPdfPayload,generateLandlordContractPdf,modalHtml,previewHtml,openForm,render,openLandlordPdfEditor,landlordPdfEditorHtml};'
+ )({getItem:()=>null,setItem:()=>{}},doc,{randomUUID:()=> 'id1'},()=>{},win);
  const s=app.s;s.demo=true;s.staff={role:'admin'};
  s.data.landlords=[
   {id:'owner',name:'مالك السطح',phone:'07701234567',national_id:'111111111111',
@@ -33,7 +34,7 @@ function model(){
   {id:'inst1',lease_id:'lease',due_date:'2026-11-19',amount:500,paid_amount:200},
   {id:'inst2',lease_id:'lease',due_date:'2027-05-19',amount:500,paid_amount:0}
  ];
- return {app,s,root};
+ return {app,s,root,win,doc};
 }
 
 test('landlord contract payload maps only saved lease and roof values, excluding identity card number',()=>{
@@ -68,10 +69,10 @@ test('landlord contract payload maps only saved lease and roof values, excluding
  assert.match(app.modalHtml(),/تحميل عقد PDF بقالب رأفت/);
 });
 
-test('landlord PDF draws its own lease terms on the same original Photoshop A4, exactly one page',async()=>{
+test('landlord PDF draws lease on first Photoshop A4 and nine numbered lease terms with signatures on second A4',async()=>{
  const {app}=model();
  const payload=app.landlordContractPdfPayload(app.s.data.leases[0]);
- const trace={text:[],pages:0,backgrounds:0,overlays:0};
+ const trace={text:[],draws:[],pages:0,backgrounds:0,overlays:0,canvasCount:0};
  const doc={
   baseURI:'https://example.test/raafatSys/',
   fonts:{load:async()=>[]},
@@ -79,10 +80,11 @@ test('landlord PDF draws its own lease terms on the same original Photoshop A4, 
   body:{appendChild(){}},
   createElement(tag){
    if(tag==='canvas'){
+    const canvasId=++trace.canvasCount;
     const ctx={
      scale(){},translate(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){},
      measureText(value){return {width:String(value).length*5.6}},
-     fillText(value){trace.text.push(String(value))}
+     fillText(value,x,y){trace.text.push(String(value));trace.draws.push({canvasId,text:String(value),x,y});}
     };
     return {width:0,height:0,getContext:()=>ctx,toDataURL:()=> 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='};
    }
@@ -115,13 +117,65 @@ test('landlord PDF draws its own lease terms on the same original Photoshop A4, 
  )({PDFLib},doc,fetch,Blob,URL,TextDecoder,setTimeout);
  const pdf=await generate.generate(payload);
  assert.equal(pdf.type,'application/pdf');
- assert.equal(trace.pages,1);
- assert.equal(trace.backgrounds,1);
- assert.equal(trace.overlays,1);
+ assert.equal(trace.pages,2);
+ assert.equal(trace.backgrounds,2);
+ assert.equal(trace.overlays,2);
  assert.match(trace.title,/RA-0007/);
  assert.match(trace.subject,/عقد إيجار سطح/);
  for(const expected of ['عقد استئجار سطح إعلاني','مالك السطح','سطح عمارة الرافدين',
-  '1,200','200','1,000','2026-11-19','2027-05-19','توقيع المالك'])
+  '1,200','200','1,000','2026-11-19','2027-05-19','شروط العقد كالتالي',
+  'الطرف الأول — المؤجر (مالك السطح)','الطرف الثاني — شركة رأفت (المستأجر)'])
   assert.ok(trace.text.some(x=>x.includes(expected)),expected);
  assert.ok(!trace.text.some(x=>x.includes('111111111111')||x.includes('البطاقة الموحدة')));
+ assert.equal(trace.text.filter(x=>x==='RA-0007').length,4,'matching reference across both rendered and measurement sheets');
+ const numbers=trace.draws.filter(d=>d.canvasId===3&&/^\d+\.$/.test(d.text)).map(d=>d.text);
+ assert.deepEqual(numbers,['1.','2.','3.','4.','5.','6.','7.','8.','9.']);
+ const owner=trace.draws.find(d=>d.canvasId===1&&d.text==='الطرف الأول — المؤجر (المالك)');
+ const tenant=trace.draws.find(d=>d.canvasId===1&&d.text==='الطرف الثاني — المستأجر');
+ assert.ok(owner&&tenant&&owner.x>tenant.x,'the owner must be right and Raafat left on page one');
+ const ownerSig=trace.draws.find(d=>d.canvasId===3&&d.text==='الطرف الأول — المؤجر (مالك السطح)');
+ const tenantSig=trace.draws.find(d=>d.canvasId===3&&d.text==='الطرف الثاني — شركة رأفت (المستأجر)');
+ assert.ok(ownerSig&&tenantSig&&ownerSig.x>tenantSig.x,'owner signature right and Raafat signature left');
+ assert.ok(trace.text.some(x=>x.includes('1,200 
+});
+)),'the amount must follow the actual saved lease, not a fixed million IQD');
+ assert.ok(trace.text.some(x=>x.includes('5 يوماً')),'grace clause must use actual saved days rather than fixed two weeks');
+ assert.ok(trace.text.some(x=>x.includes('2026/11/14')&&x.includes('2027/11/13')),'the period in the clauses must use saved dates');
+ assert.ok(!trace.draws.some(d=>d.canvasId===1&&d.text==='شروط العقد كالتالي'),'first page contains no terms');
+});
+
+
+test('lease editor mirrors customer two-page review with editable nine conditions, signatures, owner and tenant, rent and installment details',()=>{
+ const {app,s,win,doc}=model();
+ win.RaafatContractPdf=new Function('window','document','URL',
+  generatorSource+'\nreturn window.RaafatContractPdf;'
+ )(win,doc,URL);
+ const stored=JSON.stringify(s.data.leases[0]),storedInstallments=JSON.stringify(s.data.lease_installments);
+ app.openLandlordPdfEditor('lease');
+ assert.equal(s.modal.kind,'landlordPdfEditor');
+ const draft=s.modal.printDraft;
+ assert.equal(draft.number,'RA-0007');
+ assert.equal(draft.firstSignatureName,'ممثل المالك');
+ assert.equal(draft.secondSignatureName,'ممثل رأفت');
+ assert.equal(draft.companyPhones,'07766663304 - 07866663304');
+ assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','3','4','5','6','7','8','9']);
+ assert.match(draft.clauses[0].text,/1,200 \$/);
+ assert.match(draft.clauses[2].text,/5 يوماً/);
+ assert.match(draft.clauses[2].text,/2026\/11\/14/);
+ const html=app.landlordPdfEditorHtml();
+ for(const item of ['landlordPdfEditorForm','data-print-clause-add','data-print-clause-remove',
+  'data-pdf-editor-preview','data-pdf-editor-download','data-print-installment-add',
+  'data-print-installment-remove','name="firstSignatureName"','name="secondSignatureName"',
+  'name="rentTotal"','name="graceDays"','name="propertyName"','name="landlordName"']){
+  assert.ok(html.includes(item),'Missing edit affordance '+item);
+ }
+ assert.ok(html.indexOf('الطرف الأول — يمين: المؤجر')<html.indexOf('الطرف الثاني — يسار: المستأجر'),
+  'first party owner must render in RTL first/right card');
+ draft.rentTotal=1500000;
+ draft.clauses.push({number:'10',text:'شرط إضافي لأغراض الطباعة'});
+ assert.equal(JSON.stringify(s.data.leases[0]),stored,'PDF editor cannot mutate stored lease');
+ assert.equal(JSON.stringify(s.data.lease_installments),storedInstallments,'PDF editor cannot mutate stored installments');
+ const generated=win.RaafatContractPdf.defaultLandlordClauses(draft);
+ assert.match(generated[0].text,/1,500,000/);
+ assert.match(generated[2].text,/5 يوماً/);
 });
