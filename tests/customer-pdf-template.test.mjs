@@ -8,7 +8,7 @@ const appSource=readFileSync(new URL('../app.js',import.meta.url),'utf8')
  .replace(/^import[^\n]*\n/,'').replace(/\nbootstrap\(\);\s*$/,'');
 
 test('the shipped customer PDF generator keeps the original Photoshop A4 as the page background and embeds Arabic text overlays',async()=>{
- const calls={copied:0,added:0,images:0,canvasTexts:[],templateFetches:[],out:0};
+ const calls={copied:0,added:0,images:0,canvasTexts:[],draws:[],canvasCount:0,templateFetches:[],out:0};
  const document={
   baseURI:'https://example.test/raafatSys/',
   fonts:{load:async()=>[]},
@@ -16,10 +16,11 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
   body:{appendChild(){}},
   createElement(tag){
    if(tag==='canvas'){
+    const canvasId=++calls.canvasCount;
     const ctx={
      scale(){},translate(){},beginPath(){},moveTo(){},lineTo(){},stroke(){},fillRect(){},
      measureText(v){return {width:String(v).length*5.8}},
-     fillText(v){calls.canvasTexts.push(String(v));},
+     fillText(v,x,y){calls.canvasTexts.push(String(v));calls.draws.push({canvasId,text:String(v),x,y,font:this.font,align:this.textAlign});},
      fillStyle:'',strokeStyle:'',font:'',direction:'rtl'
     };
     return {width:0,height:0,getContext:()=>ctx,toDataURL:()=> 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='};
@@ -88,13 +89,26 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  assert.ok(calls.canvasTexts.some(x=>x.includes('A004')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('4,200')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('07766663304 - 07866663304')),'company phones are printed');
- assert.ok(calls.canvasTexts.some(x=>x.includes('رقم عقد الزبون')),'number is attached to the customer section');
+ assert.ok(calls.canvasTexts.filter(x=>x==='RC-0007').length===4,'the same contract number must be drawn on both sheets (measure and final render)');
+ assert.ok(calls.canvasTexts.some(x=>x==='رقم العقد'),'reference label is at top of both pages');
+ const numbersOnTerms=calls.draws.filter(d=>d.canvasId===3&&/^\d+\.$/.test(d.text)).map(d=>d.text);
+ assert.deepEqual(numbersOnTerms,['1.','2.','3.','4.','5.','6.','7.','8.','9.'],'default terms must have no missing third clause');
+ const code=calls.draws.find(d=>d.canvasId===1&&d.text==='A001');
+ const boardName=calls.draws.find(d=>d.canvasId===1&&d.text.includes('لوحة إعلانية تجريبية رقم 1'));
+ const boardAddress=calls.draws.find(d=>d.canvasId===1&&d.text.includes('شارع الزهور'));
+ assert.ok(code&&boardName&&boardAddress,'board code, name and street must be visible');
+ assert.ok(boardName.x<code.x-16,'the board title must be left of its code badge, never overlap it');
+ assert.ok(boardAddress.y>boardName.y+11,'board address must always be on a later row below the title');
+ const customerRep=calls.draws.find(d=>d.canvasId===1&&d.text==='ممثل الزبون');
+ const companyRep=calls.draws.find(d=>d.canvasId===1&&d.text==='ممثل الشركة');
+ assert.ok(customerRep&&companyRep&&customerRep.x>companyRep.x,'customer representative must be in right column');
+ assert.equal(customerRep.y,companyRep.y,'both representatives must be ordinary side-by-side fields');
  assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد كالتالي')),'terms have their own sheet title');
  assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول المؤجر')),'signature left party caption is included');
  assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('توقيع')));
- assert.ok(!calls.canvasTexts.some(x=>x.includes('صفحة 2')),'no second page is permitted');
+ assert.ok(!calls.canvasTexts.some(x=>x.includes('صفحة 3')),'customer contract must not have a third page');
  assert.ok(!calls.canvasTexts.some(x=>x.includes('123456789012')),'identity-card values must never be written anywhere on a PDF page');
  assert.ok(!calls.canvasTexts.some(x=>x.includes('البطاقة')||x.includes('الرقم الوطني')),'identity-card labels must never appear on the PDF');
  assert.ok(calls.templateFetches.some(x=>x==='https://example.test/raafatSys/customer-contract-template.pdf'));
@@ -189,10 +203,14 @@ test('print editor allows editing customer contract, each site, numbered terms a
  assert.equal(draft.companyPhones,'07766663304 - 07866663304');
  assert.equal(draft.firstSignatureLabel,'الطرف الأول المؤجر');
  assert.equal(draft.secondSignatureLabel,'الطرف الثاني — ممثل الشركة');
- assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','4','5','6','7','8','9','10']);
+ assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','3','4','5','6','7','8','9']);
  const html=app.customerPdfEditorHtml();
  assert.match(html,/data-print-site-field="address"/);
  assert.match(html,/data-print-site-add/);
+ assert.match(html,/data-print-clause-add/);
+ assert.match(html,/data-print-clause-remove/);
+ assert.match(html,/aria-label="نص الشرط 3"/);
+ assert.match(app.customerContractPreview(app.s.data.customer_contracts[0]),/contract-number-top/);
  assert.match(html,/data-pdf-editor-preview/);
  assert.match(html,/data-pdf-editor-download/);
  assert.match(html,/name="firstSignatureDate"/);
