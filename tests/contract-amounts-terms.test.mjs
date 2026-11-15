@@ -12,13 +12,13 @@ const pdf=mockWindow.RaafatContractPdf;
 
 test('amounts are shown in figures and full Arabic words with لا غير',()=>{
  assert.equal(pdf.amountInWords(1250000,'IQD'),
-  '1,250,000 د.ع (مليون ومئتان وخمسون ألف دينار عراقي لا غير)');
+  '1,250,000 د.ع — مليون ومئتان وخمسون ألف دينار عراقي لا غير');
  assert.equal(pdf.amountInWords(670,'USD'),
-  '670 $ (ستمئة وسبعون دولار أمريكي لا غير)');
+  '670 $ — ستمئة وسبعون دولار أمريكي لا غير');
  assert.equal(pdf.amountInWords(2000.25,'USD'),
-  '2,000.25 $ (ألفان دولار أمريكي وخمسة وعشرون سنت لا غير)');
+  '2,000.25 $ — ألفان دولار أمريكي وخمسة وعشرون سنت لا غير');
  assert.equal(pdf.amountInWords(0,'IQD'),
-  '0 د.ع (صفر دينار عراقي لا غير)');
+  '0 د.ع — صفر دينار عراقي لا غير');
  assert.throws(()=>pdf.amountInWords(-1,'IQD'),/غير صالح/);
 });
 
