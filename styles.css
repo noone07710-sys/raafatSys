@@ -729,3 +729,21 @@
  .customer-print-actions .btn{flex:1 1 155px;font-size:11px;padding:10px}
  .customer-print-clause{gap:7px}
 }
+
+
+/* Final customer-contract print review refinements */
+.customer-print-clause{align-items:flex-start}
+.customer-print-clause textarea{min-width:0;flex:1 1 auto}
+.customer-print-clause-remove{flex:0 0 auto;align-self:flex-start;padding:8px 7px;color:#9b6770}
+.customer-print-clause-remove:hover{color:#b3434c;background:#fff1f3;border-radius:7px}
+.customer-print-section-head>.subtle{margin:0;flex:1;min-width:190px;font-size:11px;line-height:1.9}
+.customer-print-section-head [data-print-clause-add]{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.printed-contract .contract-head .contract-number-top{
+ display:block;text-align:left;direction:ltr;color:#263d52;font-size:12px;
+ font-weight:800;padding:3px 0 9px;
+}
+@media(max-width:540px){
+ .customer-print-clause{gap:6px;padding:8px}
+ .customer-print-clause-remove{padding:6px 4px}
+ .customer-print-section-head [data-print-clause-add]{width:100%;justify-content:center}
+}
