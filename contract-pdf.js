@@ -338,7 +338,7 @@
    page.y+=8;rule(page.ctx,page.y);page.y+=13;
    const half=(w-10)/2;
    const sides=[
-    {x:AREA.right-8,text:'توقيع ممثل الشركة'},
+    {x:AREA.right-8,text:'توقيع المدير المفوض'},
     {x:AREA.left+half,text:payload.kind==='landlord'?'توقيع المالك / ممثله':'توقيع الزبون / ممثله'}
    ];
    for(const side of sides){
@@ -453,10 +453,10 @@
   // First party (right) = owner for leases / Raafat for customer contracts.
   // Second party (left) = Raafat for leases / customer for customer contracts.
   const blocks=[
-   {x:right,label:label(payload.firstSignatureLabel,payload.kind==='landlord'?'الطرف الأول — مالك السطح':'الطرف الأول — ممثل الشركة'),
+   {x:right,label:label(payload.firstSignatureLabel,payload.kind==='landlord'?'الطرف الأول — مالك السطح':'الطرف الأول — المدير المفوض لشركة رأفت'),
     name:label(payload.firstSignatureName,payload.kind==='landlord'?payload.landlordRepresentative:payload.companyRepresentative),
     date:label(payload.firstSignatureDate,payload.startDate)},
-   {x:left,label:label(payload.secondSignatureLabel,payload.kind==='landlord'?'الطرف الثاني — شركة رأفت':'الطرف الثاني — الزبون'),
+   {x:left,label:label(payload.secondSignatureLabel,payload.kind==='landlord'?'الطرف الثاني — المدير المفوض لشركة رأفت':'الطرف الثاني — الزبون'),
     name:label(payload.secondSignatureName,payload.kind==='landlord'?payload.companyRepresentative:payload.customerRepresentative||payload.customerName),
     date:label(payload.secondSignatureDate,payload.startDate)}
   ];
