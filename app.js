@@ -1862,11 +1862,11 @@ function customerContractPdfPayload(v){
   terms:v.terms||'',
   extraTerms:v.terms||'',
   notes:v.notes||'',
-  firstSignatureLabel:'الطرف الأول المؤجر',
-  firstSignatureName:v.customer_representative||v.customer_name_snapshot||customer?.name||'—',
+  firstSignatureLabel:'الطرف الأول — ممثل الشركة',
+  firstSignatureName:v.company_representative||'—',
   firstSignatureDate:v.start_date,
-  secondSignatureLabel:'الطرف الثاني — ممثل الشركة',
-  secondSignatureName:v.company_representative||'—',
+  secondSignatureLabel:'الطرف الثاني — الزبون',
+  secondSignatureName:v.customer_representative||v.customer_name_snapshot||customer?.name||'—',
   secondSignatureDate:v.start_date
  };
 }
@@ -1968,14 +1968,20 @@ function customerPdfEditorHtml(){
     '<button type="button" class="linkbtn customer-print-clause-remove" data-print-clause-remove="'+index+'" aria-label="حذف الشرط '+(index+1)+'">'+uiIcon('trash',14)+'</button></div>').join('')+'</div>'+
    '<div class="customer-print-fields">'+CUSTOMER_PRINT_FIELDS.slice(15).map(field).join('')+'</div></section>'+
   '<section class="customer-print-section"><h3>بيانات التوقيع — الصفحة الثانية</h3>'+
-   '<div class="customer-print-fields">'+[
-    ['firstSignatureLabel','عنوان الطرف الأول — يسار'],
-    ['firstSignatureName','اسم ممثل الطرف الأول'],
-    ['firstSignatureDate','تاريخ الطرف الأول','date'],
-    ['secondSignatureLabel','عنوان الطرف الثاني — يمين'],
-    ['secondSignatureName','اسم ممثل الشركة'],
-    ['secondSignatureDate','تاريخ الطرف الثاني','date']
-   ].map(field).join('')+'</div></section>'+
+   '<div class="customer-signature-parties">'+
+    '<div class="customer-signature-party"><strong>الطرف الأول — جهة اليمين (الشركة)</strong>'+
+    [
+     ['firstSignatureLabel','عنوان الطرف الأول'],
+     ['firstSignatureName','اسم ممثل الشركة'],
+     ['firstSignatureDate','تاريخ توقيع الطرف الأول','date']
+    ].map(field).join('')+'</div>'+
+    '<div class="customer-signature-party"><strong>الطرف الثاني — جهة اليسار (الزبون)</strong>'+
+    [
+     ['secondSignatureLabel','عنوان الطرف الثاني'],
+     ['secondSignatureName','اسم ممثل الزبون'],
+     ['secondSignatureDate','تاريخ توقيع الطرف الثاني','date']
+    ].map(field).join('')+'</div>'+
+   '</div></section>'+
   '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-preview>'+
    uiIcon('file',16)+' معاينة ملف PDF</button><button type="button" class="btn" data-pdf-editor-download>'+
    uiIcon('download',16)+' تنزيل نسخة الطباعة</button>'+
