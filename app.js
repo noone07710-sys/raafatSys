@@ -250,7 +250,8 @@ async function load(){
   const fetchAll=async table=>{
    const all=[];
    for(let start=0;start<100000;start+=1000){
-    const {data,error}=await s.client.from(table).select('*').order('created_at',{ascending:false}).range(start,start+999);
+    const source=table==='employees'&&s.staff?.role!=='admin'?'raafat_employee_directory':table;
+    const {data,error}=await s.client.from(source).select('*').order('created_at',{ascending:false}).range(start,start+999);
     if(error)throw error;
     all.push(...(data||[]));
     if(!data||data.length<1000)return all;
