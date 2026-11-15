@@ -1432,6 +1432,171 @@ function leasePlanSummary(v){
   '<small>السنة الواحدة: سنوي = قسط واحد، ونصف سنوي = قسطين. المقدم لا ينشئ قسطاً ثالثاً.</small></div>';
 }
 
+
+function expenseOptionList(options,value,allowEmpty=true){
+ const current=String(value??'');
+ let html=allowEmpty?'<option value="">— يرجى الاختيار —</option>':'';
+ html+=options.map(([code,label])=>'<option value="'+E(code)+'"'+(current===code?' selected':'')+'>'+E(label)+'</option>').join('');
+ if(current&&!options.some(([code])=>code===current))
+  html+='<option value="'+E(current)+'" selected>قيمة مسجّلة سابقاً: '+E(current)+'</option>';
+ return html;
+}
+function expenseInvoiceForm(v){
+ const editing=Boolean(v?.id),items=s.modal.expenseItems||expenseLineItems(v);
+ const status=v.status||expensePaymentStatus(v),currency=v.currency||s.displayCurrency;
+ const departmentOptions=EXPENSE_DEPARTMENTS;
+ const categoryOptions=EXPENSE_CATEGORY_OPTIONS.map(id=>[id,EXPENSE_CATEGORY_LABELS[id]]);
+ const employeeOptions=EXPENSE_EMPLOYEES.map(([name,role])=>[name,name+' — '+role]);
+ const line=(item,index)=>'<article class="expense-line" data-expense-item>'+
+  '<div class="expense-line-heading"><strong>الصنف '+serial4(index+1)+'</strong>'+
+  (items.length>1?'<button type="button" class="expense-remove-line" data-expense-remove="'+index+'" title="حذف الصنف">'+uiIcon('trash',15)+' حذف الصنف</button>':'')+
+  '</div><div class="expense-line-fields">'+
+  '<label class="field expense-line-description"><span>المنتج / بيان الخدمة *</span>'+
+   '<input type="text" data-expense-field="description" maxlength="200" required placeholder="مثال: ورق تصوير A4 أو اشتراك برنامج" value="'+E(item.description||'')+'"></label>'+
+  '<label class="field"><span>التصنيف المحاسبي *</span><select required data-expense-field="category">'+
+   expenseOptionList(categoryOptions,item.category)+'</select></label>'+
+  '<label class="field"><span>القسم المستفيد *</span><select required data-expense-field="department">'+
+   expenseOptionList(departmentOptions,item.department)+'</select></label>'+
+  '<label class="field expense-line-number"><span>الكمية *</span><input type="number" data-expense-field="quantity" min="1" max="100000" step="1" required value="'+E(item.quantity??1)+'"></label>'+
+  '<label class="field expense-line-number"><span>سعر الوحدة *</span><input type="number" data-expense-field="unit_price" min="0.01" step="0.01" required value="'+E(item.unit_price??'')+'"></label>'+
+  '<div class="expense-line-subtotal"><span>إجمالي الصنف</span><strong data-expense-subtotal>'+E(money(expenseLineTotal(item),currency))+'</strong></div>'+
+  '</div></article>';
+ const originalImage=v.transfer_proof_path;
+ return '<div class="overlay"><div class="modal expense-form-modal expense-invoice-modal">'+
+  '<div class="modalhead"><div><h2>'+(editing?'تعديل الفاتورة':'تسجيل فاتورة مصروفات')+'</h2>'+
+  '<p class="subtle">يمكن إدراج عدة أصناف ضمن فاتورة واحدة، مع تحديد المستفيد والتصنيف لكل صنف.</p></div>'+
+  '<button type="button" class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+  '<form id="recordForm" class="expense-invoice-form">'+
+  '<section class="expense-invoice-section"><div class="expense-invoice-section-title"><strong>بيانات الفاتورة</strong><span>01</span></div>'+
+  '<div class="expense-invoice-grid">'+
+   '<label class="field"><span>تاريخ الفاتورة *</span><input name="expense_date" type="date" required value="'+E(v.expense_date||today())+'"></label>'+
+   '<label class="field"><span>رقم الفاتورة / الوصل (اختياري)</span><input name="receipt_number" maxlength="80" placeholder="وفقاً للرقم المطبوع على الوصل" value="'+E(v.receipt_number||'')+'"></label>'+
+   '<label class="field"><span>الموظف المسؤول / المستلم *</span><select name="paid_by" required>'+expenseOptionList(employeeOptions,v.paid_by)+'</select></label>'+
+   '<label class="field"><span>عملة الفاتورة *</span><select name="currency" required>'+expenseOptionList([['IQD','دينار عراقي (IQD)'],['USD','دولار أمريكي (USD)']],currency,false)+'</select></label>'+
+   '<label class="field expense-full"><span>موضوع الفاتورة (اختياري)</span><input name="title" type="text" maxlength="200" placeholder="يُستكمل تلقائياً من بيانات الأصناف إذا تُرك فارغاً" value="'+E(v.title||'')+'"></label>'+
+  '</div></section>'+
+  '<section class="expense-invoice-section"><div class="expense-invoice-section-title"><strong>الأصناف والخدمات</strong><span>02</span></div>'+
+   '<div class="expense-lines">'+items.map(line).join('')+'</div>'+
+   '<div class="expense-add-row"><button type="button" class="btn secondary mini" data-expense-add>'+uiIcon('plus',16)+' إضافة صنف آخر</button>'+
+   '<span>'+items.length+' '+(items.length===1?'صنف':'أصناف')+' ضمن الفاتورة</span></div>'+
+  '</section>'+
+  '<section class="expense-invoice-section"><div class="expense-invoice-section-title"><strong>تفاصيل السداد</strong><span>03</span></div>'+
+   '<div class="expense-payment-box"><div><small>القيمة الإجمالية للفاتورة</small><strong id="expenseInvoiceTotal">'+E(money(expenseInvoiceTotal(items),currency))+'</strong></div>'+
+   '<div><small>المبلغ المدفوع</small><strong id="expenseInvoicePaid">'+E(money(Number(v.paid_amount)||0,currency))+'</strong></div>'+
+   '<div><small>الرصيد المتبقي</small><strong id="expenseInvoiceBalance">—</strong></div></div>'+
+   '<input type="hidden" name="amount" value="'+E(expenseInvoiceTotal(items))+'">'+
+   '<div class="expense-invoice-grid">'+
+    '<label class="field"><span>حالة الدفع *</span><select name="expense_payment_status" required>'+
+     expenseOptionList([['paid','مدفوعة بالكامل'],['partial','مدفوعة جزئياً'],['unpaid','غير مدفوعة']],status,false)+'</select></label>'+
+    '<label class="field"><span>طريقة الدفع *</span><select name="payment_method" required>'+
+     expenseOptionList([['cash','نقداً'],['mastercard','ماستر كارد / تحويل']],v.payment_method||'cash',false)+'</select></label>'+
+    '<label class="field expense-full" id="expensePartialField"><span>المبلغ المدفوع فعلياً *</span>'+
+     '<input name="paid_amount" type="number" min="0.01" step="0.01" placeholder="أدخل المبلغ الذي تم تسديده من الفاتورة" value="'+E(v.paid_amount??'')+'">'+
+     '<small class="subtle">يُحتسب الرصيد المتبقي تلقائياً من إجمالي الفاتورة.</small></label>'+
+    '<div class="expense-full expense-transfer-field" id="expenseTransferField">'+
+     '<label class="field"><span>صورة تحويل الماستر كارد * (عند وجود مبلغ مدفوع)</span>'+
+     '<input name="transfer_image" type="file" accept="image/png,image/jpeg,image/webp">'+
+     '<small class="subtle">PNG أو JPG أو WebP، بحد أقصى 5 ميغابايت. المرفق خاص بموظفي الشركة.</small></label>'+
+     '<div class="expense-transfer-info" id="expenseFileInfo">'+(s.modal.transferFile?'ملف محدد: '+E(s.modal.transferFile.name):originalImage?'صورة تحويل محفوظة ضمن المرفقات':'لم تُرفق صورة تحويل بعد')+'</div>'+
+     (originalImage?'<button type="button" class="btn secondary mini" data-expense-proof="'+E(v.id)+'">'+uiIcon('image',15)+' عرض الصورة المحفوظة</button>':'')+
+    '</div>'+
+   '</div>'+
+  '</section>'+
+  '<section class="expense-invoice-section"><label class="field"><span>ملاحظات داخلية (اختياري)</span>'+
+  '<textarea name="notes" rows="2" placeholder="معلومات إضافية تخص الفاتورة أو عملية السداد">'+E(v.notes||'')+'</textarea></label></section>'+
+  '<div class="expense-save-actions"><button type="button" class="btn secondary" data-action="close">إلغاء</button>'+
+  '<button type="submit" class="btn">'+uiIcon('save',16)+(editing?' حفظ تعديل الفاتورة':' اعتماد الفاتورة')+'</button></div>'+
+  '</form></div></div>';
+}
+function expenseCurrentItems(form){
+ return [...form.querySelectorAll('[data-expense-item]')].map(row=>{
+  const get=name=>row.querySelector('[data-expense-field="'+name+'"]')?.value??'';
+  return {description:get('description'),category:get('category'),department:get('department'),
+   quantity:get('quantity'),unit_price:get('unit_price')};
+ });
+}
+function captureExpenseDraft(form){
+ if(!s.modal||s.modal.table!=='company_expenses'||!form)return;
+ captureForm(form);
+ s.modal.expenseItems=expenseCurrentItems(form);
+ s.modal.data.status=form.elements.namedItem('expense_payment_status')?.value||'paid';
+}
+function updateExpenseInvoiceTotals(form){
+ if(!form||s.modal?.table!=='company_expenses')return;
+ const items=expenseCurrentItems(form),currency=form.elements.namedItem('currency')?.value||s.displayCurrency;
+ const total=expenseInvoiceTotal(items);
+ items.forEach((item,i)=>{
+  const label=form.querySelectorAll('[data-expense-subtotal]')[i];
+  if(label)label.textContent=money(expenseLineTotal(item),currency);
+ });
+ const status=form.elements.namedItem('expense_payment_status')?.value||'paid';
+ const paidField=form.elements.namedItem('paid_amount');
+ const paid=status==='paid'?total:status==='unpaid'?0:Number(paidField?.value||0);
+ const due=Math.max(0,roundAmount(total-paid));
+ const t=form.querySelector('#expenseInvoiceTotal'),p=form.querySelector('#expenseInvoicePaid'),
+  b=form.querySelector('#expenseInvoiceBalance'),hidden=form.elements.namedItem('amount'),
+  partial=form.querySelector('#expensePartialField'),transfer=form.querySelector('#expenseTransferField');
+ if(t)t.textContent=money(total,currency);
+ if(p)p.textContent=money(paid,currency);
+ if(b)b.textContent=money(due,currency);
+ if(hidden)hidden.value=String(total);
+ if(partial)partial.hidden=status!=='partial';
+ if(paidField)paidField.required=status==='partial';
+ if(transfer)transfer.hidden=form.elements.namedItem('payment_method')?.value!=='mastercard';
+ const picture=form.elements.namedItem('transfer_image');
+ if(picture)picture.required=form.elements.namedItem('payment_method')?.value==='mastercard'&&paid>0&&
+  !s.modal.transferFile&&!s.modal.data.transfer_proof_path;
+}
+function bindExpenseInvoiceForm(form){
+ form.addEventListener('input',event=>{
+  if(event.target.matches('[data-expense-field], [name="paid_amount"]'))updateExpenseInvoiceTotals(form);
+ });
+ form.addEventListener('change',event=>{
+  if(event.target.matches('[name="expense_payment_status"], [name="payment_method"]'))updateExpenseInvoiceTotals(form);
+ });
+ const add=form.querySelector('[data-expense-add]');
+ if(add)add.onclick=()=>{
+  captureExpenseDraft(form);
+  if(s.modal.expenseItems.length>=100)return toast('الحد الأقصى 100 صنف في الفاتورة الواحدة',true);
+  s.modal.expenseItems.push({description:'',category:'',department:'',quantity:1,unit_price:''});
+  render();
+ };
+ form.querySelectorAll('[data-expense-remove]').forEach(button=>button.onclick=()=>{
+  captureExpenseDraft(form);
+  if(s.modal.expenseItems.length<=1)return toast('يجب إبقاء صنف واحد على الأقل',true);
+  s.modal.expenseItems.splice(Number(button.dataset.expenseRemove),1);
+  render();
+ });
+ const file=form.elements.namedItem('transfer_image');
+ if(file)file.onchange=()=>{
+  const selected=file.files?.[0]||null;
+  if(selected&&(!['image/png','image/jpeg','image/webp'].includes(selected.type)||
+    selected.size>5242880||selected.size<=0)){
+   toast('يُقبل مرفق PNG أو JPG أو WebP بحد أقصى 5 ميغابايت.',true);
+   file.value='';return;
+  }
+  s.modal.transferFile=selected;
+  const info=form.querySelector('#expenseFileInfo');
+  if(info)info.textContent=selected?'الملف المحدد: '+selected.name:
+   (s.modal.data.transfer_proof_path?'صورة تحويل محفوظة':'لم يتم إرفاق صورة التحويل');
+  updateExpenseInvoiceTotals(form);
+ };
+ const currency=form.elements.namedItem('currency');
+ if(currency)currency.onchange=()=>{
+  const previous=s.modal.data.currency||s.displayCurrency,next=currency.value;
+  captureExpenseDraft(form);
+  if(previous!==next){
+   s.modal.expenseItems=s.modal.expenseItems.map(item=>({...item,
+    unit_price:item.unit_price===''?'':roundAmount(convert(item.unit_price,previous,next))}));
+   if(s.modal.data.paid_amount!=='')
+    s.modal.data.paid_amount=roundAmount(convert(s.modal.data.paid_amount||0,previous,next));
+  }
+  s.modal.data.currency=next;
+  render();
+ };
+ updateExpenseInvoiceTotals(form);
+}
+
 function modalHtml(){
  if(s.modal?.kind==='reminderMessage')return reminderMessageDialog();
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
@@ -1439,12 +1604,7 @@ function modalHtml(){
  if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
  if(m.kind==='deleteExpense')return expenseDeleteDialog(v);
  let fields=meta.fields;
- if(k==='company_expenses'){
-  return '<div class="overlay"><div class="modal expense-form-modal"><div class="modalhead"><h2>'+(v.id?'تعديل المصروف':'تسجيل مصروف جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+ 
-   '<div class="notice">سجّل المبلغ الفعلي وتاريخه؛ العملة المختارة هنا هي عملة الدفع الأصلية، ويمكن تبديل عرض الإجماليات بالأعلى.</div>'+ 
-   '<form id="recordForm"><div class="formgrid">'+fields.map(field=>fieldHtml(field,v,v)).join('')+'</div>'+ 
-   '<div class="actions"><button class="btn" type="submit">'+uiIcon('save',16)+(v.id?' حفظ التعديلات':' حفظ المصروف')+'</button></div></form></div></div>';
- }
+ if(k==='company_expenses')return expenseInvoiceForm(v);
  if(k==='campaigns'){
   const steps=[['العميل والحملة',['customer_id','title','start_date']],['نوع الإعلان والمواقع',['package_id','locations','quantity']],['الأسعار والأشهر',['months','price','currency','next_payment_due_date']],['الدفعات والملاحظات',['notes']],['مراجعة وحفظ',[]]];
   const stepFields=s.formStep<4?fields.filter(x=>steps[s.formStep][1].includes(x[0])).map(f=>fieldHtml(f,v,v)).join('')+(s.formStep===2?packagePricingInfo(v):''):review(v);
@@ -1796,7 +1956,10 @@ function bind(){
  const cardFileInput=document.querySelector('input[name="card_image"]');
  if(cardFileInput)cardFileInput.addEventListener('change',e=>{s.modal.cardFile=e.target.files?.[0]||null;});
  if($('#globalCurrency'))$('#globalCurrency').onchange=e=>{
-  if($('#recordForm'))captureForm($('#recordForm'));
+  if($('#recordForm')){
+   if(s.modal?.table==='company_expenses')captureExpenseDraft($('#recordForm'));
+   else captureForm($('#recordForm'));
+  }
   s.displayCurrency=e.target.value;
   localStorage.setItem('raafat-display-currency',s.displayCurrency);
   render();
@@ -1831,6 +1994,7 @@ function bind(){
  }
  const form=$('#recordForm'),v=s.modal?.data,k=s.modal?.table;
  if(!form)return;
+ if(k==='company_expenses'){bindExpenseInvoiceForm(form);return;}
  for(const name of ['width_m','height_m','quantity']){
   const el=form.elements.namedItem(name);
   if(el)el.addEventListener('input',()=>updateAreaOutputs(form));
@@ -2037,6 +2201,12 @@ function openForm(k,row){
  const drafts={};
  if(k==='packages')packageRates(data).forEach(rate=>{drafts[rate.months]=roundAmount(convert(rate.usd_price,'USD',data.currency||'USD'));});
  s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set(),contractCustomerFilter:k==='customer_contracts'&&!data.id?(row?.customer_id||null):null};
+ if(k==='company_expenses'){
+  s.modal.expenseItems=row?.id?expenseLineItems(row):[{description:'',category:'',department:'',quantity:1,unit_price:''}];
+  s.modal.data.status=row?.id?expensePaymentStatus(row):'paid';
+  s.modal.data.paid_amount=row?.id?expensePaidAmount(row):0;
+  s.modal.transferFile=null;
+ }
  s.formStep=0;render();
 }
 function captureForm(form){
