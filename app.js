@@ -1375,7 +1375,7 @@ function expenseOverview(){
   const categoryLabel=categoryCodes.length===1?
    EXPENSE_CATEGORY_LABELS[categoryCodes[0]]||categoryCodes[0]:'فاتورة متعددة التصنيفات';
   const due=Math.max(0,roundAmount(Number(expense.amount)-expensePaidAmount(expense)));
-  const canEdit=canAccess('expenses','edit');
+  const canEdit=s.staff?.role==='admin'||s.staff?.role==='custom_admin'&&canAccess('expenses','edit');
   const details=items.map(item=>'<div class="expense-invoice-product">'+
    '<div><strong>'+E(item.description)+'</strong><small>'+
     E(EXPENSE_CATEGORY_LABELS[item.category]||item.category||'—')+' · '+
