@@ -104,6 +104,14 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  assert.ok(customerRep&&companyRep&&companyRep.x>customerRep.x,'company representative must be in right column and customer in left');
  assert.equal(customerRep.y,companyRep.y,'both representatives must be ordinary side-by-side fields');
  assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد كالتالي')),'terms have their own sheet title');
+ assert.ok(calls.draws.some(x=>x.canvasId===1&&x.text==='مواصفات الإعلان'),
+  'ad specifications heading must be printed on the first contract page');
+ assert.ok(calls.draws.some(x=>x.canvasId===1&&x.text.includes('مضيئة وجوه متعددة')),
+  'ad specifications details must be printed on page one');
+ assert.ok(!calls.draws.some(x=>x.canvasId===3&&x.text==='مواصفات الإعلان'),
+  'the legal conditions page must not repeat specifications');
+ assert.ok(!calls.draws.some(x=>x.canvasId===3&&x.text.includes('مضيئة وجوه متعددة')),
+  'no advertisement specifications text is permitted on page two');
  const companyParty=calls.draws.find(d=>d.canvasId===1&&d.text==='الطرف الأول — شركة رأفت');
  const customerParty=calls.draws.find(d=>d.canvasId===1&&d.text==='الطرف الثاني — الزبون');
  const companyPhone=calls.draws.find(d=>d.canvasId===1&&d.text==='هاتف الشركة');
@@ -220,6 +228,10 @@ test('print editor allows editing customer contract, each site, numbered terms a
  assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','3','4','5','6','7','8','9']);
  const html=app.customerPdfEditorHtml();
  assert.match(html,/data-print-site-field="address"/);
+ const specField=html.indexOf('name="specifications"');
+ const termsHeading=html.indexOf('الشروط والملاحظات — الصفحة الثانية');
+ assert.ok(specField>=0&&termsHeading>=0&&specField<termsHeading,
+  'ad specifications must be editable in the first-sheet section, not alongside legal conditions');
  assert.match(html,/data-print-site-add/);
  assert.match(html,/data-print-clause-add/);
  assert.match(html,/data-print-clause-remove/);
