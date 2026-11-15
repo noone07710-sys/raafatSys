@@ -1130,6 +1130,120 @@ function expenseOverview(){
    '</div>')+'</div>'+
   '<p class="subtle expense-footnote">القيم المالية معروضة بالعملة المختارة بالأعلى. تُحفظ كل فاتورة بعملتها الأصلية، ويتم احتساب المدفوع والمتبقي دون تعديل قيمة الفاتورة.</p></section>';
 }
+
+function employeeSalaryExpenses(employeeId){
+ return (s.data.company_expenses||[])
+  .filter(row=>row.employee_id===employeeId&&expenseLineItems(row).some(item=>item.category==='salaries'))
+  .sort((a,b)=>String(b.expense_date||'').localeCompare(String(a.expense_date||'')));
+}
+function employeesOverview(){
+ if(!s.demo&&s.staff?.role!=='admin')return '<div class="notice">هذا القسم خاص بإدارة الشركة.</div>';
+ const items=s.data.employees||[];
+ const query=s.search.trim().toLocaleLowerCase();
+ const filtered=items.filter(item=>
+  !query||[item.name,item.job_title,item.department,item.phone].some(v=>String(v||'').toLocaleLowerCase().includes(query)));
+ const count=items.filter(item=>item.active).length;
+ const salaryBudget=items.filter(item=>item.active).reduce((total,item)=>
+  total+convert(Number(item.salary_amount)||0,item.salary_currency||'IQD',s.displayCurrency),0);
+ const historyFor=s.employeeFocus?lookup('employees',s.employeeFocus):null;
+ const history=historyFor?employeeSalaryExpenses(historyFor.id):[];
+ const allSalary=items.flatMap(row=>employeeSalaryExpenses(row.id));
+ const paid=allSalary.reduce((sum,row)=>sum+convert(expensePaidAmount(row),row.currency,s.displayCurrency),0);
+ return '<div class="hr-page"><div class="hr-stats">'+[
+  ['الموظفون المسجّلون',items.length],
+  ['الموظفون الفعالون',count],
+  ['إجمالي الرواتب الشهرية',money(roundAmount(salaryBudget),s.displayCurrency)],
+  ['الرواتب المدفوعة المسجّلة',money(roundAmount(paid),s.displayCurrency)]
+ ].map(([label,val])=>'<div class="box hr-stat"><small>'+label+'</small><strong>'+E(val)+'</strong></div>').join('')+
+ '</div><div class="notice">ربط الرواتب يتم من قسم الفواتير والمصروفات، عند اختيار تصنيف «رواتب وأجور الموظفين» وتحديد الموظف المستفيد. الموظف المسؤول عن تسليم المبلغ يُسجّل بشكل مستقل.</div>'+
+ '<div class="toolbar"><input id="search" class="search" placeholder="بحث باسم الموظف أو القسم أو الهاتف..." value="'+E(s.search)+'">'+
+ '<button class="btn" type="button" data-new="employees">'+uiIcon('plus',16)+' إضافة موظف</button></div>'+
+ '<div class="box tablewrap"><table class="table"><thead><tr><th>اسم الموظف</th><th>الوظيفة والقسم</th><th>الراتب الشهري</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>'+
+ (filtered.length?filtered.map(item=>
+  '<tr><td><strong>'+E(item.name)+'</strong><small class="subtle hr-phone">'+E(item.phone||'')+'</small></td>'+
+  '<td>'+E(item.job_title||'—')+'<small class="subtle hr-phone">'+E(EXPENSE_DEPARTMENTS.find(([id])=>id===item.department)?.[1]||'—')+'</small></td>'+
+  '<td>'+E(money(item.salary_amount,item.salary_currency))+'</td>'+
+  '<td><span class="pill '+(item.active?'active':'inactive')+'">'+(item.active?'فعال':'غير فعال')+'</span></td>'+
+  '<td class="hr-actions"><button type="button" class="linkbtn" data-edit="employees:'+E(item.id)+'">'+uiIcon('pencil',14)+' تعديل</button>'+
+  '<button type="button" class="linkbtn" data-salary-expense="'+E(item.id)+'">'+uiIcon('wallet',14)+' تسجيل راتب</button>'+
+  '<button type="button" class="linkbtn" data-employee-history="'+E(item.id)+'">'+uiIcon('history',14)+' سجل الرواتب</button></td></tr>'
+ ).join(''):'<tr><td colspan="5" class="empty">لا توجد بيانات موظفين مطابقة.</td></tr>')+
+ '</tbody></table></div>'+
+ (historyFor?'<div class="box hr-history"><div class="hr-history-top"><h3>سجل الرواتب — '+E(historyFor.name)+'</h3>'+
+ '<button type="button" class="btn secondary mini" data-employee-history="">إغلاق السجل</button></div>'+
+ '<p class="subtle">يعرض الفواتير المرتبطة بهذا الموظف فقط. يُحسب المدفوع من الفواتير المعتمدة، والرصيد غير المسدد بشكل منفصل.</p>'+
+ (history.length?'<div class="tablewrap"><table class="table"><thead><tr><th>تاريخ الراتب</th><th>بيان الفاتورة</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>'+
+  history.map(row=>'<tr><td>'+E(row.expense_date)+'</td><td>'+E(row.title)+'</td><td>'+E(money(row.amount,row.currency))+
+   '</td><td>'+E(money(expensePaidAmount(row),row.currency))+'</td><td>'+E(money(Math.max(0,Number(row.amount)-expensePaidAmount(row)),row.currency))+'</td></tr>').join('')+
+ '</tbody></table></div>':'<p class="notice">ماكو رواتب مسجّلة لهذا الموظف بعد. تقدر تسجل راتب من الزر أعلاه.</p>')+
+ '</div>':'')+'</div>';
+}
+function activityDetail(log){
+ const map={
+  status:'الحالة',active:'الفعالية',amount:'المبلغ',currency:'العملة',rent_total:'الإيجار',
+  paid_amount:'المدفوع',start_date:'البداية',end_date:'النهاية',
+  salary_amount:'الراتب الشهري',salary_currency:'عملة الراتب',category:'التصنيف',
+  payment_method:'طريقة الدفع',payment_frequency:'الدورية',department:'القسم',
+  site_type:'نوع الموقع',expense_date:'تاريخ الفاتورة',employee_id:'الموظف المستفيد',
+  due_date:'الاستحقاق',quantity:'الكمية',price:'السعر',job_title:'المنصب',code:'رمز القطعة'
+ };
+ const pairs=Object.entries(log.changes||{});
+ if(!pairs.length)return '—';
+ return pairs.slice(0,8).map(([key,value])=>{
+  const format=v=>v===null||v===undefined?'—':typeof v==='object'?JSON.stringify(v):String(v);
+  return (map[key]||key)+': '+format(value?.old)+' ← '+format(value?.new);
+ }).join(' • ');
+}
+function activityLogsView(){
+ if(!s.demo&&s.staff?.role!=='admin')return '<div class="notice">سجل الحركات متاح للمدير فقط.</div>';
+ const labelsByTable={
+  customers:'الزبائن',packages:'الباقات',package_rates:'أسعار الباقات',
+  landlords:'مالكو الأسطح',properties:'العقارات',ad_sites:'المواقع الإعلانية',
+  campaigns:'الحملات',campaign_sites:'لوحات الحملات',campaign_payments:'دفعات الحملات',
+  leases:'عقود الأسطح',lease_installments:'أقساط الإيجارات',
+  customer_contracts:'عقود الزبائن',company_expenses:'الفواتير والمصروفات',
+  employees:'الموظفون',settings:'إعدادات الشركة',staff_members:'صلاحيات المستخدمين'
+ };
+ const q=(s.activityQuery||'').trim().toLocaleLowerCase(),filter=s.activityAction||'all';
+ const rows=(s.activityLogs||[]).filter(item=>(filter==='all'||item.action===filter)&&
+  (!q||[item.table_name,item.record_label,item.actor_email,item.actor_id,
+    labelsByTable[item.table_name],activityDetail(item)].some(val=>String(val||'').toLocaleLowerCase().includes(q))));
+ return '<div class="activity-page"><div class="notice">سجل تلقائي موثق من قاعدة البيانات للإضافات والتعديلات والحذف. تظهر أحدث 300 حركة فقط، وليس تعديلات حصلت قبل تفعيل السجل. السجل للقراءة فقط.</div>'+
+ '<div class="toolbar"><input id="activitySearch" class="search" placeholder="بحث عن سجل أو مستخدم أو تغيير..." value="'+E(s.activityQuery||'')+'">'+
+ '<select id="activityAction" class="search">'+[
+  ['all','كل الحركات'],['INSERT','إضافة'],['UPDATE','تعديل'],['DELETE','حذف']
+ ].map(([value,label])=>'<option value="'+value+'"'+(filter===value?' selected':'')+'>'+label+'</option>').join('')+'</select>'+
+ '<button type="button" class="btn secondary" data-activity-refresh>'+uiIcon('refresh',15)+' تحديث الحركات</button></div>'+
+ '<div class="box tablewrap"><table class="table activity-table"><thead><tr><th>التوقيت</th><th>الإجراء</th><th>القسم</th><th>السجل</th><th>المستخدم</th><th>تفاصيل التغيير</th></tr></thead><tbody>'+
+ (rows.length?rows.map(item=>'<tr><td><small>'+E(new Date(item.occurred_at).toLocaleString('ar-IQ',{timeZone:'Asia/Baghdad',dateStyle:'short',timeStyle:'short'}))+'</small></td>'+
+ '<td><span class="activity-action activity-action-'+E(item.action.toLowerCase())+'">'+
+ E(({INSERT:'إضافة',UPDATE:'تعديل',DELETE:'حذف'})[item.action]||item.action)+'</span></td>'+
+ '<td>'+E(labelsByTable[item.table_name]||item.table_name)+'</td><td>'+E(item.record_label)+'</td>'+
+ '<td title="'+E(item.actor_id||'')+'">'+E(item.actor_email||item.actor_id?.slice(0,12)||'النظام')+'</td>'+
+ '<td class="activity-description">'+E(activityDetail(item))+'</td></tr>').join(''):
+ '<tr><td colspan="6" class="empty">لا توجد حركات مطابقة للفلاتر.</td></tr>')+'</tbody></table></div>'+
+ '<p class="subtle">عدد الحركات المعروضة: '+rows.length+'</p></div>';
+}
+async function refreshActivityLogs(){
+ if(!s.demo&&(!s.client||s.staff?.role!=='admin'))return;
+ if(s.demo){s.activityLogs=[];render();return}
+ const {data,error}=await s.client.from('activity_logs').select('*').order('occurred_at',{ascending:false}).limit(300);
+ if(error)return toast('تعذّر تحديث سجل الحركات: '+error.message,true);
+ s.activityLogs=data||[];render();
+}
+function openSalaryExpense(employeeId){
+ if(!s.demo&&s.staff?.role!=='admin')return toast('اعتماد رواتب الموظفين خاص بالمدير',true);
+ const employee=lookup('employees',employeeId);
+ if(!employee)return toast('لم يتم العثور على الموظف.',true);
+ openForm('company_expenses',{employee_id:employee.id,paid_by:'',currency:employee.salary_currency||'IQD',
+  title:'راتب '+employee.name+' — '+today().slice(0,7),expense_date:today()});
+ s.modal.salaryFromEmployee=employee.id;
+ s.modal.expenseItems=[{description:'راتب '+employee.name+' لشهر '+today().slice(0,7),
+  category:'salaries',department:employee.department||'general',
+  quantity:1,unit_price:Number(employee.salary_amount)>0?employee.salary_amount:''}];
+ render();
+}
+
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
  if(k==='company_expenses')return expenseOverview();
@@ -2356,6 +2470,13 @@ function bind(){
  };
 
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
+ document.querySelectorAll('[data-salary-expense]').forEach(x=>x.onclick=()=>openSalaryExpense(x.dataset.salaryExpense));
+ document.querySelectorAll('[data-employee-history]').forEach(x=>x.onclick=()=>{
+  s.employeeFocus=x.dataset.employeeHistory||null;render();
+ });
+ document.querySelectorAll('[data-activity-refresh]').forEach(x=>x.onclick=()=>refreshActivityLogs());
+ if($('#activitySearch'))$('#activitySearch').oninput=e=>{s.activityQuery=e.target.value;render();$('#activitySearch')?.focus()};
+ if($('#activityAction'))$('#activityAction').onchange=e=>{s.activityAction=e.target.value;render()};
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
  document.querySelectorAll('[data-delete-customer]').forEach(x=>x.onclick=()=>openCustomerDelete(x.dataset.deleteCustomer));
  document.querySelectorAll('[data-delete-landlord]').forEach(x=>x.onclick=()=>openLandlordDelete(x.dataset.deleteLandlord));
