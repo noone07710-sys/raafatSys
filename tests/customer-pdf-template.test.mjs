@@ -186,7 +186,7 @@ test('print editor allows editing customer contract, each site, numbered terms a
  const src=readFileSync(new URL('../app.js',import.meta.url),'utf8')
   .replace(/^import[^\n]*\n/,'').replace(/\nbootstrap\(\);\s*$/,'');
  const app=new Function('localStorage','document','crypto','createClient','window',
-  src+'\nreturn {s,openCustomerPdfEditor,customerPdfEditorHtml};'
+  src+'\nreturn {s,openCustomerPdfEditor,customerPdfEditorHtml,customerContractPreview};'
  )({getItem:()=>null,setItem:()=>{}},document,{randomUUID:()=> 'x'},()=>{},{});
  app.s.demo=true;app.s.staff={role:'admin'};
  app.s.data.customers=[{id:'client',name:'زبون العقد',phone:'07700000000'}];
