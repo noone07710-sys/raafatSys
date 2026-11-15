@@ -1972,10 +1972,13 @@ function landlordPdfEditorHtml(){
    '<div class="customer-print-fields">'+[
     ['startDate','تاريخ بدء الإيجار','date'],['endDate','تاريخ انتهاء الإيجار','date'],
     ['paymentFrequency','دورية تسديد الإيجار'],['graceDays','أيام فترة السماح','number'],
-    ['rentTotal','الإيجار الإجمالي','number'],['currency','عملة العقد','currency'],
+    ['currency','عملة العقد','currency'],['rentTotal','الإيجار الإجمالي بعملة الطباعة','number'],
     ['advanceAmount','المقدم عند التعاقد','number']
    ].map(field).join('')+'</div>'+
    '<p class="subtle">تُحدّث الأجرة وفترة السماح وتواريخ الإيجار داخل الشروط تلقائياً عند تغييرها، ويمكن مراجعة صياغة كل شرط قبل الطباعة.</p>'+
+   '<div class="landlord-print-fx-note" role="note">'+
+    'سعر الصرف المعتمد: 1 دولار = '+E(Number(s.settings?.usd_iqd||0).toLocaleString('en-US'))+
+    ' دينار عراقي. عند تغيير عملة نسخة الطباعة تُحوَّل كل مبالغ العقد والأقساط؛ ويمكنك كتابة القيمة المطلوبة بالدينار يدوياً بعد التحويل. <strong>العقد الأصلي لا يتغير.</strong></div>'+
    '<div class="customer-print-section-head"><h3>الأقساط الواردة في نسخة العقد</h3>'+
     '<button type="button" class="btn secondary mini" data-print-installment-add>'+uiIcon('plus',15)+' إضافة قسط</button></div>'+
    '<div class="landlord-print-installments">'+installments+'</div></section>'+
@@ -2098,10 +2101,16 @@ function customerPdfEditorHtml(){
 function captureCustomerPdfEditor(form){
  const modal=s.modal;
  if(!['customerPdfEditor','landlordPdfEditor'].includes(modal?.kind)||!form)return;
- const payload={...modal.printDraft};
+ const previous=modal.printDraft;
+ const payload={...previous};
  for(const [name,val] of new FormData(form).entries()){
   if(!(val instanceof File))payload[name]=String(val).trim();
  }
+ // Capture clauses *before* recomputing lease terms. The old code rebuilt
+ // terms, then overwrote them with stale textarea values on every save.
+ payload.clauses=[...form.querySelectorAll('[data-print-clause]')].map((row,index)=>({
+  number:String(index+1),text:row.querySelector('textarea')?.value?.trim()||''
+ }));
  if(modal.kind==='customerPdfEditor'){
   payload.sites=[...form.querySelectorAll('[data-print-site]')].map(row=>{
    const get=name=>row.querySelector('[data-print-site-field="'+name+'"]')?.value?.trim()||'';
@@ -2115,24 +2124,37 @@ function captureCustomerPdfEditor(form){
   payload.rentTotal=Number(payload.rentTotal);
   payload.advanceAmount=Number(payload.advanceAmount);
   payload.graceDays=Number(payload.graceDays);
-  payload.remainingAfterAdvance=Math.max(0,Math.round((payload.rentTotal-payload.advanceAmount)*100)/100);
   payload.quantity=Number(payload.quantity)||0;
-  // Revise untouched financial/date clauses when their backing invoice values
-  // change in this editor; never silently overwrite a manually edited clause.
+  // Currency changes affect the entire *print copy*: rent, upfront amount,
+  // each installment, balance, and auto-generated legal clauses together.
+  // Never change the original saved agreement or the live finance ledger.
+  const from=previous.currency,to=payload.currency;
+  if(from!==to){
+   const rate=Number(s.settings?.usd_iqd);
+   if(!['IQD','USD'].includes(from)||!['IQD','USD'].includes(to)||
+      !Number.isFinite(rate)||rate<=0)throw Error('سعر الصرف غير صالح. راجع إعدادات العملة قبل تجهيز نسخة العقد.');
+   const fx=n=>{
+    const value=convert(n,from,to);
+    return to==='IQD'?Math.round(value):roundAmount(value);
+   };
+   payload.rentTotal=fx(payload.rentTotal);
+   payload.advanceAmount=fx(payload.advanceAmount);
+   payload.installments=payload.installments.map(item=>({...item,amount:fx(item.amount)}));
+  }
+  payload.remainingAfterAdvance=roundAmount(Math.max(0,payload.rentTotal-payload.advanceAmount));
+  // Only replace clauses whose text is still the previously generated version;
+  // user-written clauses and added custom conditions must never be overwritten.
   const autoTerms=window.RaafatContractPdf?.defaultLandlordClauses?.(payload)?.map(item=>item.text);
   if(autoTerms){
-   const previous=modal.printDraft._autoLandlordClauses||[];
+   const oldAuto=previous._autoLandlordClauses||[];
    payload.clauses=payload.clauses.map(clause=>{
-    const oldIndex=previous.indexOf(clause.text);
+    const oldIndex=oldAuto.indexOf(clause.text);
     return oldIndex>=0&&oldIndex<autoTerms.length?
      {...clause,text:autoTerms[oldIndex]}:clause;
    });
    payload._autoLandlordClauses=autoTerms;
   }
  }
- payload.clauses=[...form.querySelectorAll('[data-print-clause]')].map((row,index)=>({
-  number:String(index+1),text:row.querySelector('textarea')?.value?.trim()||''
- }));
  payload.quantity=Number(payload.quantity)||0;
  payload.months=Number(payload.months)||0;
  payload.amount=Number(payload.amount)||0;
@@ -2166,8 +2188,11 @@ function bindCustomerPdfEditor(){
   }finally{if(button.isConnected)button.disabled=false;}
  });
  if(s.modal?.kind==='landlordPdfEditor'){
-  form.querySelectorAll('[name="rentTotal"],[name="currency"],[name="graceDays"],[name="startDate"],[name="endDate"]').forEach(input=>{
-   input.addEventListener('change',()=>{captureCustomerPdfEditor(form);render();});
+  form.querySelectorAll('[name="rentTotal"],[name="currency"],[name="advanceAmount"],[name="graceDays"],[name="startDate"],[name="endDate"],[data-print-installment-field="amount"]').forEach(input=>{
+   input.addEventListener('change',()=>{
+    try{captureCustomerPdfEditor(form);render();}
+    catch(e){toast(e.message||String(e),true);render();}
+   });
   });
  }
  const addClause=form.querySelector('[data-print-clause-add]');
