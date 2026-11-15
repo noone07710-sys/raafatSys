@@ -375,7 +375,6 @@
   const sections=payload.kind==='landlord'?
    [['شروط خاصة إضافية',payload.extraTerms],['ملاحظات عقد الإيجار',payload.notes]]:
    [['شروط خاصة',payload.extraTerms||payload.terms],
-    ['مواصفات الإعلان',payload.specifications],
     ['ملاحظات الحملة',payload.campaignNotes],
     ['ملاحظات العقد',payload.notes]];
   for(const [heading,value] of sections){
@@ -512,12 +511,17 @@
     {name:'القياسات',value:payload.dimensions},
     {name:'المساحة م²',value:payload.area}
    ]);
-   painter.field('القيمة الإجمالية المتفق عليها',amount(payload.amount,payload.currency));
+   painter.field('القيمة الإجمالية المتفق عليها',
+    number(payload.amount)+' '+(payload.currency==='IQD'?'دينار عراقي':'دولار أمريكي'));
+   // Specifications belong to the agreed advertising scope on the contract
+   // sheet, not to the legal clauses on page two.
+   if(String(payload.specifications||'').trim())
+    painter.block('مواصفات الإعلان',payload.specifications);
 
    painter.section('القطع والمواقع الإعلانية');
    painter.compactSites(payload.sites);
    if(payload.additionalLocations)painter.block('مواقع إضافية',payload.additionalLocations);
-   // Customer legal terms, signatures and lengthy notes are on page 2 only.
+   // Customer legal terms, signatures and general notes remain on page 2 only.
    painter.end();
   }
 
