@@ -757,3 +757,31 @@
 .customer-signature-party .field:last-child{margin-bottom:0}
 .customer-signature-party .field>input{background:#fff;font-size:12px;border:1px solid #dce5ed;border-radius:10px;padding:9px 11px;width:100%;min-width:0}
 @media(max-width:600px){.customer-signature-parties{grid-template-columns:1fr}.customer-signature-party{padding:12px}}
+
+
+/* Rooftop lease contract: same print-only review experience as customer PDF. */
+.landlord-pdf-editor .customer-print-section h3{font-size:14px}
+.landlord-pdf-editor .customer-signature-parties{direction:rtl}
+.landlord-pdf-editor .customer-signature-party .field input,
+.landlord-pdf-editor .customer-signature-party .field textarea{
+ background:#fff;border:1px solid #dce5ed;border-radius:10px;padding:9px 11px;
+ width:100%;max-width:100%;font-size:12px;color:#243d4d
+}
+.landlord-print-installments{display:grid;gap:8px;margin-top:8px}
+.landlord-print-installment{display:grid;grid-template-columns:90px minmax(0,1fr) minmax(0,1fr) 35px;
+ align-items:end;gap:12px;padding:11px 13px;border:1px solid #e3ebf1;border-radius:11px;background:#fff}
+.landlord-print-installment>strong{font-size:11px;color:#3e5c6f;align-self:center}
+.landlord-print-installment .field{margin:0;min-width:0}
+.landlord-print-installment .field>span{font-size:11px}
+.landlord-print-installment .field>input{border:1px solid #dce5ed;border-radius:9px;padding:8px 10px;
+ width:100%;max-width:100%;font-size:12px;color:#263d4a;background:#fff}
+.landlord-print-installment .linkbtn{align-self:center;color:#aa6870;padding:8px}
+.landlord-print-installment .linkbtn:hover{background:#fff3f3;border-radius:8px}
+@media(max-width:680px){
+ .landlord-print-installment{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 28px}
+ .landlord-print-installment>strong{grid-column:1/-1}
+}
+@media(max-width:500px){
+ .landlord-print-installment{gap:7px;padding:9px}
+ .landlord-print-installment .field>input{font-size:11px;padding:8px 6px}
+}
