@@ -55,7 +55,7 @@ test('A-E billboard categories filter sites and reject cross-package bookings',(
  s.modal=selected;
  for(const letter of ['A','B','C','D','E']){
   const html=selectedSiteCards({package_id:id(letter)});
-  assert.match(html,new RegExp('القطع التابعة للباقة '+letter));
+  assert.match(html,new RegExp('القطع المتاحة للباقة '+letter));
   for(const other of ['A','B','C','D','E']){
    assert.equal(html.includes('data-site-id="site'+other+'"'),letter===other,
     letter+' should show only its own '+other+' registered site');
