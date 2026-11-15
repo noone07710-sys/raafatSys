@@ -1667,6 +1667,7 @@ function bindExpenseInvoiceForm(form){
 
 function modalHtml(){
  if(s.modal?.kind==='reminderMessage')return reminderMessageDialog();
+ if(s.modal?.kind==='customerPdfEditor')return customerPdfEditorHtml();
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
@@ -1841,6 +1842,7 @@ function customerContractPdfPayload(v){
   number:numberedContract(v.contract_number),
   customerName:v.customer_name_snapshot||customer?.name||'—',
   customerPhone:customer?.phone||'—',
+  companyPhones:'07766663304 - 07866663304',
   companyRepresentative:v.company_representative||'—',
   customerRepresentative:v.customer_representative||'—',
   campaignTitle:v.campaign_title_snapshot||campaign?.title||'—',
@@ -1858,10 +1860,17 @@ function customerContractPdfPayload(v){
   additionalLocations:details.locations,
   campaignNotes:details.notes,
   terms:v.terms||'',
-  notes:v.notes||''
+  extraTerms:v.terms||'',
+  notes:v.notes||'',
+  firstSignatureLabel:'الطرف الأول المؤجر',
+  firstSignatureName:v.customer_representative||v.customer_name_snapshot||customer?.name||'—',
+  firstSignatureDate:v.start_date,
+  secondSignatureLabel:'الطرف الثاني — ممثل الشركة',
+  secondSignatureName:v.company_representative||'—',
+  secondSignatureDate:v.start_date
  };
 }
-async function generateCustomerContractPdf(id,mode='download'){
+async function generateCustomerContractPdf(id,mode='download',editablePayload=null){
  const contract=lookup('customer_contracts',id);
  if(!contract){toast('العقد غير موجود أو لم يتم حفظه',true);return}
  const generator=typeof window!=='undefined'?window.RaafatContractPdf:null;
@@ -1873,7 +1882,7 @@ async function generateCustomerContractPdf(id,mode='download'){
  s.generatingContractPdf=true;
  document.querySelectorAll('[data-customer-pdf]').forEach(button=>{button.disabled=true});
  try{
-  const payload=customerContractPdfPayload(contract);
+  const payload=editablePayload||customerContractPdfPayload(contract);
   if(mode==='preview')await generator.preview(payload,win);
   else await generator.download(payload);
   toast(mode==='preview'?'تم إنشاء معاينة PDF باستخدام القالب الأصلي':'تم تنزيل عقد الزبون بالقالب الرسمي الأصلي');
@@ -1884,6 +1893,138 @@ async function generateCustomerContractPdf(id,mode='download'){
   s.generatingContractPdf=false;
   document.querySelectorAll('[data-customer-pdf]').forEach(button=>{button.disabled=false});
  }
+}
+
+
+function openCustomerPdfEditor(id,preferredMode='preview'){
+ const contract=lookup('customer_contracts',id);
+ if(!contract)return toast('عقد الزبون غير موجود، يرجى مراجعة السجل.',true);
+ const payload=customerContractPdfPayload(contract);
+ const standard=typeof window!=='undefined'?window.RaafatContractPdf?.defaultClauses:null;
+ const fallback=[
+  ['1','تتعهد شركتنا بحماية إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'],
+  ['2','تتعهد شركتنا بتوفير إنارة الكابينة وإدامتها وحسب الحاجة.'],
+  ['4','في حالة تلف إعلان المشترك من قبل العناصر المجهولة تتعهد الشركة بإعادة تصميم وطبع إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'],
+  ['5','تتعهد الشركة بترويج إعلان المشترك على مشروع الشاشات العملاقة ولمدة 30 يوم وبسعر 25$ فقط من تاريخ التشغيل التابع لنا.'],
+  ['6','تتعهد الشركة بترويج إعلان المشترك على مواقع التواصل الاجتماعي التابعة لنا.'],
+  ['7','يتعهد المشترك بدفع جميع أجور الإعلان الخاصة به.'],
+  ['8','ترفع جميع الإعلانات التجارية في وقت الانتخابات المحددة ويتم إعادتها من قبلنا بعد انتهاء فترة الانتخابات.'],
+  ['9','يتعهد المشترك بتصميم وتبديل الإعلان الخاص به كل ستة أشهر ويكون مع الشركة حصراً.'],
+  ['10','حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.']
+ ].map(([number,text])=>({number,text}));
+ payload.clauses=(standard||fallback).map(item=>({...item}));
+ s.modal={kind:'customerPdfEditor',table:'customer_contracts',data:contract,
+  printDraft:payload,preferredMode};
+ render();
+}
+const CUSTOMER_PRINT_FIELDS=[
+ ['customerName','اسم الزبون'],['customerPhone','هاتف الزبون'],
+ ['companyPhones','أرقام هواتف الشركة'],['customerRepresentative','ممثل الزبون'],
+ ['companyRepresentative','ممثل الشركة'],['campaignTitle','عنوان الحملة'],
+ ['packageName','الباقة الإعلانية'],['quantity','عدد القطع','number'],
+ ['months','مدة الحجز بالأشهر','number'],['startDate','بداية العقد','date'],
+ ['endDate','نهاية العقد','date'],['dimensions','القياسات'],['area','المساحة م²'],
+ ['amount','القيمة المتفق عليها','number'],['currency','العملة','currency'],
+ ['additionalLocations','مواقع إعلانية إضافية','textarea'],
+ ['specifications','مواصفات الإعلان','textarea'],
+ ['campaignNotes','ملاحظات الحملة','textarea'],
+ ['notes','ملاحظات العقد','textarea'],['extraTerms','شروط خاصة إضافية','textarea']
+];
+function customerPdfEditorHtml(){
+ const m=s.modal,v=m.printDraft;
+ const field=([id,label,type='text'])=>{
+  let control=type==='textarea'?
+   '<textarea name="'+E(id)+'" rows="2">'+E(v[id]||'')+'</textarea>':
+   type==='currency'?'<select name="currency">'+['IQD','USD'].map(code=>'<option value="'+code+'"'+(v.currency===code?' selected':'')+'>'+E(labels[code]||code)+'</option>').join('')+'</select>':
+   '<input name="'+E(id)+'" type="'+E(type)+'" '+(type==='number'?'min="0" step="any"':'')+' value="'+E(v[id]??'')+'">';
+  return '<label class="field '+(type==='textarea'?'full':'')+'"><span>'+E(label)+'</span>'+control+'</label>';
+ };
+ const line=(site,index)=>'<div class="customer-print-site" data-print-site><div class="customer-print-site-head">'+
+  '<strong>القطعة '+serial4(index+1)+'</strong>'+
+  '<button type="button" class="linkbtn" data-print-site-remove="'+index+'">'+uiIcon('trash',14)+' إزالة من نسخة الطباعة</button></div>'+
+  '<div class="customer-print-site-grid">'+
+   [['code','رمز القطعة'],['name','اسم الموقع'],['governorate','المحافظة'],['address','العنوان']].map(([id,label])=>
+    '<label class="field"><span>'+label+'</span><input data-print-site-field="'+id+'" value="'+E(site[id]||'')+'"></label>').join('')+
+  '</div></div>';
+ return '<div class="overlay"><div class="modal customer-pdf-editor" role="dialog" aria-modal="true" aria-labelledby="customerPdfEditorTitle">'+
+  '<div class="modalhead"><div><h2 id="customerPdfEditorTitle">مراجعة وتحرير نسخة العقد للطباعة</h2>'+
+  '<p class="subtle">صفحتان بالقالب الأصلي: العقد أولاً، ثم الشروط والتواقيع. تعديلات هذه النافذة خاصة بملف PDF ولا تغيّر البيانات المحفوظة.</p></div>'+
+  '<button class="close" type="button" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+  '<form id="customerPdfEditorForm">'+
+  '<section class="customer-print-section"><h3>بيانات العقد والأطراف</h3>'+
+   '<div class="customer-print-fields">'+
+    '<label class="field"><span>رقم عقد الزبون</span><input name="number" value="'+E(v.number||'')+'"></label>'+
+    CUSTOMER_PRINT_FIELDS.slice(0,15).map(field).join('')+'</div></section>'+
+  '<section class="customer-print-section"><div class="customer-print-section-head"><h3>القطع والمواقع المشمولة</h3>'+
+    '<button type="button" class="btn secondary mini" data-print-site-add>'+uiIcon('plus',15)+' إضافة قطعة لنسخة الطباعة</button></div>'+
+    '<p class="subtle">يمكن تعديل الرموز والعناوين قبل الطباعة. يتم تصغير عرض القطع تلقائياً عند زيادة عددها.</p>'+
+    '<div class="customer-print-sites">'+(v.sites||[]).map(line).join('')+'</div></section>'+
+  '<section class="customer-print-section"><h3>الشروط والملاحظات — الصفحة الثانية</h3>'+
+   '<p class="subtle">النصوص التالية قابلة للتعديل، وترتيب الأرقام كما زوّدته الشركة محفوظ.</p>'+
+   '<div class="customer-print-clauses">'+(v.clauses||[]).map(clause=>
+    '<label class="customer-print-clause" data-print-clause="'+E(clause.number)+'"><b>'+E(clause.number)+'.</b>'+
+    '<textarea rows="2" aria-label="نص الشرط '+E(clause.number)+'">'+E(clause.text)+'</textarea></label>').join('')+'</div>'+
+   '<div class="customer-print-fields">'+CUSTOMER_PRINT_FIELDS.slice(15).map(field).join('')+'</div></section>'+
+  '<section class="customer-print-section"><h3>بيانات التوقيع — الصفحة الثانية</h3>'+
+   '<div class="customer-print-fields">'+[
+    ['firstSignatureLabel','عنوان الطرف الأول — يسار'],
+    ['firstSignatureName','اسم ممثل الطرف الأول'],
+    ['firstSignatureDate','تاريخ الطرف الأول','date'],
+    ['secondSignatureLabel','عنوان الطرف الثاني — يمين'],
+    ['secondSignatureName','اسم ممثل الشركة'],
+    ['secondSignatureDate','تاريخ الطرف الثاني','date']
+   ].map(field).join('')+'</div></section>'+
+  '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-preview>'+
+   uiIcon('file',16)+' معاينة ملف PDF</button><button type="button" class="btn" data-pdf-editor-download>'+
+   uiIcon('download',16)+' تنزيل نسخة الطباعة</button>'+
+   '<button type="button" class="btn secondary" data-action="close">إغلاق</button></div>'+
+  '</form></div></div>';
+}
+function captureCustomerPdfEditor(form){
+ const modal=s.modal;
+ if(modal?.kind!=='customerPdfEditor'||!form)return;
+ const payload={...modal.printDraft};
+ for(const [name,val] of new FormData(form).entries()){
+  if(!(val instanceof File))payload[name]=String(val).trim();
+ }
+ payload.sites=[...form.querySelectorAll('[data-print-site]')].map(row=>{
+  const get=name=>row.querySelector('[data-print-site-field="'+name+'"]')?.value?.trim()||'';
+  return {code:get('code'),name:get('name'),governorate:get('governorate'),address:get('address')};
+ });
+ payload.clauses=[...form.querySelectorAll('[data-print-clause]')].map(row=>({
+  number:String(row.dataset.printClause),text:row.querySelector('textarea')?.value?.trim()||''
+ }));
+ payload.quantity=Number(payload.quantity)||0;
+ payload.months=Number(payload.months)||0;
+ payload.amount=Number(payload.amount)||0;
+ modal.printDraft=payload;
+}
+function bindCustomerPdfEditor(){
+ const form=$('#customerPdfEditorForm');
+ if(!form)return;
+ document.querySelectorAll('[data-pdf-editor-preview],[data-pdf-editor-download]').forEach(button=>button.onclick=async()=>{
+  captureCustomerPdfEditor(form);
+  const m=s.modal,mode=button.hasAttribute('data-pdf-editor-preview')?'preview':'download';
+  if(!m||m.kind!=='customerPdfEditor')return;
+  const draft=m.printDraft;
+  if(!draft.customerName||!draft.number||!draft.campaignTitle)return toast('تأكد من رقم العقد واسم الزبون وعنوان الحملة.',true);
+  if(draft.amount<0||!Number.isFinite(draft.amount))return toast('القيمة المتفق عليها غير صالحة.',true);
+  button.disabled=true;
+  try{await generateCustomerContractPdf(m.data.id,mode,draft);}
+  finally{if(button.isConnected)button.disabled=false;}
+ });
+ const add=form.querySelector('[data-print-site-add]');
+ if(add)add.onclick=()=>{
+  captureCustomerPdfEditor(form);
+  if(s.modal.printDraft.sites.length>=100)return toast('الحد الأقصى 100 قطعة في نسخة الطباعة.',true);
+  s.modal.printDraft.sites.push({code:'',name:'',governorate:'',address:''});
+  render();
+ };
+ form.querySelectorAll('[data-print-site-remove]').forEach(button=>button.onclick=()=>{
+  captureCustomerPdfEditor(form);
+  s.modal.printDraft.sites.splice(Number(button.dataset.printSiteRemove),1);
+  render();
+ });
 }
 
 function customerContractPreview(v){
@@ -2003,7 +2144,8 @@ function bind(){
   }if(field==='site_id')data.siteIds=[id];openForm(k,data)});
  document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'leases',data:lookup('leases',x.dataset.preview)};render()});
  document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
- document.querySelectorAll('[data-customer-pdf]').forEach(button=>button.onclick=()=>generateCustomerContractPdf(button.dataset.customerPdf,button.dataset.pdfMode||'download'));
+ document.querySelectorAll('[data-customer-pdf]').forEach(button=>button.onclick=()=>openCustomerPdfEditor(button.dataset.customerPdf,button.dataset.pdfMode||'preview'));
+ bindCustomerPdfEditor();
  document.querySelectorAll('[data-landlord-pdf]').forEach(button=>button.onclick=()=>generateLandlordContractPdf(button.dataset.landlordPdf,button.dataset.pdfMode||'download'));
  document.querySelectorAll('[data-print-record]').forEach(x=>x.onclick=()=>{const [table,id]=x.dataset.printRecord.split('|');s.modal={kind:'preview',table,data:lookup(table,id)};render()});
  document.querySelectorAll('[data-renew]').forEach(x=>x.onclick=()=>{let v=lookup('leases',x.dataset.renew);openForm('leases',{...v,id:undefined,contract_number:undefined,renewed_from:v.id,start_date:today(),end_date:'',rent_total:v.rent_total,advance_amount:0})});
