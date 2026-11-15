@@ -104,11 +104,13 @@ test('generated contract filenames include the Arabic customer or landlord name 
  const win={},doc={baseURI:'https://example.test/raafatSys/'};
  const pdf=new Function('window','document','URL',
   pdfSource+';\nreturn window.RaafatContractPdf;')(win,doc,URL);
- const customer=pdf.contractFileName({number:'RC-0024',customerName:'مكتبة حبر'});
- const landlord=pdf.contractFileName({kind:'landlord',number:'RA-0032',landlordName:'حسين علي'});
+ const customer=pdf.contractFileName({number:'RC-0024',customerName:'مكتبة حبر',customerPhone:'07701234567'});
+ const landlord=pdf.contractFileName({kind:'landlord',number:'RA-0032',landlordName:'حسين علي',landlordPhone:'07801234567'});
  assert.ok(customer.includes('مكتبة-حبر'));
  assert.ok(customer.includes('RC-0024'));
+ assert.ok(customer.includes('07701234567'));
  assert.ok(landlord.includes('حسين-علي'));
+ assert.ok(landlord.includes('07801234567'));
  assert.ok(landlord.includes('RA-0032'));
  assert.ok(landlord.endsWith('.pdf'));
  assert.ok(!landlord.includes('/'));
