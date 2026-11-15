@@ -3717,6 +3717,7 @@ function clean(k,v){
   if(numericField&&val!==null&&(!Number.isFinite(Number(val))))throw Error('قيمة رقمية غير صالحة في '+f);
   if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','next_payment_due_date','company_representative','landlord_representative','locations','hired_at','phone'].includes(f))val=null;
   if(f==='active')val=(val===true||val==='true');
+  if(f==='ad_faces'&&val!==null)val=Number(val);
   o[f]=val;
  }});
  if(k==='landlords'&&v.card_image_path)o.card_image_path=v.card_image_path;
