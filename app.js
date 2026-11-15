@@ -48,7 +48,12 @@ const defs={
  company_expenses:{title:'المصروفات والفواتير',icon:'receipt',fields:[['expense_date','تاريخ الفاتورة','date',true],['title','وصف الفاتورة','text'],['category','التصنيف المحاسبي','text'],['amount','إجمالي الفاتورة','number',true],['currency','عملة الفاتورة','select',true,['IQD','USD']],['paid_by','الموظف المسؤول / المستلم','text',true],['notes','الملاحظات','textarea']]},
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المعتمدة','lookup:campaigns',true],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
-const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
+const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',
+ general:'الإدارة العامة',graphic_design:'التصميم والجرافيك',production:'الإنتاج والتصوير',
+ marketing:'التسويق وإدارة الحسابات',development:'البرمجة وتطوير المواقع',
+ shared:'الخدمات الإدارية والمشتركة',cleaning:'التنظيف',
+ admin:'المدير الرئيسي',staff:'موظف',custom_admin:'مدير بصلاحيات مخصصة',
+ true:'متاح للحملات',false:'غير متاح'};
 const COMPANY_DEFAULTS=Object.freeze({
  company_name:'شركة رأفت للدعاية والإعلان والتجارة العامة',
  company_short_name:'رأفت',
