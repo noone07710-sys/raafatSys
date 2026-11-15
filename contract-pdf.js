@@ -312,7 +312,10 @@
   return months>0?months+' شهراً':'المدة المحددة في هذا العقد';
  }
  function landlordClauses(payload){
-  const rent=amount(payload.rentTotal,payload.currency);
+  // The legal rent line names Iraqi dinars explicitly, and spells out one million when exact.
+  const rent=payload.currency==='IQD'?
+   number(payload.rentTotal)+' دينار عراقي'+(Number(payload.rentTotal)===1000000?' (مليون دينار عراقي)':''):
+   amount(payload.rentTotal,payload.currency);
   const days=Math.max(0,Number(payload.graceDays)||0);
   const grace=days===14?'أسبوعان':days===7?'أسبوع واحد':days+' يوماً';
   const start=label(payload.startDate).replace(/-/g,'/');
