@@ -682,7 +682,7 @@ function bindNav(){
   const staffAdminRequested=s.view==='staff_admin';
   localStorage.setItem('raafat-last-view',s.view);
   s.navExpanded=navGroupForView(s.view);
-  s.search='';s.filter='all';s.expenseCategory='';s.modal=null;
+  s.search='';s.filter='all';s.expenseCategory='';s.campaignPaymentFocusId=null;s.modal=null;
   render();
   if(staffAdminRequested&&!s.managedStaff)refreshManagedStaff();
  });
@@ -1018,14 +1018,16 @@ function showVal(k,row,f){
 }
 function campaignPaymentOverview(){
  const q=s.search.trim().toLocaleLowerCase();
+ const focused=lookup('campaigns',s.campaignPaymentFocusId);
+ const accountingRows=focused?[focused]:s.data.campaigns;
  const rows=s.data.campaigns.filter(cam=>
-  !q||[cam.title,cam.notes,cam.locations,
+  (!focused||cam.id===focused.id)&&(!q||[cam.title,cam.notes,cam.locations,
     nameOf('customers',cam.customer_id),nameOf('packages',cam.package_id),
     ...linkedSites(cam.id).flatMap(site=>[site.code,site.name])
-  ].some(value=>String(value||'').toLocaleLowerCase().includes(q)));
- const total=s.data.campaigns.reduce((sum,cam)=>sum+convert(Number(cam.price||0),cam.currency,s.displayCurrency),0);
- const received=s.data.campaigns.reduce((sum,cam)=>sum+convert(campaignPaid(cam.id),cam.currency,s.displayCurrency),0);
- const remaining=s.data.campaigns.reduce((sum,cam)=>sum+convert(campaignBalance(cam),cam.currency,s.displayCurrency),0);
+  ].some(value=>String(value||'').toLocaleLowerCase().includes(q))));
+ const total=accountingRows.reduce((sum,cam)=>sum+convert(Number(cam.price||0),cam.currency,s.displayCurrency),0);
+ const received=accountingRows.reduce((sum,cam)=>sum+convert(campaignPaid(cam.id),cam.currency,s.displayCurrency),0);
+ const remaining=accountingRows.reduce((sum,cam)=>sum+convert(campaignBalance(cam),cam.currency,s.displayCurrency),0);
  const summary=[
   ['إجمالي قيمة الحملات',total,'total'],
   ['إجمالي المبالغ الواصلة',received,'received'],
@@ -1066,6 +1068,7 @@ function campaignPaymentOverview(){
  }).join('');
  return '<div class="campaign-payments-page">'+
   '<div class="campaign-payments-intro"><h2>حسابات الحملات الإعلانية</h2><p>كل حملة تظهر مع إجمالي مبلغها والواصل والمتبقي. سجّل الدفعة مباشرة من نفس الحملة، وراجع سجل الدفعات القديمة عند الحاجة.</p></div>'+
+  (focused?'<div class="campaign-payments-focus"><div><strong>دفعات الحملة: '+E(focused.title)+'</strong><small>تظهر دفعات الحملة المرتبطة بالعقد المحدد فقط.</small></div><button type="button" class="btn secondary mini" data-clear-campaign-payment-focus>عرض جميع الحملات</button></div>':'')+
   '<div class="campaign-payments-summary-grid">'+summary+'</div>'+
   '<div class="campaign-payments-toolbar"><input class="search" id="search" type="search" placeholder="ابحث باسم الحملة أو الزبون أو الباقة..." value="'+E(s.search)+'">'+
   '<span class="campaign-payments-count">الحملات الظاهرة: '+rows.length+' من '+s.data.campaigns.length+'</span></div>'+
@@ -3320,6 +3323,9 @@ function bind(){
  };
 
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
+ document.querySelectorAll('[data-clear-campaign-payment-focus]').forEach(button=>button.onclick=()=>{
+  s.campaignPaymentFocusId=null;s.search='';render();
+ });
  document.querySelectorAll('[data-payroll-create]').forEach(x=>x.onclick=()=>openPayrollPayment(x.dataset.payrollCreate));
  document.querySelectorAll('[data-payroll-receipt]').forEach(x=>x.onclick=()=>downloadPayrollReceipt(x.dataset.payrollReceipt));
  document.querySelectorAll('[data-staff-new]').forEach(x=>x.onclick=()=>openStaffRoleEditor());
@@ -3370,6 +3376,13 @@ function bind(){
   s.modal=null;s.search=numberedContract(lease.contract_number);s.view='lease_installments';render();
  });
  document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
+ document.querySelectorAll('[data-customer-payments]').forEach(button=>button.onclick=()=>{
+  const contract=lookup('customer_contracts',button.dataset.customerPayments);
+  const campaign=contract?.campaign_id?lookup('campaigns',contract.campaign_id):null;
+  if(!campaign)return toast('هذا العقد غير مرتبط بحملة محفوظة، لذلك لا توجد دفعات حملة مرتبطة به.',true);
+  if(!canAccess('campaign_payments','read'))return toast('ما عندك صلاحية لعرض دفعات الحملات.',true);
+  s.modal=null;s.search='';s.campaignPaymentFocusId=campaign.id;s.view='campaign_payments';render();
+ });
  document.querySelectorAll('[data-customer-pdf]').forEach(button=>button.onclick=()=>openCustomerPdfEditor(button.dataset.customerPdf,button.dataset.pdfMode||'preview'));
  bindCustomerPdfEditor();
  document.querySelectorAll('[data-landlord-pdf]').forEach(button=>button.onclick=()=>openLandlordPdfEditor(button.dataset.landlordPdf,button.dataset.pdfMode||'preview'));
