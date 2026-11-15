@@ -7,7 +7,7 @@ const source=readFileSync(new URL('../app.js',import.meta.url),'utf8')
 const pdfSource=readFileSync(new URL('../contract-pdf.js',import.meta.url),'utf8');
 function setup(){
  const a=new Function('localStorage','document','crypto','createClient','window','FormData','File',
-  source+'\nreturn {s,seededDemoPackages,seededDemoRates,quoteCampaign,campaignFaces,formValidate,campaignContractData,quoteCustomerContract,customerContractPdfPayload,fieldHtml,clean};'
+  source+'\nreturn {s,seededDemoPackages,seededDemoRates,quoteCampaign,refreshCampaignQuote,campaignFaces,formValidate,campaignContractData,quoteCustomerContract,customerContractPdfPayload,fieldHtml,clean};'
  )({getItem:()=>null,setItem:()=>{}},{baseURI:'https://example.test/raafatSys/'},
   {randomUUID:()=> 'example-uuid'},()=>{},{},class {},class {});
  a.s.demo=true;a.s.staff={role:'admin'};
@@ -33,6 +33,18 @@ test('face selection applies a strict 50 percent discount only to A B C D',()=>{
  // Legacy campaigns had no ad_faces field and keep their previous full price.
  assert.equal(a.quoteCampaign({package_id:pkg('A').id,months:3,quantity:1,
   currency:'USD'}).total,280);
+});
+
+test('changing face count recalculates the current campaign price',()=>{
+ const {a,pkg}=setup();
+ const campaign={package_id:pkg('A').id,months:3,quantity:1,currency:'USD',ad_faces:2,price:280};
+ a.s.modal={table:'campaigns',data:campaign,siteIds:[],autoPrice:true};
+ campaign.ad_faces=1;
+ a.refreshCampaignQuote();
+ assert.equal(campaign.price,140);
+ campaign.ad_faces=2;
+ a.refreshCampaignQuote();
+ assert.equal(campaign.price,280);
 });
 
 test('E remains on the unchanged square-meter pricing regardless of face input',()=>{
