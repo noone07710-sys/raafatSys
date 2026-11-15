@@ -136,9 +136,7 @@ test('landlord PDF draws lease on first Photoshop A4 and nine numbered lease ter
  const ownerSig=trace.draws.find(d=>d.canvasId===3&&d.text==='الطرف الأول — المؤجر (مالك السطح)');
  const tenantSig=trace.draws.find(d=>d.canvasId===3&&d.text==='الطرف الثاني — شركة رأفت (المستأجر)');
  assert.ok(ownerSig&&tenantSig&&ownerSig.x>tenantSig.x,'owner signature right and Raafat signature left');
- assert.ok(trace.text.some(x=>x.includes('1,200 
-});
-)),'the amount must follow the actual saved lease, not a fixed million IQD');
+ assert.ok(trace.text.some(x=>x.includes('1,200')),'rent clause uses the actual lease amount');
  assert.ok(trace.text.some(x=>x.includes('5 يوماً')),'grace clause must use actual saved days rather than fixed two weeks');
  assert.ok(trace.text.some(x=>x.includes('2026/11/14')&&x.includes('2027/11/13')),'the period in the clauses must use saved dates');
  assert.ok(!trace.draws.some(d=>d.canvasId===1&&d.text==='شروط العقد كالتالي'),'first page contains no terms');
