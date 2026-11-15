@@ -142,6 +142,63 @@ const displayMoneyText=(n,source)=>money(equivalent(n,source),s.displayCurrency)
 const displayMoney=(n,source)=>'<strong class="amount">'+E(money(equivalent(n,source),s.displayCurrency))+'</strong>'+(s.displayCurrency!==source?'<small class="original-amount">الأصل: '+E(money(n,source))+'</small>':'');
 const originalCurrency=(k,v)=>v?.currency||((k==='lease_installments')?lookup('leases',v?.lease_id)?.currency:(k==='campaign_payments')?lookup('campaigns',v?.campaign_id)?.currency:null)||'IQD';
 const linkedSites=(campaignId)=>s.data.campaign_sites.filter(x=>x.campaign_id===campaignId).map(x=>lookup('ad_sites',x.site_id)).filter(Boolean);
+
+// A campaign reserves each site only during its agreed dates. Bookings
+// with overlapping calendar periods cannot share the same advertising site.
+function campaignBookingPeriod(campaign){
+ const start=String(campaign?.start_date||'');
+ const months=Number(campaign?.months);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!Number.isInteger(months)||months<=0)return null;
+ try{
+  const end=addDays(plusMonths(start,months),-1);
+  return end>=start?{start,end}:null;
+ }catch(_){return null;}
+}
+function overlappingBookingPeriods(a,b){
+ return Boolean(a&&b&&a.start<=b.end&&b.start<=a.end);
+}
+function campaignSiteConflict(siteId,draft,campaignLinks=s.data.campaign_sites,campaigns=s.data.campaigns){
+ const proposed=campaignBookingPeriod(draft);
+ if(!siteId||!proposed)return null;
+ for(const link of campaignLinks){
+  if(link.site_id!==siteId||link.campaign_id===draft?.id)continue;
+  const campaign=campaigns.find(row=>row.id===link.campaign_id);
+  if(campaign&&overlappingBookingPeriods(proposed,campaignBookingPeriod(campaign)))return campaign;
+ }
+ return null;
+}
+function reservedCampaignChoices(draft,ids=s.modal?.siteIds||[],links=s.data.campaign_sites,campaigns=s.data.campaigns){
+ return (ids||[]).map(siteId=>({
+  siteId,
+  site:lookup('ad_sites',siteId),
+  campaign:campaignSiteConflict(siteId,draft,links,campaigns)
+ })).filter(item=>item.campaign);
+}
+function reservedCampaignMessage(conflicts){
+ return 'بعض القطع محجوزة بحملات أخرى خلال الفترة المختارة: '+
+  conflicts.map(row=>(row.site?.code||row.siteId)+' ('+row.campaign.title+')').join('، ');
+}
+function removeUnavailableCampaignChoices(draft){
+ if(s.modal?.table!=='campaigns')return [];
+ const conflicts=reservedCampaignChoices(draft);
+ if(!conflicts.length)return [];
+ const ids=new Set(conflicts.map(item=>item.siteId));
+ s.modal.siteIds=(s.modal.siteIds||[]).filter(id=>!ids.has(id));
+ return conflicts;
+}
+async function freshCampaignConflicts(draft,ids){
+ if(s.demo||!s.client||!ids?.length)return [];
+ const {data:links,error:linksError}=await s.client.from('campaign_sites')
+  .select('site_id,campaign_id').in('site_id',[...new Set(ids)]);
+ if(linksError)throw linksError;
+ const otherLinks=(links||[]).filter(link=>link.campaign_id!==draft?.id);
+ if(!otherLinks.length)return [];
+ const campaignIds=[...new Set(otherLinks.map(link=>link.campaign_id))];
+ const {data:campaigns,error:campaignError}=await s.client.from('campaigns')
+  .select('id,title,start_date,months').in('id',campaignIds);
+ if(campaignError)throw campaignError;
+ return reservedCampaignChoices(draft,ids,otherLinks,campaigns||[]);
+}
 const serial4=(number)=>String(Math.max(0,Number(number)||0)).padStart(4,'0');
 const numberedContract=(code)=>String(code??'').replace(/^([A-Z]+-)(\d+)$/,(_,prefix,num)=>prefix+serial4(num));
 const currencyAmount=(value,currency)=>displayMoney(value,currency);
@@ -2119,11 +2176,15 @@ function selectedSiteCards(v){
  const pkg=lookup('packages',v.package_id);
  if(!pkg)return '<div class="notice full">اختَر نوع الإعلان / الباقة A–E أولاً حتى تظهر القطع التابعة إلها فقط.</div>';
  const matches=s.data.ad_sites.filter(x=>siteMatchesPackage(x,pkg.id));
- const rows=matches.filter(x=>x.active!==false||selected.includes(x.id));
+ const rows=matches.filter(x=>(x.active!==false||selected.includes(x.id))&&!campaignSiteConflict(x.id,v));
+ const reservedCount=matches.filter(x=>campaignSiteConflict(x.id,v)).length;
+ const conflicts=reservedCampaignChoices(v,selected);
  const mismatch=selected.filter(id=>!siteMatchesPackage(lookup('ad_sites',id),pkg.id));
- const notice=mismatch.length?'<div class="notice full">توجد '+mismatch.length+' قطع مرتبطة سابقاً بالحملة من باقة مختلفة. غيّر الباقة أو صحّح تصنيف القطع قبل الحفظ.</div>':'';
- if(!rows.length)return notice+'<div class="notice full">ماكو قطع مسجّلة للباقة <b>'+E(pkg.code)+'</b> حالياً. أضف قطع من قسم «المواقع الإعلانية» وحدّد الباقة '+E(pkg.code)+' أو أدخل موقعاً نصياً إضافياً.</div>';
- return notice+'<div class="full"><strong>القطع التابعة للباقة '+E(pkg.code)+' فقط</strong><p class="subtle">'+rows.length+' قطعة من نوع '+E(pkg.name)+' — اختَر قطعة أو أكثر. القطع من الباقات الأخرى مخفية تلقائياً.</p><div class="site-picker">'+rows.map(x=>'<label class="site-option"><input type="checkbox" data-site-id="'+E(x.id)+'" '+(selected.includes(x.id)?'checked':'')+'><span><b>'+E(x.code)+' — '+E(x.name)+'</b><small>'+E(labels[x.site_type]||x.site_type)+' · '+E(x.governorate)+' · '+E(x.address)+(x.active===false?' · غير متاحة حالياً':'')+(x.rooftop_property_id?' · '+E(nameOf('properties',x.rooftop_property_id)):'')+(pkg.pricing_mode==='sqm_month'?' · '+(rooftopSiteArea(x)>0?E(fmt(rooftopSiteArea(x)))+' م²':'السطح بلا قياس مسجّل'):'')+'</small></span></label>').join('')+'</div></div>';
+ const notice=(mismatch.length?'<div class="notice full">توجد '+mismatch.length+' قطع مرتبطة سابقاً بالحملة من باقة مختلفة. غيّر الباقة أو صحّح تصنيف القطع قبل الحفظ.</div>':'')+
+  (conflicts.length?'<div class="notice full">'+E(reservedCampaignMessage(conflicts))+' — غيّر مدة الحملة أو اختر قطعاً غير محجوزة.</div>':'');
+ const bookingHint=reservedCount?'<small>'+reservedCount+' قطعة محجوزة خلال فترة الحملة المحددة، لذلك مخفية من الاختيار.</small>':'';
+ if(!rows.length)return notice+'<div class="notice full">لا توجد قطع متاحة للباقة <b>'+E(pkg.code)+'</b> خلال الفترة المختارة. '+(reservedCount?'غيّر تاريخ البداية أو المدة للحصول على قطع متاحة.':'أضف قطعاً من قسم المواقع الإعلانية أو أدخل موقعاً إضافياً.')+'</div>';
+ return notice+'<div class="full"><strong>القطع المتاحة للباقة '+E(pkg.code)+'</strong><p class="subtle">'+rows.length+' قطعة متاحة من نوع '+E(pkg.name)+' — المحجوزة بحملات متداخلة لا تظهر هنا. '+bookingHint+'</p><div class="site-picker">'+rows.map(x=>'<label class="site-option"><input type="checkbox" data-site-id="'+E(x.id)+'" '+(selected.includes(x.id)?'checked':'')+'><span><b>'+E(x.code)+' — '+E(x.name)+'</b><small>'+E(labels[x.site_type]||x.site_type)+' · '+E(x.governorate)+' · '+E(x.address)+(x.active===false?' · غير متاحة حالياً':'')+(x.rooftop_property_id?' · '+E(nameOf('properties',x.rooftop_property_id)):'')+(pkg.pricing_mode==='sqm_month'?' · '+(rooftopSiteArea(x)>0?E(fmt(rooftopSiteArea(x)))+' م²':'السطح بلا قياس مسجّل'):'')+'</small></span></label>').join('')+'</div></div>';
 }
 
 function relatedDetails(k,v){
