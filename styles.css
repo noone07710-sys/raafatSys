@@ -1007,3 +1007,57 @@
  .lease-custom-row{padding:10px;gap:8px}
  .lease-custom-row .field input{padding:8px 6px;font-size:11px}
 }
+
+
+/* Payroll workspace and fine-grained administrator permissions */
+.payroll-payment-modal,.staff-role-editor{width:min(780px,calc(100vw - 26px));max-height:90dvh;overflow-y:auto}
+.payroll-payee{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;margin:12px 0 20px}
+.payroll-payee>div{background:#f3f8f9;border:1px solid #dae7eb;border-radius:13px;
+ padding:14px;display:grid;gap:7px;min-width:0}
+.payroll-payee small{font-size:11px;color:#63818d}
+.payroll-payee strong{font-size:17px;color:#214b57;font-weight:800;overflow-wrap:anywhere}
+.payroll-payee span{font-size:11px;color:#65808d}
+.payroll-payment-form .formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.payroll-payment-form .formgrid>.full{grid-column:1/-1}
+.payroll-payment-form .field{min-width:0}
+.payroll-payment-form input,.payroll-payment-form textarea{max-width:100%}
+.payroll-receipt-hint{display:flex;align-items:flex-start;gap:10px;border:1px solid #c9dfe0;
+ background:#edf6f5;padding:12px 14px;border-radius:12px;margin:14px 0;color:#2f6970}
+.payroll-receipt-hint svg{flex:none;margin-top:3px}
+.payroll-receipt-hint p{font-size:11px;line-height:1.9;margin:0}
+.payroll-success-mark{background:#e6f5ef;border:1px solid #c5e7db;color:#2b806d;
+ margin:12px auto;border-radius:50%;height:59px;width:59px;display:grid;place-items:center}
+.payroll-receipt-ready{text-align:center;max-width:580px}
+.payroll-receipt-ready .modalhead{text-align:right}
+.payroll-receipt-ready h3{font-size:17px;font-weight:800;color:#244b59}
+.payroll-receipt-ready>p{font-size:12px;color:#425c6b;line-height:1.95}
+.payroll-receipt-ready .actions{justify-content:center}
+.hr-legacy{margin-top:18px;border-top:1px dashed #ccdce2;padding-top:13px;color:#647782;font-size:11px;line-height:1.8}
+.hr-legacy h4{color:#486b78;font-weight:800;margin:0 0 9px}
+.hr-legacy p{margin:6px 0;background:#f7f9fa;border:1px solid #ebeff2;border-radius:9px;padding:8px 10px}
+.staff-admin-page{display:grid;gap:16px}
+.staff-admin-intro{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:19px}
+.staff-admin-intro>div{min-width:0;flex:1 1 320px}
+.staff-admin-intro h2{font-size:17px;font-weight:800;color:#2b4c5c;margin:0 0 9px}
+.staff-admin-intro p{font-size:12px;line-height:2;margin:0}
+.staff-permission-pills{max-width:380px}
+.staff-permission-chip{display:inline-block;margin:3px;padding:4px 8px;border:1px solid #d9e5e9;
+ border-radius:8px;color:#3c6876;background:#f3f8fa;font-size:10px;white-space:normal}
+.staff-permissions{border:1px solid #e0e9ed;background:#f8fbfc;padding:14px;border-radius:14px;margin:15px 0}
+.staff-permissions h3{font-weight:800;font-size:13px;color:#2a5361}
+.staff-permissions>p{font-size:11px;line-height:2;margin:6px 0 13px}
+.staff-permission-list{display:grid;gap:6px;max-height:min(46dvh,400px);overflow-y:auto;padding-inline-end:4px}
+.staff-permission-row{display:grid;grid-template-columns:minmax(0,1fr) 115px 135px;align-items:center;gap:8px;
+ border:1px solid #e4ecef;background:#fff;border-radius:10px;padding:10px 12px}
+.staff-permission-row>strong{font-size:12px;color:#2d4e5d;overflow-wrap:anywhere}
+.staff-permission-toggle{display:flex;align-items:center;gap:7px;font-size:11px;color:#50707d;cursor:pointer}
+.staff-permission-toggle input{width:16px;height:16px;accent-color:#297c83}
+@media(max-width:650px){
+ .payroll-payee,.payroll-payment-form .formgrid{grid-template-columns:1fr}
+ .payroll-payment-form .formgrid>.full{grid-column:1}
+ .staff-admin-intro .inline{width:100%}
+ .staff-permission-row{grid-template-columns:minmax(0,1fr) 76px 108px;padding:9px 7px;gap:5px}
+ .staff-permission-row>strong{font-size:10px}
+ .staff-permission-toggle{font-size:10px;gap:4px}
+ .staff-role-editor{padding:13px}
+}
