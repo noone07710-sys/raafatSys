@@ -6,7 +6,7 @@ const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
-const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts','company_expenses'];
+const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts','company_expenses','employees'];
 
 // Province choices are canonical Arabic governorate names (including Halabja, 2025).
 // Legacy saved names are displayed as a one-time existing option, not discarded.
@@ -39,6 +39,12 @@ const defs={
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
  package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
+ employees:{title:'الموظفون والرواتب',icon:'users',fields:[
+  ['name','اسم الموظف','text',true],['job_title','المسمّى الوظيفي','text',true],
+  ['department','القسم','select',true,['general','graphic_design','production','marketing','development','services']],
+  ['phone','رقم الهاتف','tel'],['salary_amount','الراتب الشهري','number',true],
+  ['salary_currency','عملة الراتب','select',true,['IQD','USD']],['hired_at','تاريخ المباشرة','date'],
+  ['active','حالة الموظف','select',true,['true','false']],['notes','ملاحظات','textarea']]},
  company_expenses:{title:'المصروفات والفواتير',icon:'receipt',fields:[['expense_date','تاريخ الفاتورة','date',true],['title','وصف الفاتورة','text'],['category','التصنيف المحاسبي','text'],['amount','إجمالي الفاتورة','number',true],['currency','عملة الفاتورة','select',true,['IQD','USD']],['paid_by','الموظف المسؤول / المستلم','text',true],['notes','الملاحظات','textarea']]},
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المعتمدة','lookup:campaigns',true],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
@@ -64,7 +70,7 @@ function companyLogoHtml(kind='sidebar'){
  '<span class="company-logo-fallback" aria-hidden="true">'+E(String(companyValue('company_short_name')).trim().slice(0,1)||'ر')+'</span>';
 }
 
-const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:'dashboard',navExpanded:null,data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',expenseCategory:'',alertFilter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
+const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:localStorage.getItem('raafat-last-view')||'dashboard',navExpanded:null,activityLogs:[],data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',expenseCategory:'',alertFilter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 
 // Demo data matches the official price matrix; real staff load rows from Supabase.
 const OFFICIAL_PACKAGES=[
@@ -251,17 +257,23 @@ async function load(){
    }
    throw Error('تجاوز عدد سجلات '+table+' حد التحميل المسموح؛ يلزم ترحيل عرض القائمة إلى صفحات.');
   };
-  const requests=await Promise.all([...keys.map(fetchAll),s.client.from('settings').select('*').eq('id',1).maybeSingle()]);
+  const requests=await Promise.all([...keys.map(fetchAll),s.client.from('settings').select('*').eq('id',1).maybeSingle(),
+   s.staff.role==='admin'?
+    s.client.from('activity_logs').select('*').order('occurred_at',{ascending:false}).limit(300):
+    Promise.resolve({data:[],error:null})]);
   for(let i=0;i<keys.length;i++)s.data[keys[i]]=requests[i]||[];
   if(requests[keys.length].error)throw requests[keys.length].error;
-  s.settings=requests[keys.length].data||s.settings;s.error='';
+  s.settings=requests[keys.length].data||s.settings;
+  s.activityLogs=requests[keys.length+1].error?[]:requests[keys.length+1].data||[];
+  s.error=requests[keys.length+1].error&&s.staff.role==='admin'?
+    'تعذر تحميل سجل الحركات: '+requests[keys.length+1].error.message:'';
   subscribeToExchangeRate();
  }catch(e){s.error=e.message||String(e)}
  s.loading=false;render();
 }
 function demo(){
  s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;if(s.demoLogoUrl){URL.revokeObjectURL(s.demoLogoUrl);s.demoLogoUrl=null;}s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={...COMPANY_DEFAULTS,usd_iqd:1500};
- s.view='dashboard';s.error='';render();
+ s.view='dashboard';s.activityLogs=[];s.error='';render();
 }
 async function connect(){
  const url=$('#url').value.trim(),key=$('#key').value.trim(),email=$('#email').value.trim(),password=$('#password').value;
@@ -382,10 +394,12 @@ const NAV_GROUPS=[
   ['lease_installments','دفعات إيجار الأسطح','receipt']
  ]},
  {id:'finance',title:'المالية',subtitle:'إدارة الفواتير والمصروفات',icon:'wallet',items:[
-  ['company_expenses','الفواتير والمصروفات','receipt']
+  ['company_expenses','الفواتير والمصروفات','receipt'],
+  ['employees','الموظفون والرواتب','users']
  ]}
 ];
 function navGroupForView(view){return NAV_GROUPS.find(group=>group.items.some(item=>item[0]===view))?.id||null;}
+s.navExpanded=navGroupForView(s.view);
 function navLink(id,label,icon){
  const active=id===s.view;
  return '<button type="button" data-nav="'+id+'" class="nav-link'+(active?' active':'')+'"'+(active?' aria-current="page"':'')+'><span class="nav-link-icon" aria-hidden="true">'+uiIcon(icon,19)+'</span><span>'+label+'</span></button>';
@@ -398,7 +412,9 @@ function nav(){
  return navLink('dashboard','الرئيسية','dashboard')+
   '<div class="nav-group-list">'+NAV_GROUPS.map(navGroup).join('')+'</div>'+
   '<div class="nav-utility"><small class="nav-utility-label">الإدارة العامة</small>'+
-  navLink('reports','التقارير','chart')+navLink('settings','الإعدادات','settings')+'</div>';
+  navLink('reports','التقارير','chart')+
+  ((s.demo||s.staff?.role==='admin')?navLink('activity_logs','سجل الحركات','history'):'')+
+  navLink('settings','الإعدادات','settings')+'</div>';
 }
 function changeNavGroup(id){
  if(!NAV_GROUPS.some(x=>x.id===id))return;
@@ -410,6 +426,7 @@ function changeNavGroup(id){
 function bindNav(){
  document.querySelectorAll('[data-nav]').forEach(x=>x.onclick=()=>{
   s.view=x.dataset.nav;
+  localStorage.setItem('raafat-last-view',s.view);
   s.navExpanded=navGroupForView(s.view);
   s.search='';s.filter='all';s.expenseCategory='';s.modal=null;
   render();
@@ -644,6 +661,8 @@ function dashboard(){
  return '<div class="cards">'+[['العملاء',s.data.customers.length],['الحملات',s.data.campaigns.length],['عقود الزبائن',s.data.customer_contracts.length],['عقود مالكي الأسطح',s.data.leases.length]].map(([t,n])=>'<div class="box stat"><small>'+t+'</small><b>'+fmt(n)+'</b></div>').join('')+'</div><div class="box"><h2>ملخص النشاط المرتبط</h2><div class="summary"><div><small>العملاء الفعالون</small><b>'+active+'</b></div><div><small>مالكو الأسطح / العقارات</small><b>'+s.data.landlords.length+' / '+s.data.properties.length+'</b></div><div><small>إجمالي دفعات الحملات المحوّل</small><b>'+E(money(paid,s.displayCurrency))+'</b></div><div><small>سعر الدولار المحدد في الإعدادات</small><b>'+fmt(s.settings.usd_iqd)+' د.ع</b></div></div><p class="subtle" style="margin-top:15px">جميع مبالغ العرض تتبدّل فوراً من قائمة العملة بالأعلى؛ المبالغ الأصلية للعقود والدفعات لا تتغير.</p></div>';
 }
 const columns={
+ employees:[['name','الموظف'],['job_title','المنصب'],['department','القسم'],
+  ['salary_amount','الراتب الشهري'],['salary_currency','العملة'],['active','الحالة']],
  customers:[['name','العميل'],['phone','الهاتف'],['rental_address','العنوان'],['status','الحالة'],['campaign_count','الحملات']],
  packages:[['code','الرمز'],['name','الباقة'],['package_type','النوع'],['width_m','العرض م'],['height_m','الطول م'],['area_m2','م²'],['default_months','الأشهر'],['price','السعر']],
  landlords:[['name','المالك'],['phone','الهاتف'],['governorate','المحافظة'],['properties_count','العقارات']],
@@ -659,6 +678,9 @@ const columns={
 function showVal(k,row,f){
  let v=row[f];
  if(f==='category'&&k==='company_expenses')return E(EXPENSE_CATEGORY_LABELS[v]||v);
+ if(k==='employees'&&f==='department')return E(EXPENSE_DEPARTMENTS.find(([id])=>id===v)?.[1]||v);
+ if(k==='employees'&&f==='salary_amount')return displayMoney(v,row.salary_currency||'IQD');
+ if(k==='employees'&&f==='salary_currency')return E(labels[v]||v);
  if(f==='status')return '<span class="pill '+E(v)+'">'+E(labels[v]||v)+'</span>';
  if(f==='site_type'||f==='contract_type'||f==='package_type')return E(labels[v]||v);
  if(f==='area_m2')return v==null?'—':E(fmt(v))+' م²';
@@ -1170,9 +1192,13 @@ function settings(){
 }
 function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>الصلاحية غير مفعلة</h1><p class="muted">تم تسجيل الدخول، لكن حسابك غير مضاف إلى موظفي نظام رأفت.</p><div class="notice">يجب إضافة معرّف حسابك إلى جدول staff_members من لوحة Supabase بدور admin أو staff، ثم تسجيل الدخول مجدداً.</div><button class="btn" data-action="logout">تسجيل خروج</button></div></div>'}
 function render(){
+ if(![...keys,'dashboard','reports','settings','alerts','activity_logs'].includes(s.view))s.view='dashboard';
+ if(s.staff&&s.staff.role!=='admin'&&['activity_logs','employees'].includes(s.view))s.view='dashboard';
+ if((s.staff||s.demo)&&s.view)localStorage.setItem('raafat-last-view',s.view);
  let target=$('#app');
  if(typeof document!=='undefined')document.title=companyValue('company_short_name')+' | نظام الإدارة';
- let content=s.view==='dashboard'?dashboard():s.view==='alerts'?alertsView():s.view==='reports'?reports():s.view==='settings'?settings():listing(s.view);
+ let content=s.view==='dashboard'?dashboard():s.view==='alerts'?alertsView():s.view==='reports'?reports():s.view==='settings'?settings():
+  s.view==='activity_logs'?activityLogsView():s.view==='employees'?employeesOverview():listing(s.view);
  if(s.passwordRecovery){target.innerHTML=passwordRecoveryPage();}
  else if(s.resetRequest){target.innerHTML=passwordResetRequestPage();}
  else if(!s.demo&&!s.session){target.innerHTML=authPage();}
@@ -2607,8 +2633,11 @@ function bind(){
 
 function openForm(k,row){
  if(k==='company_expenses'&&row?.id&&s.staff?.role!=='admin')return toast('تعديل المصروفات متاح للمدير فقط',true);
- const defaults={status:'inquiry',currency:s.displayCurrency,expense_date:today(),category:'hospitality',advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
+ if(k==='employees'&&!s.demo&&s.staff?.role!=='admin')return toast('بيانات الموظفين والرواتب متاحة للمدير فقط',true);
+ const defaults={status:'inquiry',currency:s.displayCurrency,salary_currency:'IQD',salary_amount:0,
+  department:'general',hired_at:'',expense_date:today(),category:'hospitality',advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
  let data={...defaults,...(row||{})};
+ if(k==='employees'&&!row?.id)data.active=true;
  if(k==='campaign_payments'&&data.campaign_id)data.entry_currency=lookup('campaigns',data.campaign_id)?.currency||s.displayCurrency;
  if(k==='lease_installments'&&data.lease_id)data.entry_currency=lookup('leases',data.lease_id)?.currency||s.displayCurrency;
  if(k==='ad_sites'&&!data.package_id){
@@ -2648,6 +2677,13 @@ function formValidate(k,v){
   if(!EXPENSE_CATEGORY_LABELS[v.category])throw Error('اختر تصنيف المصروف من القائمة');
   if(!['IQD','USD'].includes(v.currency))throw Error('اختر عملة المصروف');
   if(!(Number(v.amount)>0)||!Number.isFinite(Number(v.amount)))throw Error('مبلغ المصروف يجب أن يكون أكبر من صفر');
+ }
+ if(k==='employees'){
+  if(!String(v.name||'').trim()||!String(v.job_title||'').trim())
+   throw Error('أدخل اسم الموظف ومسمّاه الوظيفي.');
+  if(!['IQD','USD'].includes(v.salary_currency))throw Error('اختر عملة راتب صحيحة.');
+  if(!Number.isFinite(Number(v.salary_amount))||Number(v.salary_amount)<0)
+   throw Error('الراتب الشهري يجب أن يكون صفراً أو مبلغاً موجباً.');
  }
  if(k==='customers'){
   if(!/^[0-9]{11}$/.test(v.phone)||!/^[0-9]{12}$/.test(v.national_id))throw Error('الهاتف يجب أن يكون 11 رقم، والبطاقة الموحدة 12 رقم');
@@ -2749,7 +2785,7 @@ function clean(k,v){
    (['campaign_payments','lease_installments'].includes(k)&&['amount','paid_amount'].includes(f));
   if(numericField&&(val===''||val===null))val=null;
   if(numericField&&val!==null&&(!Number.isFinite(Number(val))))throw Error('قيمة رقمية غير صالحة في '+f);
-  if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','next_payment_due_date','company_representative','landlord_representative','locations'].includes(f))val=null;
+  if(val===''&&['alternate_phone','national_id','notes','landmark','card_image_path','package_id','rooftop_property_id','renewed_from','next_payment_due_date','company_representative','landlord_representative','locations','hired_at','phone'].includes(f))val=null;
   if(f==='active')val=(val===true||val==='true');
   o[f]=val;
  }});
