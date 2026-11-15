@@ -1019,53 +1019,91 @@ function leaseInstallmentsOverview(){
 function expenseOverview(){
  const all=s.data.company_expenses||[],query=s.search.trim().toLocaleLowerCase();
  const filtered=all.filter(expense=>
-  (!s.expenseCategory||expense.category===s.expenseCategory)&&
+  (!s.expenseCategory||expenseLineItems(expense).some(item=>item.category===s.expenseCategory))&&
   (!query||[expense.title,expense.notes,expense.paid_by,expense.expense_date,
-   EXPENSE_CATEGORY_LABELS[expense.category]].some(v=>String(v||'').toLocaleLowerCase().includes(query))))
+   expense.receipt_number,EXPENSE_CATEGORY_LABELS[expense.category],expenseItemDetailsText(expense),
+   ...expenseLineItems(expense).flatMap(item=>[EXPENSE_CATEGORY_LABELS[item.category],
+    EXPENSE_DEPARTMENTS.find(([id])=>id===item.department)?.[1]])]
+   .some(value=>String(value||'').toLocaleLowerCase().includes(query))))
   .sort((a,b)=>String(b.expense_date||'').localeCompare(String(a.expense_date||''))||
    String(b.created_at||'').localeCompare(String(a.created_at||'')));
- const total=items=>roundAmount(items.reduce((sum,item)=>
-  sum+convert(Number(item.amount||0),item.currency,s.displayCurrency),0));
- const thisMonth=today().slice(0,7);
- const todayRows=all.filter(x=>x.expense_date===today());
- const monthRows=all.filter(x=>String(x.expense_date||'').startsWith(thisMonth));
+ const converted=(v,cur)=>convert(Number(v||0),cur,s.displayCurrency);
+ const total=invoices=>roundAmount(invoices.reduce((sum,e)=>sum+converted(e.amount,e.currency),0));
+ const paid=roundAmount(all.reduce((sum,e)=>sum+converted(expensePaidAmount(e),e.currency),0));
+ const overall=total(all),outstanding=Math.max(0,roundAmount(overall-paid));
+ const paidCount=all.filter(e=>expensePaymentStatus(e)==='paid').length;
  const tiles=[
-  ['كل المصروفات',money(total(all),s.displayCurrency),'total'],
-  ['مصروفات الشهر',money(total(monthRows),s.displayCurrency),'month'],
-  ['مصروفات اليوم',money(total(todayRows),s.displayCurrency),'today'],
-  ['عدد العمليات',String(all.length),'count']
+  ['إجمالي قيمة الفواتير',money(overall,s.displayCurrency),'total'],
+  ['المبالغ المسددة',money(paid,s.displayCurrency),'month'],
+  ['الرصيد غير المسدد',money(outstanding,s.displayCurrency),'today'],
+  ['عدد الفواتير',String(all.length),'count']
  ].map(([label,value,type])=>'<div class="expense-stat '+type+'"><small>'+E(label)+'</small><strong>'+E(value)+'</strong></div>').join('');
- const categoryTotals=Object.entries(EXPENSE_CATEGORY_LABELS)
-  .map(([id,label])=>({id,label,items:all.filter(e=>e.category===id)})).filter(x=>x.items.length)
-  .map(x=>'<div class="expense-category-chip"><span>'+E(x.label)+'</span><b>'+E(money(total(x.items),s.displayCurrency))+'</b></div>').join('');
- const cards=filtered.map(e=>{
+ const groupTotals=new Map();
+ for(const inv of all)for(const item of expenseLineItems(inv)){
+  const category=item.category||'other';
+  groupTotals.set(category,(groupTotals.get(category)||0)+
+   converted(expenseLineTotal(item),inv.currency));
+ }
+ const grouping=[...new Set([...EXPENSE_CATEGORY_OPTIONS,...groupTotals.keys()])];
+ const categoryTotals=grouping.filter(code=>groupTotals.has(code)).map(code=>
+  '<div class="expense-category-chip"><span>'+E(EXPENSE_CATEGORY_LABELS[code]||code)+'</span>'+
+  '<b>'+E(money(roundAmount(groupTotals.get(code)),s.displayCurrency))+'</b></div>').join('');
+ const cats=grouping.filter(code=>groupTotals.has(code));
+ const cards=filtered.map(expense=>{
+  const status=expensePaymentStatus(expense),items=expenseLineItems(expense);
+  const categoryCodes=[...new Set(items.map(x=>x.category))];
+  const categoryLabel=categoryCodes.length===1?
+   EXPENSE_CATEGORY_LABELS[categoryCodes[0]]||categoryCodes[0]:'فاتورة متعددة التصنيفات';
+  const due=Math.max(0,roundAmount(Number(expense.amount)-expensePaidAmount(expense)));
   const canEdit=s.staff?.role==='admin';
+  const details=items.map(item=>'<div class="expense-invoice-product">'+
+   '<div><strong>'+E(item.description)+'</strong><small>'+
+    E(EXPENSE_CATEGORY_LABELS[item.category]||item.category||'—')+' · '+
+    E(EXPENSE_DEPARTMENTS.find(([id])=>id===item.department)?.[1]||'القسم غير محدد (سجل سابق)')+
+    '</small></div><span>'+E(fmt(item.quantity))+' × '+E(money(item.unit_price,expense.currency))+
+    '</span><b>'+E(money(expenseLineTotal(item),expense.currency))+'</b></div>').join('');
   return '<article class="expense-record"><div class="expense-record-main">'+
-   '<span class="expense-record-category">'+E(EXPENSE_CATEGORY_LABELS[e.category]||e.category)+'</span>'+
-   '<h3>'+E(e.title)+'</h3>'+
-   '<div class="expense-record-meta"><span>'+uiIcon('calendar',14)+' '+E(e.expense_date)+'</span>'+
-    (e.paid_by?'<span>'+uiIcon('user',14)+' '+E(e.paid_by)+'</span>':'')+'</div>'+
-   (e.notes?'<p>'+E(e.notes)+'</p>':'')+'</div>'+
-   '<div class="expense-record-side"><strong>'+displayMoney(e.amount,e.currency)+'</strong>'+
-   '<div class="expense-record-actions">'+(canEdit?
-     '<button class="linkbtn" data-edit="company_expenses:'+E(e.id)+'">'+uiIcon('pencil',14)+' تعديل</button>'+
-     '<button class="linkbtn expense-delete-link" data-delete-expense="'+E(e.id)+'">'+uiIcon('trash',14)+' حذف</button>':
-     '<span class="subtle">للعرض فقط</span>')+'</div></div></article>';
+   '<div class="expense-record-flags"><span class="expense-record-category">'+E(categoryLabel)+'</span>'+
+    '<span class="expense-payment-status '+status+'">'+E(EXPENSE_PAYMENT_LABELS[status])+'</span></div>'+
+   '<h3>'+E(expense.title)+'</h3>'+
+   '<div class="expense-record-meta"><span>'+uiIcon('calendar',14)+' '+E(expense.expense_date)+'</span>'+
+    (expense.paid_by?'<span>'+uiIcon('user',14)+' الموظف: '+E(expense.paid_by)+'</span>':'')+
+    (expense.receipt_number?'<span>'+uiIcon('receipt',14)+' الوصل: '+E(expense.receipt_number)+'</span>':'')+
+    '<span>'+uiIcon('layers',14)+' '+items.length+' '+(items.length===1?'صنف':'أصناف')+'</span></div>'+
+   (expense.notes?'<p>'+E(expense.notes)+'</p>':'')+
+   '<details class="expense-product-disclosure"><summary>تفاصيل الأصناف والمستفيدين</summary>'+
+    '<div class="expense-product-list">'+details+'</div></details></div>'+
+   '<div class="expense-record-side"><strong>'+displayMoney(expense.amount,expense.currency)+'</strong>'+
+    '<span class="expense-paid-line">المسدّد: '+E(money(expensePaidAmount(expense),expense.currency))+'</span>'+
+    (due>0?'<span class="expense-balance-line">المتبقي: '+E(money(due,expense.currency))+'</span>':'')+
+    '<span class="expense-payment-method">'+E(expense.payment_method==='mastercard'?'ماستر كارد':'نقداً')+'</span>'+
+    '<div class="expense-record-actions">'+
+    (expense.transfer_proof_path?'<button class="linkbtn" type="button" data-expense-proof="'+E(expense.id)+'">'+
+     uiIcon('image',14)+' صورة التحويل</button>':'')+
+    (canEdit?'<button class="linkbtn" data-edit="company_expenses:'+E(expense.id)+'">'+
+     uiIcon('pencil',14)+' تعديل الفاتورة</button>'+
+     '<button class="linkbtn expense-delete-link" data-delete-expense="'+E(expense.id)+'">'+
+     uiIcon('trash',14)+' حذف</button>':'')+
+    '</div></div></article>';
  }).join('');
  return '<section class="expense-page"><div class="expense-intro">'+
-  '<div><h2>مصروفات الشركة</h2><p>سجّل كل مبلغ صرفته الشركة: جاي، قهوة، مي، قرطاسية، وقود أو أي احتياجات يومية.</p></div>'+
-  '<button type="button" class="btn" data-new="company_expenses">'+uiIcon('plus',17)+' إضافة مصروف</button></div>'+
+  '<div><h2>المصروفات والفواتير الداخلية</h2>'+
+  '<p>إدارة فواتير المشتريات والخدمات، توزيع التكاليف حسب الأقسام، ومتابعة أرصدة السداد والمرفقات.</p></div>'+
+  '<button type="button" class="btn" data-new="company_expenses">'+uiIcon('plus',17)+' تسجيل فاتورة</button></div>'+
   '<div class="expense-stat-grid">'+tiles+'</div>'+
-  (categoryTotals?'<div class="expense-categories"><h3>المصروفات حسب التصنيف</h3><div class="expense-category-grid">'+categoryTotals+'</div></div>':'')+
-  '<div class="expense-toolbar"><input class="search" id="search" type="search" placeholder="ابحث عن مصروف أو شخص أو تاريخ..." value="'+E(s.search)+'">'+
-  '<select id="expenseCategory" class="search" aria-label="تصفية مصروفات الشركة حسب التصنيف">'+
-  '<option value="">كل التصنيفات</option>'+Object.entries(EXPENSE_CATEGORY_LABELS).map(([id,label])=>
-   '<option value="'+id+'"'+(s.expenseCategory===id?' selected':'')+'>'+E(label)+'</option>').join('')+'</select>'+
-  '<span class="expense-count">المعروض '+filtered.length+' من '+all.length+'</span></div>'+
+  (categoryTotals?'<details class="expense-categories expense-category-expand">'+
+   '<summary>التوزيع المحاسبي حسب نوع المصروف <span>· '+paidCount+' فاتورة مسددة بالكامل</span></summary>'+
+   '<div class="expense-category-grid">'+categoryTotals+'</div></details>':'')+
+  '<div class="expense-toolbar"><input class="search" id="search" type="search" placeholder="البحث برقم الوصل أو الموظف أو الصنف..." value="'+E(s.search)+'">'+
+  '<select id="expenseCategory" class="search" aria-label="تصفية المصروفات حسب التصنيف">'+
+  '<option value="">جميع التصنيفات</option>'+cats.map(code=>
+   '<option value="'+E(code)+'"'+(s.expenseCategory===code?' selected':'')+'>'+
+   E(EXPENSE_CATEGORY_LABELS[code]||code)+'</option>').join('')+'</select>'+
+  '<span class="expense-count">'+filtered.length+' من '+all.length+' فاتورة</span></div>'+
   '<div class="expense-record-list">'+(cards||'<div class="box empty">'+
-   (all.length?'لا توجد مصروفات مطابقة للبحث أو التصنيف.':'ماكو مصروفات مسجّلة بعد. اضغط إضافة مصروف لتسجيل أول عملية.')+
+   (all.length?'لا توجد فواتير مطابقة لمعايير البحث.':'لم تُسجّل أي فواتير حتى الآن. استخدم «تسجيل فاتورة» لإضافة أول فاتورة.')+
    '</div>')+'</div>'+
-  '<p class="subtle expense-footnote">المجاميع بعملة العرض المختارة بالأعلى، وتظل كل عملية محفوظة بعملتها الأصلية. المصروفات اليومية منفصلة عن دفعات الحملات وأقساط الإيجارات.</p></section>';
+  '<p class="subtle expense-footnote">القيم المالية معروضة بالعملة المختارة بالأعلى. تُحفظ كل فاتورة بعملتها الأصلية، ويتم احتساب المدفوع والمتبقي دون تعديل قيمة الفاتورة.</p></section>';
 }
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
