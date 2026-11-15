@@ -575,8 +575,8 @@ const EXPENSE_DEPARTMENTS=[
 ];
 const EXPENSE_EMPLOYEES=[
  ['حسين علاء','المدير التنفيذي'],
- ['أحمد إسماعيل','التصميم'],
- ['آمال عبد','موظفة خدمة'],
+ ['احمد اسماعيل','التصميم'],
+ ['امال عبد','موظفة خدمة'],
  ['رأفت عبد الرزاق','المدير المفوض']
 ];
 function expenseLineItems(expense){
@@ -870,9 +870,12 @@ async function deleteExpenseConfirmed(form){
    if(error)throw error;
    if(data?.id!==expense.id)throw Error('لم يؤكد الخادم الحذف');
   }
+  const proof=expense.transfer_proof_path;
+  let cleanupIssue='';
+  if(proof&&!s.demo){const removed=await s.client.storage.from('expense-transfers').remove([proof]);if(removed.error)cleanupIssue=removed.error.message;}
   s.modal=null;s.view='company_expenses';s.search='';s.expenseCategory='';
   if(s.demo)render();else await load();
-  toast('تم حذف المصروف');
+  toast(cleanupIssue?'تم حذف الفاتورة، ولكن تعذر حذف مرفق التحويل: '+cleanupIssue:'تم حذف الفاتورة ومرفقاتها المرتبطة');
  }catch(e){
   toast('تعذّر حذف المصروف: '+(e.message||String(e)),true);
  }finally{s.deletingExpense=false}
@@ -1912,6 +1915,7 @@ function bind(){
  document.querySelectorAll('[data-delete-customer]').forEach(x=>x.onclick=()=>openCustomerDelete(x.dataset.deleteCustomer));
  document.querySelectorAll('[data-delete-landlord]').forEach(x=>x.onclick=()=>openLandlordDelete(x.dataset.deleteLandlord));
  document.querySelectorAll('[data-delete-expense]').forEach(x=>x.onclick=()=>openExpenseDelete(x.dataset.deleteExpense));
+ document.querySelectorAll('[data-expense-proof]').forEach(x=>x.onclick=()=>showExpenseTransferProof(x.dataset.expenseProof));
  for(const [formId,inputId,buttonId,handler] of [
   ['deleteLandlordForm','deleteLandlordConfirmation','deleteLandlordSubmit',deleteLandlordConfirmed],
   ['deleteExpenseForm','deleteExpenseConfirmation','deleteExpenseSubmit',deleteExpenseConfirmed]
@@ -2399,9 +2403,95 @@ async function syncCampaignSites(campaignId,siteIds){
   if(!s.demo)s.data.campaign_sites.push(added);
  }
 }
+
+async function showExpenseTransferProof(id){
+ const expense=lookup('company_expenses',id);
+ if(!expense?.transfer_proof_path||s.demo||!s.client)return toast('لا توجد صورة تحويل محفوظة لهذا السجل.',true);
+ const popup=typeof window!=='undefined'?window.open('','_blank'):null;
+ if(popup){popup.document.title='مرفق الفاتورة';popup.document.body.textContent='جارٍ فتح المرفق الخاص...';}
+ try{
+  const {data,error}=await s.client.storage.from('expense-transfers').createSignedUrl(expense.transfer_proof_path,90);
+  if(error||!data?.signedUrl)throw Error(error?.message||'تعذر إصدار رابط المرفق');
+  if(popup&&!popup.closed)popup.location.href=data.signedUrl;
+  else window.open(data.signedUrl,'_blank','noopener,noreferrer');
+ }catch(e){
+  if(popup&&!popup.closed)popup.close();
+  toast('تعذر عرض مرفق التحويل: '+(e.message||String(e)),true);
+ }
+}
+async function saveExpenseInvoice(form){
+ const modal=s.modal;
+ if(modal?.table!=='company_expenses'||s.savingExpense)return;
+ if(modal.data.id&&s.staff?.role!=='admin')return toast('تعديل الفواتير متاح للمدير فقط.',true);
+ captureExpenseDraft(form);
+ const v=modal.data;
+ const items=(modal.expenseItems||[]).map(item=>({
+  description:String(item.description||'').trim(),
+  category:String(item.category||'').trim(),
+  department:String(item.department||'').trim(),
+  quantity:Number(item.quantity),unit_price:Number(item.unit_price)
+ }));
+ const values={...v,id:v.id,receipt_number:String(v.receipt_number||'').trim(),
+  status:form.elements.namedItem('expense_payment_status')?.value||'',
+  payment_method:form.elements.namedItem('payment_method')?.value||''};
+ let details,file=modal.transferFile||form.elements.namedItem('transfer_image')?.files?.[0]||null;
+ try{
+  details=expenseInvoiceValidated(values,items);
+  if(file&&(!['image/png','image/jpeg','image/webp'].includes(file.type)||
+     file.size>5242880||file.size<=0))throw Error('صيغة صورة التحويل يجب أن تكون PNG أو JPG أو WebP وبحجم لا يتجاوز 5 ميغابايت.');
+  if(values.payment_method==='mastercard'&&details.paid_amount>0&&!file&&!v.transfer_proof_path)
+   throw Error('يرجى إرفاق صورة تحويل الماستر كارد قبل اعتماد السداد.');
+ }catch(e){toast(e.message||String(e),true);return}
+ const title=String(v.title||'').trim()||('فاتورة: '+items[0].description+(items.length>1?' + '+(items.length-1)+' أصناف':''));
+ if(title.length<2||title.length>200)return toast('وصف الفاتورة يجب ألا يتجاوز 200 حرف.',true);
+ s.savingExpense=true;
+ const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;
+ let uploaded=null;
+ try{
+  if(file&&values.payment_method==='mastercard'&&details.paid_amount>0&&!s.demo){
+   if(!s.client||!s.session?.user?.id)throw Error('يجب تسجيل الدخول لرفع صورة التحويل.');
+   const extension={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[file.type];
+   uploaded=s.session.user.id+'/'+uid()+'.'+extension;
+   const {error}=await s.client.storage.from('expense-transfers').upload(uploaded,file,{
+    upsert:false,contentType:file.type,cacheControl:'60'
+   });
+   if(error)throw Error('تعذر رفع صورة التحويل: '+error.message);
+  }
+  const proof=values.payment_method==='mastercard'&&details.paid_amount>0?
+   (uploaded||v.transfer_proof_path||(s.demo&&file?'preview-only':null)):null;
+  const record={
+   expense_date:values.expense_date,title,category:items[0].category,
+   amount:details.amount,currency:values.currency,
+   paid_by:values.paid_by,receipt_number:values.receipt_number||null,
+   payment_method:values.payment_method,paid_amount:details.paid_amount,
+   expense_items:items,transfer_proof_path:proof,
+   notes:String(values.notes||'').trim()||null
+  };
+  const oldProof=String(v.transfer_proof_path||'');
+  await persist('company_expenses',record,v.id);
+  if(!s.demo&&oldProof&&oldProof!==proof){
+   const {error:cleanup}=await s.client.storage.from('expense-transfers').remove([oldProof]);
+   if(cleanup)toast('تم حفظ الفاتورة، وتعذر تنظيف المرفق السابق: '+cleanup.message,true);
+  }
+  s.modal=null;s.view='company_expenses';s.search='';s.expenseCategory='';
+  if(s.demo)render();else await load();
+  toast('تم اعتماد الفاتورة وتحديث أرصدة السداد بنجاح.');
+ }catch(e){
+  if(!s.demo&&uploaded){
+   try{await s.client.storage.from('expense-transfers').remove([uploaded]);}catch(_){}
+  }
+  toast('تعذر حفظ الفاتورة: '+(e.message||String(e)),true);
+ }finally{
+  s.savingExpense=false;
+  if(submit&&submit.isConnected)submit.disabled=false;
+ }
+}
+
 async function saveForm(form){
  if(!s.modal)return;
  const m=s.modal,k=m.table;
+ // The structured invoice form has independent line items and attachment state.
+ if(k==='company_expenses'&&form.querySelectorAll?.('[data-expense-item]')?.length)return saveExpenseInvoice(form);
  captureForm(form);
  if(k==='landlords')captureRoofDrafts();
  let v=m.data;
