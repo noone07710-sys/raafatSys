@@ -3003,6 +3003,33 @@ function bind(){
  const form=$('#recordForm'),v=s.modal?.data,k=s.modal?.table;
  if(!form)return;
  if(k==='company_expenses'){bindExpenseInvoiceForm(form);return;}
+ if(k==='leases'){
+  document.querySelectorAll('[data-lease-mode]').forEach(button=>button.onclick=()=>{
+   captureForm(form);
+   if(button.dataset.leaseMode==='manual'){
+    if(s.modal.leasePlanMode!=='manual'&&!s.modal.leaseDraft?.length)
+     s.modal.leaseDraft=leaseInstallmentPlan(v).map(r=>({due_date:r.due_date,amount:r.amount}));
+    s.modal.leasePlanMode='manual';
+   }else s.modal.leasePlanMode='auto';
+   render();
+  });
+  const add=document.querySelector('[data-lease-add-row]');
+  if(add)add.onclick=()=>{
+   captureForm(form);
+   if(s.modal.leaseDraft.length>=30)return toast('الحد الأقصى 30 قسطاً.',true);
+   s.modal.leaseDraft.push({due_date:v.start_date||today(),amount:''});
+   render();
+  };
+  document.querySelectorAll('[data-lease-remove-row]').forEach(button=>button.onclick=()=>{
+   captureForm(form);
+   s.modal.leaseDraft.splice(Number(button.dataset.leaseRemoveRow),1);
+   render();
+  });
+  document.querySelectorAll('[data-lease-draft-row] input').forEach(input=>{
+   input.addEventListener('input',()=>captureLeasePlan(form));
+  });
+  document.querySelectorAll('[data-lease-save-due]').forEach(button=>button.onclick=()=>saveLeaseDueDate(button.dataset.leaseSaveDue,form));
+ }
  for(const name of ['width_m','height_m','quantity']){
   const el=form.elements.namedItem(name);
   if(el)el.addEventListener('input',()=>updateAreaOutputs(form));
@@ -3028,9 +3055,13 @@ function bind(){
  const currency=form.elements.namedItem('currency');
  if(currency)currency.onchange=()=>{
   const previous=v.currency||s.displayCurrency,next=currency.value;
-  for(const name of ['price','rent_total','amount','paid_amount','initial_payment_amount']){
+  for(const name of ['price','rent_total','advance_amount','amount','paid_amount','initial_payment_amount']){
    let input=form.elements.namedItem(name);
    if(input&&input.value!=='')input.value=String(roundAmount(convert(input.value,previous,next)));
+  }
+  if(k==='leases'&&s.modal?.leasePlanMode==='manual'){
+   captureLeasePlan(form);
+   s.modal.leaseDraft=s.modal.leaseDraft.map(r=>({...r,amount:String(r.amount).trim()===''?'':String(roundAmount(convert(r.amount,previous,next)))}));
   }
   if(k==='packages'){
    form.querySelectorAll('[data-package-rate-month]').forEach(input=>{
@@ -3220,7 +3251,8 @@ function openForm(k,row){
  const ids=k==='campaigns'?(data.siteIds||s.data.campaign_sites.filter(x=>x.campaign_id===data.id).map(x=>x.site_id)):[];
  const drafts={};
  if(k==='packages')packageRates(data).forEach(rate=>{drafts[rate.months]=roundAmount(convert(rate.usd_price,'USD',data.currency||'USD'));});
- s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set(),contractCustomerFilter:k==='customer_contracts'&&!data.id?(row?.customer_id||null):null};
+ s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set(),contractCustomerFilter:k==='customer_contracts'&&!data.id?(row?.customer_id||null):null,
+ leasePlanMode:'auto',leaseDraft:[]};
  if(k==='company_expenses'){
   s.modal.expenseItems=row?.id?expenseLineItems(row):[{description:'',category:'',department:'',quantity:1,unit_price:''}];
   s.modal.data.status=row?.id?expensePaymentStatus(row):'paid';
@@ -3236,6 +3268,7 @@ function captureForm(form){
  if(s.modal.table==='packages')form.querySelectorAll('[data-package-rate-month]').forEach(input=>{s.modal.rateDraft[Number(input.dataset.packageRateMonth)]=input.value;});
  const siteInputs=[...form.querySelectorAll('[data-site-id]')];
  if(siteInputs.length)s.modal.siteIds=siteInputs.filter(el=>el.checked).map(el=>el.dataset.siteId);
+ if(s.modal.table==='leases')captureLeasePlan(form);
 }
 function formValidate(k,v){
  if(k==='company_expenses'){
