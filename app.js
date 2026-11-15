@@ -39,7 +39,7 @@ const defs={
  campaign_payments:{title:'دفعات الحملات',icon:'◉',fields:[]},
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
  package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
- company_expenses:{title:'المصروفات',icon:'receipt',fields:[['expense_date','تاريخ المصروف','date',true],['title','شنو اشترت / صرفت الشركة؟','text',true],['category','تصنيف المصروف','select',true,['hospitality','office','transport','maintenance','supplies','utilities','other']],['amount','المبلغ المصروف','number',true],['currency','العملة','select',true,['IQD','USD']],['paid_by','اسم الشخص اللي صرف المبلغ','text'],['notes','ملاحظات إضافية','textarea']]},
+ company_expenses:{title:'المصروفات والفواتير',icon:'receipt',fields:[['expense_date','تاريخ الفاتورة','date',true],['title','وصف الفاتورة','text'],['category','التصنيف المحاسبي','text'],['amount','إجمالي الفاتورة','number',true],['currency','عملة الفاتورة','select',true,['IQD','USD']],['paid_by','الموظف المسؤول / المستلم','text',true],['notes','الملاحظات','textarea']]},
  customer_contracts:{title:'عقود الزبائن — الكابينات والأسطح',icon:'▣',fields:[['customer_id','الزبون','lookup:customers',true],['package_id','الباقة الإعلانية','lookup:packages',true],['contract_type','نوع العقد','select',true,['cabin','rooftop']],['duration_months','مدة العقد بالأشهر','number',true],['rented_area_m2','مساحة الإعلان المتفق عليها م² (لباقة E)','number'],['campaign_id','الحملة المعتمدة','lookup:campaigns',true],['site_id','الموقع الإعلاني (اختياري)','lookup:ad_sites'],['start_date','تاريخ بداية العقد','date',true],['end_date','تاريخ نهاية العقد','date',true],['amount','قيمة عقد الزبون','number',true],['currency','العملة','select',true,['IQD','USD']],['company_representative','ممثل شركة رأفت','text'],['customer_representative','ممثل الزبون','text'],['terms','شروط الاتفاق','textarea'],['notes','ملاحظات','textarea']]}
 };
 const labels={active:'فعال',inactive:'غير فعال',inquiry:'استفسار',IQD:'دينار عراقي',USD:'دولار أمريكي',annual:'سنوي',semiannual:'نصف سنوي',cabin:'كابينة إعلانية',fixed_term:'سعر كامل المدة للقطعة',sqm_month:'سعر المتر المربع شهرياً',roadside:'شارع / رصيف',rooftop:'سطح',building:'واجهة بناية',other:'أخرى',true:'متاح للحملات',false:'غير متاح'};
@@ -549,7 +549,93 @@ function reminderMessageDialog(){
   (phone?'':'<div class="notice">رقم الهاتف غير صالح لواتساب. صححه ببيانات الزبون أو المالك.</div>')+'</div></div>';
 }
 
-const EXPENSE_CATEGORY_LABELS={hospitality:'ضيافة ومشروبات',office:'قرطاسية ومكتبية',transport:'نقل ووقود',maintenance:'صيانة',supplies:'مستلزمات',utilities:'خدمات وفواتير',other:'أخرى'};
+const EXPENSE_CATEGORY_LABELS={
+ hospitality:'ضيافة ومشروبات',office:'قرطاسية ومكتبية',transport:'نقل ووقود',
+ maintenance:'صيانة',supplies:'مستلزمات',utilities:'خدمات وفواتير',other:'مصروفات أخرى',
+ salaries:'رواتب وأجور الموظفين',
+ rent_services:'إيجار المقر وفواتير الخدمات',
+ hospitality_misc:'ضيافة ونثريات المكتب (أثاث، إلكترونيات، وغيرها)',
+ design_subscriptions:'اشتراكات برامج وأدوات التصميم',
+ stationery:'مستلزمات مكتبية وقرطاسية',
+ equipment_maintenance:'صيانة أجهزة ومعدات التصوير',
+ local_transport:'مواصلات وتنقلات داخلية',
+ internet_telecom:'إنترنت واتصالات'
+};
+const EXPENSE_CATEGORY_OPTIONS=[
+ 'salaries','rent_services','hospitality_misc','design_subscriptions',
+ 'stationery','equipment_maintenance','local_transport','internet_telecom'
+];
+const EXPENSE_DEPARTMENTS=[
+ ['general','الإدارة العامة'],
+ ['graphic_design','قسم التصميم والجرافيك'],
+ ['production','قسم الإنتاج والتصوير'],
+ ['marketing','قسم التسويق وإدارة الحسابات'],
+ ['development','قسم البرمجة وتطوير المواقع'],
+ ['shared','الخدمات الإدارية والمشتركة']
+];
+const EXPENSE_EMPLOYEES=[
+ ['حسين علاء','المدير التنفيذي'],
+ ['أحمد إسماعيل','التصميم'],
+ ['آمال عبد','موظفة خدمة'],
+ ['رأفت عبد الرزاق','المدير المفوض']
+];
+function expenseLineItems(expense){
+ if(Array.isArray(expense?.expense_items)&&expense.expense_items.length)
+  return expense.expense_items.map(item=>({
+   description:String(item.description||''),
+   category:String(item.category||''),
+   department:String(item.department||''),
+   quantity:Number(item.quantity)||1,unit_price:Number(item.unit_price)||0
+  }));
+ // Older simple expense records are displayed as a single item without mutation.
+ return [{description:String(expense?.title||''),category:String(expense?.category||''),
+  department:'',quantity:1,unit_price:Number(expense?.amount)||0}];
+}
+function expenseLineTotal(item){return roundAmount(Number(item.quantity||0)*Number(item.unit_price||0))}
+function expenseInvoiceTotal(items){return roundAmount(items.reduce((sum,item)=>sum+expenseLineTotal(item),0))}
+function expensePaidAmount(expense){
+ // Previous records were always recorded as paid before payment tracking existed.
+ return expense?.paid_amount==null?Number(expense?.amount||0):Number(expense.paid_amount)||0;
+}
+function expensePaymentStatus(expense){
+ const total=Number(expense?.amount||0),paid=expensePaidAmount(expense);
+ return paid<=0?'unpaid':paid>=total-0.001?'paid':'partial';
+}
+const EXPENSE_PAYMENT_LABELS={paid:'مدفوعة بالكامل',partial:'مدفوعة جزئياً',unpaid:'غير مدفوعة'};
+function expenseItemDetailsText(expense){
+ return expenseLineItems(expense).map(item=>item.description).filter(Boolean).join('، ');
+}
+function expenseInvoiceValidated(values,items){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(values.expense_date||'')))throw Error('يجب تحديد تاريخ الفاتورة.');
+ if(!['IQD','USD'].includes(values.currency))throw Error('يرجى تحديد عملة الفاتورة.');
+ if(!items.length||items.length>100)throw Error('يجب أن تحتوي الفاتورة على صنف واحد على الأقل وبحد أقصى 100 صنف.');
+ if(!EXPENSE_EMPLOYEES.some(([name])=>name===values.paid_by)&&
+  !(values.id&&values.paid_by===lookup('company_expenses',values.id)?.paid_by))
+  throw Error('يرجى تحديد الموظف المسؤول أو المستلم من القائمة.');
+ for(let i=0;i<items.length;i++){
+  const x=items[i];
+  if(!String(x.description||'').trim()||String(x.description).trim().length>200)throw Error('يرجى كتابة بيان الصنف رقم '+(i+1)+' بشكل صحيح.');
+  if(!EXPENSE_CATEGORY_LABELS[x.category])throw Error('يرجى تحديد التصنيف المحاسبي للصنف رقم '+(i+1)+'.');
+  if(!EXPENSE_DEPARTMENTS.some(([id])=>id===x.department)&&
+   !(values.id&&x.department===''))
+   throw Error('يرجى تحديد القسم المستفيد من الصنف رقم '+(i+1)+'.');
+  if(!Number.isInteger(Number(x.quantity))||Number(x.quantity)<=0||Number(x.quantity)>100000)
+   throw Error('كمية الصنف رقم '+(i+1)+' يجب أن تكون عدداً صحيحاً موجباً.');
+  if(!(Number(x.unit_price)>0)||!Number.isFinite(Number(x.unit_price))||Number(x.unit_price)>100000000000)
+   throw Error('يرجى تحديد سعر الوحدة للصنف رقم '+(i+1)+'.');
+ }
+ const amount=expenseInvoiceTotal(items);
+ if(!(amount>0)||!Number.isFinite(amount))throw Error('إجمالي الفاتورة غير صالح.');
+ const mode=values.status;
+ if(!['paid','partial','unpaid'].includes(mode))throw Error('يرجى تحديد حالة الدفع.');
+ const paid=mode==='paid'?amount:mode==='unpaid'?0:Number(values.paid_amount);
+ if(!Number.isFinite(paid)||paid<0||paid>amount||mode==='partial'&&!(paid>0&&paid<amount))
+  throw Error('المبلغ المدفوع جزئياً يجب أن يكون أكبر من صفر وأقل من إجمالي الفاتورة.');
+ if(!['cash','mastercard'].includes(values.payment_method))throw Error('يرجى تحديد طريقة الدفع.');
+ if(String(values.receipt_number||'').trim().length>80)throw Error('رقم الوصل يتجاوز الحد المسموح.');
+ return {amount,paid_amount:roundAmount(paid)};
+}
+
 const visibleTable=(k)=>s.data[k]||[];
 function dashboard(){
  let due=s.data.lease_installments.filter(x=>Number(x.paid_amount)<Number(x.amount)&&x.due_date<=today()).length;
