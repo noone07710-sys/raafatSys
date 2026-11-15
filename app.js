@@ -584,16 +584,17 @@ function navLink(id,label,icon){
 }
 function navGroup(group){
  const expanded=s.navExpanded===group.id,contains=navGroupForView(s.view)===group.id;
- return '<div class="nav-group'+(contains?' has-active':'')+'"><button type="button" class="nav-group-toggle'+(expanded?' expanded':'')+'" data-nav-group="'+group.id+'" aria-expanded="'+expanded+'" aria-controls="nav-group-'+group.id+'"><span class="nav-group-icon" aria-hidden="true">'+uiIcon(group.icon,20)+'</span><span class="nav-group-copy"><strong>'+group.title+'</strong><small>'+group.subtitle+'</small></span><span class="nav-group-chevron" aria-hidden="true">'+uiIcon('chevron',17)+'</span></button><div class="nav-group-items" id="nav-group-'+group.id+'" role="group" aria-label="'+group.title+'"'+(expanded?'':' hidden')+'>'+group.items.filter(([id])=>id!=='employees'||s.demo||s.staff?.role==='admin')
+ return '<div class="nav-group'+(contains?' has-active':'')+'"><button type="button" class="nav-group-toggle'+(expanded?' expanded':'')+'" data-nav-group="'+group.id+'" aria-expanded="'+expanded+'" aria-controls="nav-group-'+group.id+'"><span class="nav-group-icon" aria-hidden="true">'+uiIcon(group.icon,20)+'</span><span class="nav-group-copy"><strong>'+group.title+'</strong><small>'+group.subtitle+'</small></span><span class="nav-group-chevron" aria-hidden="true">'+uiIcon('chevron',17)+'</span></button><div class="nav-group-items" id="nav-group-'+group.id+'" role="group" aria-label="'+group.title+'"'+(expanded?'':' hidden')+'>'+group.items.filter(([id])=>canAccess(TABLE_ACCESS[id]||id,'read'))
  .map(([id,label,icon])=>navLink(id,label,icon)).join('')+'</div></div>';
 }
 function nav(){
  return navLink('dashboard','الرئيسية','dashboard')+
   '<div class="nav-group-list">'+NAV_GROUPS.map(navGroup).join('')+'</div>'+
   '<div class="nav-utility"><small class="nav-utility-label">الإدارة العامة</small>'+
-  navLink('reports','التقارير','chart')+
-  ((s.demo||s.staff?.role==='admin')?navLink('activity_logs','سجل الحركات','history'):'')+
-  navLink('settings','الإعدادات','settings')+'</div>';
+  (canAccess('reports','read')?navLink('reports','التقارير','chart'):'')+
+  (canAccess('activity_logs','read')?navLink('activity_logs','سجل الحركات','history'):'')+
+   ((s.demo||s.staff?.role==='admin')?navLink('staff_admin','إدارة الحسابات والصلاحيات','users'):'')+
+  (canAccess('settings','read')?navLink('settings','الإعدادات','settings'):'')+'</div>';
 }
 function changeNavGroup(id){
  if(!NAV_GROUPS.some(x=>x.id===id))return;
@@ -614,7 +615,8 @@ function bindNav(){
 }
 function shell(content){
  return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='alerts'?'التنبيهات':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':
- s.view==='activity_logs'?'سجل الحركات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length?'<span>'+E(alertsList().length>99?'99+':alertsList().length)+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
+ s.view==='activity_logs'?'سجل الحركات':s.view==='staff_admin'?'إدارة الحسابات والصلاحيات':
+  defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length?'<span>'+E(alertsList().length>99?'99+':alertsList().length)+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
 }
 // Alerts are derived from live balances and contracts; they do not mutate records.
 function alertsLocalDate(){
@@ -1422,6 +1424,109 @@ function expenseOverview(){
   '<p class="subtle expense-footnote">القيم المالية معروضة بالعملة المختارة بالأعلى. تُحفظ كل فاتورة بعملتها الأصلية، ويتم احتساب المدفوع والمتبقي دون تعديل قيمة الفاتورة.</p></section>';
 }
 
+
+function staffAdminView(){
+ if(!s.demo&&s.staff?.role!=='admin')return '<div class="notice">إدارة الحسابات والصلاحيات للمدير الرئيسي فقط.</div>';
+ const rows=s.managedStaff||[];
+ return '<div class="staff-admin-page">'+
+ '<section class="box staff-admin-intro"><div><h2>إدارة الحسابات وصلاحيات المدراء</h2>'+
+ '<p class="subtle">أنشئ مديراً ببريد إلكتروني ودعوة رسمية. تحدد الأقسام المسموح له بعرضها أو تعديلها؛ صلاحيات الوصول مطبّقة على قاعدة البيانات، مو على الأزرار فقط.</p></div>'+
+ '<div class="inline"><button type="button" class="btn" data-staff-new>'+uiIcon('user',16)+' دعوة مدير بصلاحيات مخصصة</button>'+
+ '<button type="button" class="btn secondary" data-staff-refresh>'+uiIcon('refresh',15)+' تحديث الحسابات</button></div></section>'+
+ '<div class="box tablewrap"><table class="table"><thead><tr><th>الاسم والبريد</th><th>الدور</th><th>الحالة</th><th>الصلاحيات</th><th>الإجراء</th></tr></thead><tbody>'+
+ (rows.length?rows.map(row=>'<tr><td><strong>'+E(row.display_name||'—')+'</strong>'+
+  '<small class="subtle hr-phone">'+E(row.email||'بريد غير مسجل')+'</small></td>'+
+  '<td>'+E(adminRoleLabel(row.role))+'</td>'+
+  '<td>'+E(row.active?'نشط':'معطّل')+'</td>'+
+  '<td class="staff-permission-pills">'+(row.role==='admin'?'<span class="staff-permission-chip">صلاحيات كاملة</span>':
+   (row.permissions||[]).length?(row.permissions||[]).slice(0,4).map(key=>
+   '<span class="staff-permission-chip">'+E(ACCESS_SECTIONS.find(([id])=>key.startsWith(id+'.'))?.[1]||key)+
+   ' — '+(key.endsWith('.edit')?'تعديل':'عرض')+'</span>').join('')+
+   (row.permissions.length>4?'<small>و'+(row.permissions.length-4)+' أخرى</small>':''):'<span>بدون صلاحيات خاصة</span>')+'</td>'+
+  '<td>'+(row.role==='custom_admin'?'<button type="button" class="linkbtn" data-staff-edit="'+E(row.user_id)+'">'+
+    uiIcon('pencil',15)+' تعديل الصلاحيات</button>':'<small class="subtle">حساب محمي</small>')+
+  '</td></tr>').join(''):'<tr><td colspan="5" class="empty">اضغط «تحديث الحسابات» لعرض المستخدمين.</td></tr>')+
+ '</tbody></table></div>'+
+ '<p class="subtle">الدور «مدير رئيسي» يبقى كامل الصلاحيات. المدير المخصص لا يقدر إنشاء أو منح حساب مدير رئيسي.</p>'+
+ '</div>';
+}
+function openStaffRoleEditor(userId=''){
+ if(!s.demo&&s.staff?.role!=='admin')return toast('إدارة الصلاحيات للمدير الرئيسي فقط.',true);
+ const current=(s.managedStaff||[]).find(row=>row.user_id===userId);
+ if(userId&&current?.role!=='custom_admin')return toast('لا يمكن تعديل حساب المدير الرئيسي أو الموظف الاعتيادي من هذه النافذة.',true);
+ s.modal={kind:'staffRoleEditor',data:{
+  userId:current?.user_id||'',email:current?.email||'',
+  displayName:current?.display_name||'',active:current?.active!==false,
+  permissions:current?.permissions||[]
+ }};render();
+}
+function staffRoleEditorHtml(){
+ const v=s.modal.data,editing=Boolean(v.userId);
+ const choices=ACCESS_SECTIONS.map(([key,title])=>
+ '<div class="staff-permission-row"><strong>'+E(title)+'</strong>'+
+  '<label class="staff-permission-toggle"><input type="checkbox" name="permission" value="'+E(key)+'.read"'+
+   (v.permissions.includes(key+'.read')?' checked':'')+'> عرض</label>'+
+  '<label class="staff-permission-toggle"><input type="checkbox" name="permission" value="'+E(key)+'.edit"'+
+   (v.permissions.includes(key+'.edit')?' checked':'')+'> إضافة وتعديل</label></div>').join('');
+ return '<div class="overlay"><div class="modal staff-role-editor" role="dialog" aria-modal="true">'+
+ '<div class="modalhead"><div><h2>'+(editing?'تعديل صلاحيات المدير':'دعوة مدير جديد')+'</h2>'+
+ '<p class="subtle">اختر الصلاحيات المناسبة لكل قسم. لا تُمنح صلاحية إدارة حسابات الآخرين للمدير المخصص.</p></div>'+
+ '<button class="close" type="button" data-action="close">'+uiIcon('x',18)+'</button></div>'+
+ '<form id="staffRoleForm">'+
+ '<div class="formgrid">'+
+ '<label class="field"><span>اسم المدير بالعربي *</span><input name="displayName" required minlength="2" maxlength="100" value="'+E(v.displayName)+'"></label>'+
+ '<label class="field"><span>البريد الإلكتروني للدعوة *</span><input type="email" name="email" required value="'+E(v.email)+'"'+(editing?' readonly':'')+'></label>'+
+ (editing?'<label class="field full"><span>حالة الحساب</span><select name="active">'+
+   '<option value="true"'+(v.active?' selected':'')+'>نشط</option>'+
+   '<option value="false"'+(!v.active?' selected':'')+'>معطّل</option></select></label>':'')+
+ '</div><div class="staff-permissions"><h3>الصلاحيات التفصيلية</h3><p class="subtle">«عرض» يسمح بالاطلاع فقط. «إضافة وتعديل» يسمح بالعمل داخل القسم وفق صلاحيات قاعدة البيانات. الحذف النهائي يبقى للمدير الرئيسي.</p>'+
+ '<div class="staff-permission-list">'+choices+'</div></div>'+
+ '<div class="actions"><button type="submit" class="btn">'+(editing?'حفظ الصلاحيات':'إرسال دعوة وإنشاء الحساب')+'</button>'+
+ '<button class="btn secondary" data-action="close" type="button">إلغاء</button></div></form></div></div>';
+}
+async function requestStaffAdmin(body){
+ if(!s.client||!s.session)return toast('تأكد من تسجيل الدخول كمدير رئيسي.',true);
+ const {data,error}=await s.client.functions.invoke('raafat-staff-admin',{body});
+ if(error)throw Error(error.message||'تعذّر الاتصال بخدمة إدارة الحسابات.');
+ if(data?.error)throw Error(data.error);
+ return data;
+}
+async function refreshManagedStaff(){
+ if(!s.demo&&s.staff?.role!=='admin')return;
+ try{
+  if(s.demo){s.managedStaff=[{user_id:'demo-main-admin',email:'demo@example.test',
+   display_name:'المدير الرئيسي',role:'admin',active:true,permissions:[]}];render();return;}
+  const data=await requestStaffAdmin({action:'list'});
+  s.managedStaff=data.staff||[];render();
+ }catch(e){toast('تعذر تحميل المستخدمين: '+(e.message||String(e)),true)}
+}
+async function saveStaffRole(form){
+ if(s.savingStaff)return;
+ if(!s.demo&&s.staff?.role!=='admin')return toast('غير مصرح بإدارة الحسابات.',true);
+ const values=new FormData(form),permissions=[...new Set(values.getAll('permission'))].map(String);
+ const name=String(values.get('displayName')||'').trim(),email=String(values.get('email')||'').trim();
+ if(name.length<2)return toast('أدخل الاسم بالعربي.',true);
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return toast('أدخل بريد إلكتروني صحيحاً.',true);
+ if(!permissions.length)return toast('اختر صلاحية واحدة على الأقل.',true);
+ const current=s.modal?.data;
+ const body={action:current.userId?'update':'invite',
+  displayName:name,permissions,email,
+  ...(current.userId?{userId:current.userId,active:values.get('active')!=='false'}:{})};
+ s.savingStaff=true;
+ const button=form.querySelector?.('[type="submit"]');if(button)button.disabled=true;
+ try{
+  if(s.demo){
+   const row={user_id:current.userId||uid(),email,display_name:name,
+    role:'custom_admin',active:body.active!==false,permissions};
+   s.managedStaff=[...(s.managedStaff||[]).filter(x=>x.user_id!==row.user_id),row];
+  }else await requestStaffAdmin(body);
+  s.modal=null;
+  await refreshManagedStaff();
+  toast(body.action==='invite'?'تم إنشاء الحساب وإرسال الدعوة إلى البريد الإلكتروني.':'تم حفظ صلاحيات المدير.');
+ }catch(e){toast('تعذر حفظ الصلاحيات: '+(e.message||String(e)),true);if(button)button.disabled=false}
+ finally{s.savingStaff=false}
+}
+
 function employeeSalaryExpenses(employeeId){
  return (s.data.company_expenses||[])
   .filter(row=>row.employee_id===employeeId&&expenseLineItems(row).some(item=>item.category==='salaries'))
@@ -1705,7 +1810,7 @@ function reports(){
 }
 
 function settings(){
- const editable=s.demo||s.staff?.role==='admin';
+ const editable=canAccess('settings','edit');
  const val=key=>E(s.settings?.[key]??COMPANY_DEFAULTS[key]??'');
  const field=(name,label,type='text',placeholder='',required=false)=>
   name==='company_governorate'?governorateField(name,label,s.settings?.[name],required):
@@ -1743,13 +1848,16 @@ function settings(){
 function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>الصلاحية غير مفعلة</h1><p class="muted">تم تسجيل الدخول، لكن حسابك غير مضاف إلى موظفي نظام رأفت.</p><div class="notice">يجب إضافة معرّف حسابك إلى جدول staff_members من لوحة Supabase بدور admin أو staff، ثم تسجيل الدخول مجدداً.</div><button class="btn" data-action="logout">تسجيل خروج</button></div></div>'}
 function render(){
  closeAppSelectPopup();
- if(![...keys,'dashboard','reports','settings','alerts','activity_logs'].includes(s.view))s.view='dashboard';
- if(s.staff&&s.staff.role!=='admin'&&['activity_logs','employees'].includes(s.view))s.view='dashboard';
+ if(![...keys,'dashboard','reports','settings','alerts','activity_logs','staff_admin'].includes(s.view))s.view='dashboard';
+ if(s.staff&&s.view==='staff_admin'&&s.staff.role!=='admin')s.view='dashboard';
+ if(s.staff&&s.view!=='dashboard'&&s.view!=='alerts'&&s.view!=='staff_admin'&&
+    !canAccess(TABLE_ACCESS[s.view]||s.view,'read'))s.view='dashboard';
  if((s.staff||s.demo)&&s.view)localStorage.setItem('raafat-last-view',s.view);
  let target=$('#app');
  if(typeof document!=='undefined')document.title=companyValue('company_short_name')+' | نظام الإدارة';
  let content=s.view==='dashboard'?dashboard():s.view==='alerts'?alertsView():s.view==='reports'?reports():s.view==='settings'?settings():
-  s.view==='activity_logs'?activityLogsView():s.view==='employees'?employeesOverview():listing(s.view);
+  s.view==='activity_logs'?activityLogsView():s.view==='staff_admin'?staffAdminView():
+   s.view==='employees'?employeesOverview():listing(s.view);
  if(s.passwordRecovery){target.innerHTML=passwordRecoveryPage();}
  else if(s.resetRequest){target.innerHTML=passwordResetRequestPage();}
  else if(!s.demo&&!s.session){target.innerHTML=authPage();}
@@ -2378,6 +2486,9 @@ function modalHtml(){
  if(s.modal?.kind==='reminderMessage')return reminderMessageDialog();
  if(s.modal?.kind==='customerPdfEditor')return customerPdfEditorHtml();
  if(s.modal?.kind==='landlordPdfEditor')return landlordPdfEditorHtml();
+ if(s.modal?.kind==='staffRoleEditor')return staffRoleEditorHtml();
+ if(s.modal?.kind==='payrollPayment')return payrollPaymentHtml();
+ if(s.modal?.kind==='payrollReceiptReady')return payrollReceiptReadyHtml();
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
@@ -3411,6 +3522,8 @@ function bind(){
 
 
 function openForm(k,row){
+ if(!canAccess(TABLE_ACCESS[k]||k,row?.id?'edit':'create'))
+  return toast('ليس لديك صلاحية الإضافة أو التعديل في هذا القسم.',true);
  if(k==='company_expenses'&&row?.id&&s.staff?.role!=='admin')return toast('تعديل المصروفات متاح للمدير فقط',true);
  if(k==='employees'&&!s.demo&&s.staff?.role!=='admin')return toast('بيانات الموظفين والرواتب متاحة للمدير فقط',true);
  const defaults={status:'inquiry',currency:s.displayCurrency,salary_currency:'IQD',salary_amount:0,
@@ -3764,6 +3877,8 @@ async function saveExpenseInvoice(form){
 async function saveForm(form){
  if(!s.modal)return;
  const m=s.modal,k=m.table;
+ if(!canAccess(TABLE_ACCESS[k]||k,m.data?.id?'edit':'create'))
+  return toast('ليس لديك صلاحية حفظ التغييرات في هذا القسم.',true);
  // The structured invoice form has independent line items and attachment state.
  if(k==='company_expenses'&&form.querySelectorAll?.('[data-expense-item]')?.length)return saveExpenseInvoice(form);
  captureForm(form);
@@ -3902,7 +4017,7 @@ async function saveForm(form){
 }
 
 async function saveSettings(form){
- if(!s.demo&&s.staff?.role!=='admin')return toast('تغيير إعدادات الشركة يتطلب صلاحية المدير',true);
+ if(!canAccess('settings','edit'))return toast('تغيير إعدادات الشركة يتطلب صلاحية الإعدادات.',true);
  const data=new FormData(form);
  const rate=Number(data.get('usd_iqd'));
  if(!Number.isFinite(rate)||rate<=0||rate>100000000)return toast('أدخل سعر صرف موجباً وصحيحاً',true);
