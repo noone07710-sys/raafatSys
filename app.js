@@ -1968,7 +1968,7 @@ function packagePricingInfo(v){
 
 
 function campaignContractData(campaign){
- if(!campaign)return {campaign_id:'',customer_id:'',package_id:'',site_id:'',contract_type:'',
+ if(!campaign)return {campaign_id:'',customer_id:'',package_id:'',site_id:'',contract_type:'',ad_faces:2,
   duration_months:3,rented_area_m2:null,start_date:'',end_date:'',amount:0,currency:'USD'};
  const pkg=lookup('packages',campaign.package_id);
  const sites=linkedSites(campaign.id);
@@ -1981,7 +1981,7 @@ function campaignContractData(campaign){
   site_id:sites[0]?.id||'',contract_type:pkg?.package_type||'cabin',
   duration_months:months,rented_area_m2:pkg?.pricing_mode==='sqm_month'?area:null,
   start_date:start,end_date:start&&months>0?addDays(plusMonths(start,months),-1):'',
-  amount:Number(campaign.price),currency:campaign.currency,
+  amount:Number(campaign.price),currency:campaign.currency,ad_faces:campaignFaces(campaign,pkg),
   campaign_title_snapshot:campaign.title,
   campaign_quantity_snapshot:Math.max(1,Number(campaign.quantity)||1,sites.length),
   campaign_sites_snapshot:sites.map(site=>({
@@ -2020,6 +2020,7 @@ function contractCampaignSummary(v){
   line('العميل',customer?.name||v.customer_name_snapshot||'—')+
   line('الباقة',pack?.name||v.package_name_snapshot||'—')+
   line('عدد القطع المتفق عليها',total)+
+  line('عدد الأوجه',campaignFacesText(current,pack))+
   line('المواقع المعيّنة فعلياً',sites.length)+
   line('مدة الحملة',current.duration_months+' أشهر')+
   line('بداية الحملة',date||'غير محددة')+
@@ -2038,7 +2039,8 @@ function quoteCustomerContract(v){
  if(!pkg)return null;
  const months=Number(v.duration_months||pkg.default_months||3);
  const area=Number(v.rented_area_m2)>0?Number(v.rented_area_m2):0;
- const usd=quotePackageUSD(pkg,months,1,area);
+ const baseUsd=quotePackageUSD(pkg,months,1,area);
+ const usd=baseUsd===null?null:roundAmount(baseUsd*(discountedByFaces(pkg,campaignFaces(v,pkg))?0.5:1));
  return usd===null?null:{usd,amount:roundAmount(convert(usd,'USD',v.currency||'USD')),area,months};
 }
 function refreshCustomerContractQuote(){
@@ -2699,6 +2701,7 @@ function customerContractPdfPayload(v){
   area:effectiveArea,
   quantity:details.total||1,
   months:Number(v.duration_months)||0,
+  adFaces:campaignFaces(v,pkg),
   startDate:v.start_date,
   endDate:v.end_date,
   amount:Number(v.amount)||0,
@@ -3130,7 +3133,7 @@ function customerContractPreview(v){
  const selectedLocations=sites.map(x=>(x.code||'')+' — '+(x.name||'')).join('، ');
  const siteCards=sites.map(x=>'<div class="contract-preview-board"><b>'+E((x.code||'')+' — '+(x.name||''))+'</b><small>'+E([x.governorate,x.address].filter(Boolean).join('، ')||'—')+'</small></div>').join('');
  const record=(label,value)=>'<div><small>'+E(label)+'</small><strong>'+E(value??'—')+'</strong></div>';
- return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><div class="contract-number-top">رقم العقد: '+E(numberedContract(v.contract_number))+'</div><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',customer?.name||v.customer_name_snapshot||'—')+record('هاتف الشركة','07766663304 - 07866663304')+record('رقم هاتف الزبون',customer?.phone||'—')+record('اسم الباقة',pkg?.name||v.package_name_snapshot||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||site?.name||v.site_name_snapshot||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('المدير المفوض',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط والتواقيع — الصفحة الثانية</h3><p class="legal-text">تُطبع الشروط والتواقيع في صفحة مستقلة بعد العقد. يمكن تعديل نصوص الشروط وبيانات الطرفين قبل إصدار ملف PDF.</p><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button type="button" class="btn" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',17)+' مراجعة وتعديل ثم تنزيل PDF</button><button type="button" class="btn secondary" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' مراجعة وتعديل ثم معاينة PDF</button><button type="button" class="btn secondary" data-action="close">إغلاق</button></div><p class="subtle contract-pdf-source-note noprint">المحتوى للمراجعة فقط؛ ملف PDF النهائي يستخدم قالب الشركة الأصلي في صفحتين مستقلتين، وأي تعديل قبل الطباعة لا يغيّر السجل المحفوظ.</p></div></div>';
+ return '<div class="overlay print-overlay"><div class="modal print-modal"><div class="modalhead noprint"><h2>معاينة عقد الزبون</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract printed-contract" dir="rtl"><div class="contract-head"><div class="contract-number-top">رقم العقد: '+E(numberedContract(v.contract_number))+'</div><h3>معاينة بيانات عقد حجز وتأجير مساحة إعلانية للزبون</h3><small>نوع العقد: '+E(labels[v.contract_type]||v.contract_type)+'</small></div><div class="summary">'+record('الطرف الأول','الشركة')+record('الطرف الثاني (الزبون)',customer?.name||v.customer_name_snapshot||'—')+record('هاتف الشركة','07766663304 - 07866663304')+record('رقم هاتف الزبون',customer?.phone||'—')+record('اسم الباقة',pkg?.name||v.package_name_snapshot||'—')+record('عدد القطع المتفق عليها',total||'غير مسجل')+record('عدد الأوجه',campaignFacesText(v,pkg))+record('عدد المواقع المحددة',sites.length)+record('نوع المساحة',labels[v.contract_type]||v.contract_type)+record('الطول والعرض',dimension)+record('مدة العقد',v.duration_months+' شهر')+record('المساحة م²',v.package_area_snapshot?fmt(v.package_area_snapshot):(pkg?.area_m2?fmt(pkg.area_m2):'—'))+record('المواقع الإعلانية',selectedLocations||site?.name||v.site_name_snapshot||'لم يتم تحديد الموقع')+record('مواقع إضافية مسجلة',locations||'—')+record('الحملة',campaign?.title||'لا توجد حملة مرتبطة')+record('تاريخ البداية',v.start_date)+record('تاريخ النهاية',v.end_date)+record('القيمة المتفق عليها',money(v.amount,v.currency))+record('المدير المفوض',v.company_representative||'—')+record('ممثل الزبون',v.customer_representative||'—')+'</div><h3>القطع والمواقع الإعلانية المشمولة بالعقد</h3><div class="contract-preview-sites">'+(siteCards||'<p>لا توجد قطع محددة بالرموز، راجع معلومات الموقع الإضافية.</p>')+'</div><h3>مواصفات المساحة الإعلانية</h3><p class="legal-text">'+E(specs)+'</p><h3>ملاحظات الحملة المسجلة</h3><p class="legal-text">'+E(notes||'—')+'</p><h3>الشروط والتواقيع — الصفحة الثانية</h3><p class="legal-text">تُطبع الشروط والتواقيع في صفحة مستقلة بعد العقد. يمكن تعديل نصوص الشروط وبيانات الطرفين قبل إصدار ملف PDF.</p><p class="print-note">تُراجع هذه المسودة مع الإدارة القانونية قبل اعتمادها كصيغة تعاقد نهائية.</p></article><div class="actions noprint"><button type="button" class="btn" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',17)+' مراجعة وتعديل ثم تنزيل PDF</button><button type="button" class="btn secondary" data-customer-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' مراجعة وتعديل ثم معاينة PDF</button><button type="button" class="btn secondary" data-action="close">إغلاق</button></div><p class="subtle contract-pdf-source-note noprint">المحتوى للمراجعة فقط؛ ملف PDF النهائي يستخدم قالب الشركة الأصلي في صفحتين مستقلتين، وأي تعديل قبل الطباعة لا يغيّر السجل المحفوظ.</p></div></div>';
 }
 
 function previewHtml(v){
@@ -3624,7 +3627,7 @@ function formValidate(k,v){
   if(campaign&&!v.id){
    if(!campaign.start_date)throw Error('حدد تاريخ بدء الحملة أولاً حتى يتم تحديد مدة العقد');
    const expected=campaignContractData(campaign);
-   for(const key of ['customer_id','package_id','contract_type','duration_months','site_id','currency','start_date','end_date','amount']){
+   for(const key of ['customer_id','package_id','contract_type','duration_months','site_id','currency','start_date','end_date','amount','ad_faces']){
     if(String(v[key]??'')!==String(expected[key]??''))throw Error('بيانات العقد يجب أن تتطابق مع الحملة؛ لا تغيّر التفاصيل المنقولة منها');
    }
    if(String(v.rented_area_m2??'')!==String(expected.rented_area_m2??''))throw Error('مساحة العقد يجب أن تتطابق مع الحملة');
@@ -3717,7 +3720,10 @@ function clean(k,v){
  }});
  if(k==='landlords'&&v.card_image_path)o.card_image_path=v.card_image_path;
  if(k==='properties'&&v.width_m&&v.height_m)o.dimensions=v.width_m+' × '+v.height_m+' m';
- if(k==='customer_contracts')o.contract_type=lookup('packages',v.package_id)?.package_type||v.contract_type||'cabin';
+ if(k==='customer_contracts'){
+  o.contract_type=lookup('packages',v.package_id)?.package_type||v.contract_type||'cabin';
+  if(v.ad_faces!==undefined&&v.ad_faces!==null)o.ad_faces=campaignFaces(v);
+ }
  return o;
 }
 
