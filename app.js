@@ -427,7 +427,7 @@ async function load(){
   const fetchAll=async table=>{
    const all=[];
    for(let start=0;start<100000;start+=1000){
-    const source=table==='employees'&&s.staff?.role!=='admin'?'raafat_employee_directory':table;
+    const source=table==='employees'&&!canAccess('employees','read')?'raafat_employee_directory':table;
     const {data,error}=await s.client.from(source).select('*').order('created_at',{ascending:false}).range(start,start+999);
     if(error)throw error;
     all.push(...(data||[]));
@@ -436,14 +436,14 @@ async function load(){
    throw Error('تجاوز عدد سجلات '+table+' حد التحميل المسموح؛ يلزم ترحيل عرض القائمة إلى صفحات.');
   };
   const requests=await Promise.all([...keys.map(fetchAll),s.client.from('settings').select('*').eq('id',1).maybeSingle(),
-   s.staff.role==='admin'?
+   canAccess('activity_logs','read')?
     s.client.from('activity_logs').select('*').order('occurred_at',{ascending:false}).limit(300):
     Promise.resolve({data:[],error:null})]);
   for(let i=0;i<keys.length;i++)s.data[keys[i]]=requests[i]||[];
   if(requests[keys.length].error)throw requests[keys.length].error;
   s.settings=requests[keys.length].data||s.settings;
   s.activityLogs=requests[keys.length+1].error?[]:requests[keys.length+1].data||[];
-  s.error=requests[keys.length+1].error&&s.staff.role==='admin'?
+  s.error=requests[keys.length+1].error&&canAccess('activity_logs','read')?
     'تعذر تحميل سجل الحركات: '+requests[keys.length+1].error.message:'';
   subscribeToExchangeRate();
  }catch(e){s.error=e.message||String(e)}
@@ -606,10 +606,12 @@ function changeNavGroup(id){
 function bindNav(){
  document.querySelectorAll('[data-nav]').forEach(x=>x.onclick=()=>{
   s.view=x.dataset.nav;
+  const staffAdminRequested=s.view==='staff_admin';
   localStorage.setItem('raafat-last-view',s.view);
   s.navExpanded=navGroupForView(s.view);
   s.search='';s.filter='all';s.expenseCategory='';s.modal=null;
   render();
+  if(staffAdminRequested&&!s.managedStaff)refreshManagedStaff();
  });
  document.querySelectorAll('[data-nav-group]').forEach(x=>x.onclick=()=>changeNavGroup(x.dataset.navGroup));
 }
@@ -1373,7 +1375,7 @@ function expenseOverview(){
   const categoryLabel=categoryCodes.length===1?
    EXPENSE_CATEGORY_LABELS[categoryCodes[0]]||categoryCodes[0]:'فاتورة متعددة التصنيفات';
   const due=Math.max(0,roundAmount(Number(expense.amount)-expensePaidAmount(expense)));
-  const canEdit=s.staff?.role==='admin';
+  const canEdit=canAccess('expenses','edit');
   const details=items.map(item=>'<div class="expense-invoice-product">'+
    '<div><strong>'+E(item.description)+'</strong><small>'+
     E(EXPENSE_CATEGORY_LABELS[item.category]||item.category||'—')+' · '+
@@ -1733,7 +1735,7 @@ function activityDetail(log){
  }).join(' • ');
 }
 function activityLogsView(){
- if(!s.demo&&s.staff?.role!=='admin')return '<div class="notice">سجل الحركات متاح للمدير فقط.</div>';
+ if(!canAccess('activity_logs','read'))return '<div class="notice">سجل الحركات يحتاج صلاحية خاصة.</div>';
  const labelsByTable={
   customers:'الزبائن',packages:'الباقات',package_rates:'أسعار الباقات',
   landlords:'مالكو الأسطح',properties:'العقارات',ad_sites:'المواقع الإعلانية',
@@ -1763,24 +1765,13 @@ function activityLogsView(){
  '<p class="subtle">عدد الحركات المعروضة: '+rows.length+'</p></div>';
 }
 async function refreshActivityLogs(){
- if(!s.demo&&(!s.client||s.staff?.role!=='admin'))return;
+ if(!s.demo&&(!s.client||!canAccess('activity_logs','read')))return;
  if(s.demo){s.activityLogs=[];render();return}
  const {data,error}=await s.client.from('activity_logs').select('*').order('occurred_at',{ascending:false}).limit(300);
  if(error)return toast('تعذّر تحديث سجل الحركات: '+error.message,true);
  s.activityLogs=data||[];render();
 }
-function openSalaryExpense(employeeId){
- if(!s.demo&&s.staff?.role!=='admin')return toast('اعتماد رواتب الموظفين خاص بالمدير',true);
- const employee=lookup('employees',employeeId);
- if(!employee)return toast('لم يتم العثور على الموظف.',true);
- openForm('company_expenses',{employee_id:employee.id,paid_by:'',currency:employee.salary_currency||'IQD',
-  title:'راتب '+employee.name+' — '+today().slice(0,7),expense_date:today()});
- s.modal.salaryFromEmployee=employee.id;
- s.modal.expenseItems=[{description:'راتب '+employee.name+' لشهر '+today().slice(0,7),
-  category:'salaries',department:employee.department||'general',
-  quantity:1,unit_price:Number(employee.salary_amount)>0?employee.salary_amount:''}];
- render();
-}
+function openSalaryExpense(employeeId){return openPayrollPayment(employeeId)}
 
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
@@ -3195,7 +3186,15 @@ function bind(){
  };
 
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
- document.querySelectorAll('[data-salary-expense]').forEach(x=>x.onclick=()=>openSalaryExpense(x.dataset.salaryExpense));
+ document.querySelectorAll('[data-payroll-create]').forEach(x=>x.onclick=()=>openPayrollPayment(x.dataset.payrollCreate));
+ document.querySelectorAll('[data-payroll-receipt]').forEach(x=>x.onclick=()=>downloadPayrollReceipt(x.dataset.payrollReceipt));
+ document.querySelectorAll('[data-staff-new]').forEach(x=>x.onclick=()=>openStaffRoleEditor());
+ document.querySelectorAll('[data-staff-edit]').forEach(x=>x.onclick=()=>openStaffRoleEditor(x.dataset.staffEdit));
+ document.querySelectorAll('[data-staff-refresh]').forEach(x=>x.onclick=()=>refreshManagedStaff());
+ const payrollForm=$('#payrollPaymentForm');
+ if(payrollForm)payrollForm.onsubmit=event=>{event.preventDefault();savePayrollPayment(payrollForm)};
+ const staffForm=$('#staffRoleForm');
+ if(staffForm)staffForm.onsubmit=event=>{event.preventDefault();saveStaffRole(staffForm)};
  document.querySelectorAll('[data-employee-history]').forEach(x=>x.onclick=()=>{
   s.employeeFocus=x.dataset.employeeHistory||null;render();
  });
@@ -3524,8 +3523,8 @@ function bind(){
 function openForm(k,row){
  if(!canAccess(TABLE_ACCESS[k]||k,row?.id?'edit':'create'))
   return toast('ليس لديك صلاحية الإضافة أو التعديل في هذا القسم.',true);
- if(k==='company_expenses'&&row?.id&&s.staff?.role!=='admin')return toast('تعديل المصروفات متاح للمدير فقط',true);
- if(k==='employees'&&!s.demo&&s.staff?.role!=='admin')return toast('بيانات الموظفين والرواتب متاحة للمدير فقط',true);
+ if(k==='company_expenses'&&row?.id&&!canAccess('expenses','edit'))return toast('تعديل المصروفات يتطلب صلاحية المالية.',true);
+ if(k==='employees'&&!canAccess('employees','edit'))return toast('تعديل بيانات الموظفين يتطلب صلاحية الموظفين.',true);
  const defaults={status:'inquiry',currency:s.displayCurrency,salary_currency:'IQD',salary_amount:0,
   department:'general',hired_at:'',expense_date:today(),category:'hospitality',advance_amount:0,site_type:'roadside',active:true,default_months:3,months:3,quantity:1,grace_days:0,payment_frequency:'annual',start_date:today(),paid_at:today(),due_date:today(),paid_amount:0,price:0,amount:0};
  let data={...defaults,...(row||{})};
@@ -3805,7 +3804,7 @@ async function showExpenseTransferProof(id){
 async function saveExpenseInvoice(form){
  const modal=s.modal;
  if(modal?.table!=='company_expenses'||s.savingExpense)return;
- if(modal.data.id&&s.staff?.role!=='admin')return toast('تعديل الفواتير متاح للمدير فقط.',true);
+ if(modal.data.id&&!canAccess('expenses','edit'))return toast('تعديل الفواتير يتطلب صلاحية المصروفات.',true);
  captureExpenseDraft(form);
  const v=modal.data;
  const items=(modal.expenseItems||[]).map(item=>({
