@@ -2247,7 +2247,12 @@ function openCustomerPdfEditor(id,preferredMode='preview'){
  const contract=lookup('customer_contracts',id);
  if(!contract)return toast('عقد الزبون غير موجود، يرجى مراجعة السجل.',true);
  const payload=customerContractPdfPayload(contract);
- const standard=typeof window!=='undefined'?window.RaafatContractPdf?.defaultClauses:null;
+ // Snapshot the company rate in this print-only draft. Neither the stored
+ // contract amount nor any campaign receipts are modified by PDF edits.
+ payload.exchangeRate=Number(s.settings?.usd_iqd)||0;
+ const pdf=typeof window!=='undefined'?window.RaafatContractPdf:null;
+ const standard=typeof pdf?.defaultCustomerClauses==='function'?
+  pdf.defaultCustomerClauses(payload):pdf?.defaultClauses;
  const fallback=[
   ['1','تتعهد شركتنا بحماية إعلان المشترك من تاريخ توقيع العقد لغاية الانتهاء.'],
   ['2','تتعهد شركتنا بتوفير إنارة الكابينة وإدامتها وحسب الحاجة.'],
@@ -2260,6 +2265,7 @@ function openCustomerPdfEditor(id,preferredMode='preview'){
   ['10','حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.']
  ].map(([,text],index)=>({number:String(index+1),text}));
  payload.clauses=(standard||fallback).map((item,index)=>({...item,number:String(index+1)}));
+ payload._autoCustomerClauses=payload.clauses.map(item=>item.text);
  s.modal={kind:'customerPdfEditor',table:'customer_contracts',data:contract,
   printDraft:payload,preferredMode};
  render();
@@ -2298,14 +2304,21 @@ function customerPdfEditorHtml(){
   '<p class="subtle">صفحتان بالقالب الأصلي: العقد أولاً، ثم الشروط والتواقيع. تعديلات هذه النافذة خاصة بملف PDF ولا تغيّر البيانات المحفوظة.</p></div>'+
   '<button class="close" type="button" data-action="close">'+uiIcon('x',19)+'</button></div>'+
   '<form id="customerPdfEditorForm">'+
-  '<section class="customer-print-section"><h3>بيانات العقد والأطراف</h3>'+
+  '<section class="customer-print-section"><h3>بيانات العقد والأطراف — الصفحة الأولى</h3>'+
    '<div class="customer-print-fields">'+
     '<label class="field"><span>رقم عقد الزبون</span><input name="number" value="'+E(v.number||'')+'"></label>'+
-    CUSTOMER_PRINT_FIELDS.slice(0,15).map(field).join('')+'</div></section>'+
+    CUSTOMER_PRINT_FIELDS.slice(0,15).map(field).join('')+'</div>'+
+   '<p class="customer-print-currency-note">عملة الطباعة: <strong>'+E(v.currency==='IQD'?'دينار عراقي (IQD)':'دولار أمريكي (USD)')+
+   '</strong> • سعر الصرف المعتمد: 1$ = '+E(fmt(v.exchangeRate||s.settings?.usd_iqd||0))+
+   ' د.ع. عند تغيير العملة تتحول قيمة العقد تلقائياً، وتكدر تعدّل المبلغ بعدها قبل الطباعة بدون تغيير بيانات العقد المحفوظ.</p>'+
+  '</section>'+
+  '<section class="customer-print-section"><h3>مواصفات الإعلان — الصفحة الأولى</h3>'+
+    '<div class="customer-print-fields">'+field(CUSTOMER_PRINT_FIELDS[16])+'</div></section>'+
   '<section class="customer-print-section"><div class="customer-print-section-head"><h3>القطع والمواقع المشمولة</h3>'+
     '<button type="button" class="btn secondary mini" data-print-site-add>'+uiIcon('plus',15)+' إضافة قطعة لنسخة الطباعة</button></div>'+
     '<p class="subtle">يمكن تعديل الرموز والعناوين قبل الطباعة. يتم تصغير عرض القطع تلقائياً عند زيادة عددها.</p>'+
-    '<div class="customer-print-sites">'+(v.sites||[]).map(line).join('')+'</div></section>'+
+    '<div class="customer-print-sites">'+(v.sites||[]).map(line).join('')+'</div>'+
+    '<div class="customer-print-fields">'+field(CUSTOMER_PRINT_FIELDS[15])+'</div></section>'+
   '<section class="customer-print-section"><h3>الشروط والملاحظات — الصفحة الثانية</h3>'+
    '<div class="customer-print-section-head"><p class="subtle">الترقيم متسلسل تلقائياً، وأي شرط جديد يُضاف قبل بند تحرير العقد الختامي.</p>'+
    '<button class="btn secondary mini" type="button" data-print-clause-add>'+uiIcon('plus',15)+' إضافة شرط</button></div>'+
@@ -2313,7 +2326,7 @@ function customerPdfEditorHtml(){
     '<div class="customer-print-clause" data-print-clause="'+index+'"><b>'+E(index+1)+'.</b>'+
     '<textarea rows="2" aria-label="نص الشرط '+E(index+1)+'">'+E(clause.text)+'</textarea>'+
     '<button type="button" class="linkbtn customer-print-clause-remove" data-print-clause-remove="'+index+'" aria-label="حذف الشرط '+(index+1)+'">'+uiIcon('trash',14)+'</button></div>').join('')+'</div>'+
-   '<div class="customer-print-fields">'+CUSTOMER_PRINT_FIELDS.slice(15).map(field).join('')+'</div></section>'+
+   '<div class="customer-print-fields">'+CUSTOMER_PRINT_FIELDS.slice(17).map(field).join('')+'</div></section>'+
   '<section class="customer-print-section"><h3>بيانات التوقيع — الصفحة الثانية</h3>'+
    '<div class="customer-signature-parties">'+
     '<div class="customer-signature-party"><strong>الطرف الأول — جهة اليمين (الشركة)</strong>'+
@@ -2349,6 +2362,29 @@ function captureCustomerPdfEditor(form){
   number:String(index+1),text:row.querySelector('textarea')?.value?.trim()||''
  }));
  if(modal.kind==='customerPdfEditor'){
+  payload.amount=Number(payload.amount);
+  // A currency switch changes the actual numeric value on the *print draft*,
+  // not merely the printed currency symbol. A subsequent manual edit is kept.
+  if(previous.currency!==payload.currency){
+   const rate=Number(s.settings?.usd_iqd);
+   if(!['USD','IQD'].includes(previous.currency)||!['USD','IQD'].includes(payload.currency)||
+      !Number.isFinite(rate)||rate<=0)
+    throw Error('سعر الصرف غير صالح. راجع إعدادات العملة قبل طباعة العقد.');
+   const converted=convert(payload.amount,previous.currency,payload.currency);
+   payload.amount=payload.currency==='IQD'?Math.round(converted):roundAmount(converted);
+  }
+  payload.exchangeRate=Number(s.settings?.usd_iqd)||previous.exchangeRate;
+  // Update only legal clauses still matching the generated standard wording.
+  // Custom edits to conditions always remain exactly as the user entered.
+  const standard=window.RaafatContractPdf?.defaultCustomerClauses?.(payload)?.map(item=>item.text);
+  if(standard){
+   const old=previous._autoCustomerClauses||[];
+   payload.clauses=payload.clauses.map(clause=>{
+    const index=old.indexOf(clause.text);
+    return index>=0&&index<standard.length?{...clause,text:standard[index]}:clause;
+   });
+   payload._autoCustomerClauses=standard;
+  }
   payload.sites=[...form.querySelectorAll('[data-print-site]')].map(row=>{
    const get=name=>row.querySelector('[data-print-site-field="'+name+'"]')?.value?.trim()||'';
    return {code:get('code'),name:get('name'),governorate:get('governorate'),address:get('address')};
@@ -2424,6 +2460,13 @@ function bindCustomerPdfEditor(){
    else await generateCustomerContractPdf(m.data.id,mode,draft);
   }finally{if(button.isConnected)button.disabled=false;}
  });
+ if(s.modal?.kind==='customerPdfEditor'){
+  const currency=form.querySelector('[name="currency"]');
+  if(currency)currency.addEventListener('change',()=>{
+   try{captureCustomerPdfEditor(form);render();}
+   catch(e){toast(e.message||String(e),true);render();}
+  });
+ }
  if(s.modal?.kind==='landlordPdfEditor'){
   form.querySelectorAll('[name="rentTotal"],[name="currency"],[name="advanceAmount"],[name="graceDays"],[name="startDate"],[name="endDate"],[data-print-installment-field="amount"]').forEach(input=>{
    input.addEventListener('change',()=>{
