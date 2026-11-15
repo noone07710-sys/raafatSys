@@ -677,3 +677,55 @@
  .expense-record-side{align-items:flex-start;gap:7px}
  .expense-category-expand{padding:10px 12px}
 }
+
+
+/* Review-before-print workflow: edit a transient PDF copy, not stored contracts. */
+.customer-pdf-editor{width:min(1050px,100%);max-height:94vh;padding:24px 27px;background:#fff;scrollbar-gutter:stable}
+.customer-pdf-editor>.modalhead{border-bottom:1px solid #e3ebef;padding-bottom:14px;align-items:flex-start;gap:12px}
+.customer-pdf-editor>.modalhead h2{font-size:19px;color:#233b4c;margin-bottom:5px}
+.customer-pdf-editor>.modalhead p{margin:0;line-height:1.8;max-width:780px}
+.customer-pdf-editor form{display:flex;flex-direction:column;gap:16px}
+.customer-print-section{background:#fbfcfe;border:1px solid #e2eaf0;border-radius:14px;padding:17px}
+.customer-print-section>h3,.customer-print-section-head h3{font-size:14px;margin:0 0 13px;color:#2e5062}
+.customer-print-section-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:9px}
+.customer-print-section-head h3{margin:0}
+.customer-print-section>.subtle{font-size:11px;line-height:1.8;margin:0 0 12px}
+.customer-print-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 15px}
+.customer-print-fields>.field{margin-bottom:12px}
+.customer-print-fields>.full{grid-column:1/-1}
+.customer-print-fields .field>span,.customer-print-site-grid .field>span{font-size:11px;font-weight:700;color:#566d7c}
+.customer-print-fields .field input,.customer-print-fields .field textarea,.customer-print-fields .field select,
+.customer-print-site-grid .field input,.customer-print-clause textarea{
+ background:#fff;border:1px solid #dce5ed;border-radius:10px;outline:0;width:100%;padding:9px 11px;font-size:12px;color:#243d4d}
+.customer-print-fields .field textarea{min-height:58px}
+.customer-print-fields .field input:focus,.customer-print-fields .field textarea:focus,
+.customer-print-site-grid .field input:focus,.customer-print-clause textarea:focus{
+ border-color:#6ba7ae;box-shadow:0 0 0 3px #267c8414}
+.customer-print-sites{display:grid;gap:9px}
+.customer-print-site{background:#fff;border:1px solid #e5ecf1;border-radius:11px;padding:12px}
+.customer-print-site-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.customer-print-site-head>strong{font-size:12px;color:#486b7a}
+.customer-print-site-head .linkbtn{font-size:11px;color:#a06560}
+.customer-print-site-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.customer-print-site-grid>.field{margin:0}
+.customer-print-clauses{display:grid;gap:7px;margin-bottom:16px}
+.customer-print-clause{display:flex;align-items:flex-start;gap:12px;padding:8px 10px;background:#fff;border:1px solid #e5edf1;border-radius:10px}
+.customer-print-clause b{flex:0 0 22px;color:#bb4751;font-size:12px;line-height:2}
+.customer-print-clause textarea{flex:1;min-height:54px;resize:vertical;line-height:1.8}
+.customer-print-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:10px;
+ position:sticky;bottom:-24px;background:#fff;padding:13px 0 1px;border-top:1px solid #e6edf1;z-index:2}
+.customer-print-actions .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+@media(max-width:800px){
+ .customer-pdf-editor{padding:18px}
+ .customer-print-site-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){
+ .customer-pdf-editor{padding:13px}
+ .customer-pdf-editor>.modalhead h2{font-size:17px}
+ .customer-print-fields,.customer-print-site-grid{grid-template-columns:1fr}
+ .customer-print-fields>.field{grid-column:1/-1}
+ .customer-print-section{padding:12px}
+ .customer-print-actions{bottom:-13px}
+ .customer-print-actions .btn{flex:1 1 155px;font-size:11px;padding:10px}
+ .customer-print-clause{gap:7px}
+}
