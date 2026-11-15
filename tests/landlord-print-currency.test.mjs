@@ -55,7 +55,7 @@ function draftForm(draft,overrides={},manualClause={}){
  }));
  const installmentRows=draft.installments.map(item=>({
   querySelector(selector){
-   const field=selector.match(/^\\[data-print-installment-field="([^"]+)"\\]$/)?.[1];
+    const field=selector.startsWith('[data-print-installment-field="')?selector.split('"')[1]:null;
    return field?{value:String(item[field]??'')}:null;
   }
  }));
