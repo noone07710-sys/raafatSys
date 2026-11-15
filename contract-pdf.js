@@ -562,6 +562,7 @@
     {name:'عدد القطع',value:payload.quantity},
     {name:'مدة الحجز',value:label(payload.months)+' أشهر'}
    ]);
+   painter.field('عدد الأوجه',Number(payload.adFaces)===1?'وجه واحد':'وجهان');
    painter.fields([
     {name:'تاريخ البداية',value:payload.startDate},
     {name:'تاريخ النهاية',value:payload.endDate}
