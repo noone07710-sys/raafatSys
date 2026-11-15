@@ -317,6 +317,18 @@
   {number:'9',text:'حرر هذا العقد من نسختين ووقعه الطرفان بعد الاطلاع على البنود المدرجة أعلاه.'}
  ]);
 
+
+ function customerClauses(payload){
+  const clauses=DEFAULT_CUSTOMER_CLAUSES.map(clause=>({...clause}));
+  // The fixed optional 25 USD promotional fee is printed in the same currency
+  // as the agreement when a valid company exchange-rate snapshot is supplied.
+  const rate=Number(payload?.exchangeRate);
+  if(payload?.currency==='IQD'&&Number.isFinite(rate)&&rate>0){
+   const fee=number(Math.round(25*rate))+' دينار عراقي';
+   for(const clause of clauses)clause.text=clause.text.replace('25$',fee);
+  }
+  return clauses;
+ }
  function landlordPeriodLabel(start,end){
   const a=Date.parse(String(start||'')+'T00:00:00Z'),b=Date.parse(String(end||'')+'T00:00:00Z');
   if(!Number.isFinite(a)||!Number.isFinite(b)||b<a)return 'المدة المحددة في هذا العقد';
@@ -355,7 +367,7 @@
    ctx.fillText(String(value??''),x,y);ctx.textAlign='right';
   };
   const clauses=Array.isArray(payload.clauses)?payload.clauses:
-   payload.kind==='landlord'?landlordClauses(payload):DEFAULT_CUSTOMER_CLAUSES;
+   payload.kind==='landlord'?landlordClauses(payload):customerClauses(payload);
   let y=AREA.top+10;
   // Exactly the same editable contract number as the page-one header.
   print('رقم العقد',AREA.left+10,AREA.top-1,9,600,COLOR.muted,'left');
@@ -583,5 +595,5 @@
   return blob;
  }
  scope.RaafatContractPdf=Object.freeze({generate,download,preview,contractFileName,TEMPLATE_URL,
-  defaultClauses:DEFAULT_CUSTOMER_CLAUSES,defaultLandlordClauses:landlordClauses});
+  defaultClauses:DEFAULT_CUSTOMER_CLAUSES,defaultCustomerClauses:customerClauses,defaultLandlordClauses:landlordClauses});
 })(window);
