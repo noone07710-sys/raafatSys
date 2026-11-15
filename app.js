@@ -495,7 +495,7 @@ function reminderText(item){
   '. نرجو التنسيق معنا بشأن الدفعة، ولكم جزيل الشكر.';
  if(item.key.startsWith('lease-payment:'))return intro+
   'نود التنسيق معكم بشأن دفعة إيجار السطح «'+item.subject+'» للعقد'+contract+
-  '+(item.days<0?'وكان موعدها ':'وموعدها ')+item.date+'، والمبلغ المتبقي من هذه الدفعة '+money(item.amount,item.currency)+
+  (item.days<0?'، وكان موعدها ':'، وموعدها ')+item.date+'، والمبلغ المتبقي من هذه الدفعة '+money(item.amount,item.currency)+
   '. يرجى التواصل معنا لتأكيد إجراءات التسديد، مع الشكر.';
  if(item.party==='landlord')return intro+
   'نود إعلامكم بأن عقد استئجار السطح «'+item.subject+'»'+contract+
