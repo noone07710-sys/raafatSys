@@ -1097,3 +1097,17 @@
 @media print{
  .lease-form-tools,.lease-preview-actions{display:none!important}
 }
+
+/* Customer contracts share the same clear, responsive actions as rooftop contracts. */
+.lease-preview-actions .lease-row-action{font-size:11px;padding:9px 12px;min-height:39px}
+.lease-preview-actions .lease-row-action:disabled{opacity:.58;cursor:not-allowed}
+.campaign-payments-focus{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:13px 17px;margin:0 0 15px;border:1px solid #c9dedf;background:#f0f7f7;border-radius:13px}
+.campaign-payments-focus>div{display:grid;gap:5px;min-width:0}
+.campaign-payments-focus strong{color:#245462;font-size:13px;overflow-wrap:anywhere}
+.campaign-payments-focus small{color:#688391;font-size:11px}
+.campaign-payments-focus .btn{flex-shrink:0}
+@media(max-width:650px){
+ .lease-preview-actions .lease-row-action{font-size:10px;padding:8px 7px;min-height:39px}
+ .campaign-payments-focus{align-items:stretch}
+ .campaign-payments-focus .btn{width:100%}
+}
