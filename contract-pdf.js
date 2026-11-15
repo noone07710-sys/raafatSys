@@ -344,12 +344,14 @@
   ctx.strokeStyle=COLOR.line;ctx.lineWidth=.8;
   ctx.beginPath();ctx.moveTo(AREA.left,signatureTop-10);ctx.lineTo(AREA.right,signatureTop-10);ctx.stroke();
   const left=AREA.left+half-17,right=AREA.right-10;
+  // Keep legal parties in the same RTL columns on both sheets.
+  // Party one is Raafat (right); party two is the customer (left).
   const blocks=[
-   {x:left,label:label(payload.firstSignatureLabel,'الطرف الأول المؤجر'),
-    name:label(payload.firstSignatureName,payload.customerRepresentative||payload.customerName),
+   {x:right,label:label(payload.firstSignatureLabel,'الطرف الأول — ممثل الشركة'),
+    name:label(payload.firstSignatureName,payload.companyRepresentative),
     date:label(payload.firstSignatureDate,payload.startDate)},
-   {x:right,label:label(payload.secondSignatureLabel,'الطرف الثاني — ممثل الشركة'),
-    name:label(payload.secondSignatureName,payload.companyRepresentative),
+   {x:left,label:label(payload.secondSignatureLabel,'الطرف الثاني — الزبون'),
+    name:label(payload.secondSignatureName,payload.customerRepresentative||payload.customerName),
     date:label(payload.secondSignatureDate,payload.startDate)}
   ];
   for(const item of blocks){
@@ -433,19 +435,19 @@
     return;
    }
    painter.section('أطراف العقد وبيانات التواصل');
-   // Right column is always the customer's side; left is the company.
-   // Customer representative is a standard-sized cell, never a full-width block.
+   // Party one (company) occupies the right cell of every row;
+   // party two (customer) occupies the left cell, including representatives.
    painter.fields([
-    {name:'الطرف الثاني — الزبون',value:payload.customerName},
-    {name:'الطرف الأول — شركة رأفت',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'}
+    {name:'الطرف الأول — شركة رأفت',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'},
+    {name:'الطرف الثاني — الزبون',value:payload.customerName}
    ]);
    painter.fields([
-    {name:'هاتف الزبون',value:payload.customerPhone},
-    {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')}
+    {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')},
+    {name:'هاتف الزبون',value:payload.customerPhone}
    ]);
    painter.fields([
-    {name:'ممثل الزبون',value:payload.customerRepresentative},
-    {name:'ممثل الشركة',value:payload.companyRepresentative}
+    {name:'ممثل الشركة',value:payload.companyRepresentative},
+    {name:'ممثل الزبون',value:payload.customerRepresentative}
    ]);
 
    painter.section('تفاصيل الحملة الإعلانية');
