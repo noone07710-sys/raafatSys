@@ -381,8 +381,8 @@ const NAV_GROUPS=[
   ['leases','عقود مالكي الأسطح','file'],
   ['lease_installments','دفعات إيجار الأسطح','receipt']
  ]},
- {id:'finance',title:'المالية',subtitle:'مصروفات الشركة اليومية',icon:'wallet',items:[
-  ['company_expenses','المصروفات','receipt']
+ {id:'finance',title:'المالية',subtitle:'إدارة الفواتير والمصروفات',icon:'wallet',items:[
+  ['company_expenses','الفواتير والمصروفات','receipt']
  ]}
 ];
 function navGroupForView(view){return NAV_GROUPS.find(group=>group.items.some(item=>item[0]===view))?.id||null;}
@@ -872,7 +872,10 @@ async function deleteExpenseConfirmed(form){
   }
   const proof=expense.transfer_proof_path;
   let cleanupIssue='';
-  if(proof&&!s.demo){const removed=await s.client.storage.from('expense-transfers').remove([proof]);if(removed.error)cleanupIssue=removed.error.message;}
+  if(proof&&!s.demo){
+   try{const removed=await s.client.storage.from('expense-transfers').remove([proof]);if(removed.error)cleanupIssue=removed.error.message;}
+   catch(error){cleanupIssue=error?.message||'تعذر حذف المرفق';}
+  }
   s.modal=null;s.view='company_expenses';s.search='';s.expenseCategory='';
   if(s.demo)render();else await load();
   toast(cleanupIssue?'تم حذف الفاتورة، ولكن تعذر حذف مرفق التحويل: '+cleanupIssue:'تم حذف الفاتورة ومرفقاتها المرتبطة');
@@ -2508,8 +2511,10 @@ async function saveExpenseInvoice(form){
   const oldProof=String(v.transfer_proof_path||'');
   await persist('company_expenses',record,v.id);
   if(!s.demo&&oldProof&&oldProof!==proof){
-   const {error:cleanup}=await s.client.storage.from('expense-transfers').remove([oldProof]);
-   if(cleanup)toast('تم حفظ الفاتورة، وتعذر تنظيف المرفق السابق: '+cleanup.message,true);
+   try{
+    const {error:cleanup}=await s.client.storage.from('expense-transfers').remove([oldProof]);
+    if(cleanup)toast('تم حفظ الفاتورة، وتعذر تنظيف المرفق السابق: '+cleanup.message,true);
+   }catch(error){toast('تم حفظ الفاتورة، ولكن تعذر تنظيف المرفق السابق: '+(error?.message||String(error)),true);}
   }
   s.modal=null;s.view='company_expenses';s.search='';s.expenseCategory='';
   if(s.demo)render();else await load();
