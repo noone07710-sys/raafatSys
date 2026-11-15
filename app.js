@@ -3540,7 +3540,16 @@ function bind(){
  };
  const months=form.elements.namedItem('months');
  if(months&&k==='campaigns')months.onchange=()=>{
-  captureForm(form);v.months=Number(months.value);refreshCampaignQuote();render();
+  captureForm(form);
+  v.months=Number(months.value);
+  const blocked=removeUnavailableCampaignChoices(v);
+  refreshCampaignQuote();
+  if(blocked.length){
+   s.formStep=1;render();
+   toast(reservedCampaignMessage(blocked)+' — أزلناها من الاختيار، اختر قطعاً متاحة.',true);
+   return;
+  }
+  render();
  };
  const quantity=form.elements.namedItem('quantity'),area=form.elements.namedItem('requested_area_m2');
  for(const input of [quantity,area].filter(Boolean))input.oninput=()=>{
@@ -3991,6 +4000,16 @@ async function saveForm(form){
  if(k==='campaigns'&&m.autoPrice&&s.formStep===4)refreshCampaignQuote();
  if(k==='campaigns'&&s.formStep<4){
   refreshCampaignQuote();
+  if(s.formStep>=1){
+   const blocked=removeUnavailableCampaignChoices(v);
+   if(blocked.length){
+    s.formStep=1;
+    refreshCampaignQuote();
+    render();
+    toast(reservedCampaignMessage(blocked)+' — تم إلغاء اختيارها، اختر قطعاً أخرى.',true);
+    return;
+   }
+  }
   if(s.formStep===1&&!lookup('packages',v.package_id)){toast('اختَر الباقة الإعلانية أولاً',true);return;}
   if(s.formStep===1&&m.siteIds?.some(id=>!siteMatchesPackage(lookup('ad_sites',id),v.package_id))){toast('القطع المختارة لا تتبع الباقة المحددة، صحّح اختيار المواقع',true);return;}
   if(s.formStep===1&&lookup('packages',v.package_id)?.pricing_mode==='sqm_month'&&(!m.siteIds?.length||selectedRooftopAreas(m.siteIds).invalid.length)){
@@ -4013,6 +4032,12 @@ async function saveForm(form){
   if(k==='leases')normalized.advance_amount=v.advance_amount===''||v.advance_amount==null?0:Number(v.advance_amount);
   if(k==='campaigns'){
    const pkg=lookup('packages',v.package_id);
+   const localConflicts=reservedCampaignChoices(normalized,m.siteIds||[]);
+   if(localConflicts.length)throw Error(reservedCampaignMessage(localConflicts));
+   // A different administrator may have saved a booking after this wizard opened.
+   // Always re-read availability; database triggers handle the final race.
+   const serverConflicts=await freshCampaignConflicts(normalized,m.siteIds||[]);
+   if(serverConflicts.length)throw Error(reservedCampaignMessage(serverConflicts));
    normalized.ad_faces=campaignFaces(v,pkg);
    if(pkg?.pricing_mode==='sqm_month'){
     const chosen=selectedRooftopAreas(m.siteIds||[]);
