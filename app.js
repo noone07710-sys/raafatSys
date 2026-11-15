@@ -6,7 +6,7 @@ const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
-const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts','company_expenses','employees'];
+const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts','company_expenses','employees','payroll_payments'];
 
 // Province choices are canonical Arabic governorate names (including Halabja, 2025).
 // Legacy saved names are displayed as a one-time existing option, not discarded.
@@ -40,8 +40,8 @@ const defs={
  campaign_sites:{title:'مواقع الحملات',icon:'⌖',fields:[]},
  package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
  employees:{title:'الموظفون والرواتب',icon:'users',fields:[
-  ['name','اسم الموظف','text',true],['job_title','المسمّى الوظيفي','text',true],
-  ['department','القسم','select',true,['general','graphic_design','production','marketing','development','shared']],
+  ['name','اسم الموظف','text',true],['job_title','المسمّى الوظيفي بالعربي','text',true],
+  ['department','القسم','select',true,['general','graphic_design','production','marketing','development','shared','cleaning']],
   ['phone','رقم الهاتف','tel'],['salary_amount','الراتب الشهري','number',true],
   ['salary_currency','عملة الراتب','select',true,['IQD','USD']],['hired_at','تاريخ المباشرة','date'],
   ['active','حالة الموظف','select',true,['true','false']],['notes','ملاحظات','textarea']]},
@@ -759,7 +759,7 @@ const EXPENSE_CATEGORY_LABELS={
  internet_telecom:'إنترنت واتصالات'
 };
 const EXPENSE_CATEGORY_OPTIONS=[
- 'salaries','rent_services','hospitality_misc','design_subscriptions',
+ 'rent_services','hospitality_misc','design_subscriptions',
  'stationery','equipment_maintenance','local_transport','internet_telecom'
 ];
 const EXPENSE_DEPARTMENTS=[
@@ -768,14 +768,56 @@ const EXPENSE_DEPARTMENTS=[
  ['production','قسم الإنتاج والتصوير'],
  ['marketing','قسم التسويق وإدارة الحسابات'],
  ['development','قسم البرمجة وتطوير المواقع'],
- ['shared','الخدمات الإدارية والمشتركة']
+ ['shared','الخدمات الإدارية والمشتركة'],
+ ['cleaning','التنظيف']
 ];
 const EXPENSE_EMPLOYEES=[
  ['حسين علاء','المدير التنفيذي'],
  ['احمد اسماعيل','التصميم'],
- ['امال عبد','موظفة خدمة'],
+ ['امال عبد','عاملة تنظيف'],
  ['رأفت عبد الرزاق','المدير المفوض']
 ];
+
+const ACCESS_SECTIONS=[
+ ['customers','الزبائن'],
+ ['packages','الباقات وأسعارها'],
+ ['campaigns','الحملات'],
+ ['customer_contracts','عقود الزبائن'],
+ ['ad_sites','المواقع الإعلانية'],
+ ['campaign_payments','دفعات الحملات'],
+ ['landlords','المالكون والعقارات'],
+ ['leases','عقود الأسطح وأقساطها'],
+ ['expenses','المصروفات والفواتير'],
+ ['employees','سجلات الموظفين'],
+ ['payroll','صرف الرواتب وسنداتها'],
+ ['reports','التقارير'],
+ ['activity_logs','سجل الحركات'],
+ ['settings','إعدادات الشركة']
+];
+const TABLE_ACCESS={
+ customers:'customers',packages:'packages',package_rates:'packages',
+ campaigns:'campaigns',campaign_sites:'campaigns',customer_contracts:'customer_contracts',
+ ad_sites:'ad_sites',campaign_payments:'campaign_payments',landlords:'landlords',
+ properties:'landlords',leases:'leases',lease_installments:'leases',
+ company_expenses:'expenses',employees:'employees',payroll_payments:'payroll'
+};
+function canAccess(module,action='read'){
+ if(s.demo||s.staff?.role==='admin')return true;
+ if(!s.staff?.active)return false;
+ const perms=s.staff.permissions||[];
+ if(s.staff.role==='custom_admin')return perms.includes(module+'.'+action)||
+  action==='read'&&perms.includes(module+'.edit');
+ if(s.staff.role==='staff'){
+  if(action==='read')return !['employees','payroll','activity_logs'].includes(module);
+  if(action==='create')return !['employees','payroll','activity_logs','settings'].includes(module);
+  return action==='edit'&&!['employees','payroll','activity_logs','settings','expenses'].includes(module);
+ }
+ return false;
+}
+function adminRoleLabel(role){
+ return ({admin:'المدير الرئيسي',staff:'موظف',custom_admin:'مدير بصلاحيات مخصصة'})[role]||'موظف';
+}
+
 function expenseLineItems(expense){
  if(Array.isArray(expense?.expense_items)&&expense.expense_items.length)
   return expense.expense_items.map(item=>({
@@ -824,12 +866,7 @@ function expenseInvoiceValidated(values,items){
    throw Error('يرجى تحديد سعر الوحدة للصنف رقم '+(i+1)+'.');
  }
  const salaryLines=items.filter(item=>item.category==='salaries');
- if(salaryLines.length){
-  if(items.length!==salaryLines.length)
-   throw Error('فاتورة الراتب تكون خاصة بموظف واحد؛ سجّل المصروفات الأخرى بفاتورة منفصلة.');
-  if(!lookup('employees',values.employee_id))
-   throw Error('اختر الموظف المستفيد من الراتب من قسم الموظفين والرواتب.');
- }
+ if(salaryLines.length)throw Error('صرف الرواتب صار حصراً من قسم الموظفين والرواتب، وليس من المصروفات.');
  const amount=expenseInvoiceTotal(items);
  if(!(amount>0)||!Number.isFinite(amount))throw Error('إجمالي الفاتورة غير صالح.');
  const mode=values.status;
@@ -1293,7 +1330,10 @@ function leaseInstallmentsOverview(){
 }
 
 function expenseOverview(){
- const all=s.data.company_expenses||[],query=s.search.trim().toLocaleLowerCase();
+ // Historical salary invoices remain intact as read-only payroll archive,
+ // never mixed with general expenses or counted twice.
+ const all=(s.data.company_expenses||[]).filter(item=>!expenseLineItems(item).some(line=>line.category==='salaries')),
+ query=s.search.trim().toLocaleLowerCase();
  const filtered=all.filter(expense=>
   (!s.expenseCategory||expenseLineItems(expense).some(item=>item.category===s.expenseCategory))&&
   (!query||[expense.title,expense.notes,expense.paid_by,expense.expense_date,
@@ -3555,7 +3595,7 @@ async function saveExpenseInvoice(form){
    amount:details.amount,currency:values.currency,
    paid_by:values.paid_by,receipt_number:values.receipt_number||null,
    payment_method:values.payment_method,paid_amount:details.paid_amount,
-   employee_id:items.some(item=>item.category==='salaries')?values.employee_id:null,
+   employee_id:null,
    expense_items:items,transfer_proof_path:proof,
    notes:String(values.notes||'').trim()||null
   };
