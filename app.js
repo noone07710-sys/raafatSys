@@ -852,6 +852,7 @@ function expenseInvoiceValidated(values,items){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(values.expense_date||'')))throw Error('يجب تحديد تاريخ الفاتورة.');
  if(!['IQD','USD'].includes(values.currency))throw Error('يرجى تحديد عملة الفاتورة.');
  if(!items.length||items.length>100)throw Error('يجب أن تحتوي الفاتورة على صنف واحد على الأقل وبحد أقصى 100 صنف.');
+ if(items.some(item=>item.category==='salaries'))throw Error('صرف الرواتب صار حصراً من قسم الموظفين والرواتب، وليس من المصروفات.');
  const knownStaff=[...new Set([...(s.data.employees||[]).map(row=>row.name),
   ...EXPENSE_EMPLOYEES.map(([name])=>name)])];
  if(!knownStaff.includes(values.paid_by)&&
