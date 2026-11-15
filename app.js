@@ -626,7 +626,9 @@ function expenseInvoiceValidated(values,items){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(values.expense_date||'')))throw Error('يجب تحديد تاريخ الفاتورة.');
  if(!['IQD','USD'].includes(values.currency))throw Error('يرجى تحديد عملة الفاتورة.');
  if(!items.length||items.length>100)throw Error('يجب أن تحتوي الفاتورة على صنف واحد على الأقل وبحد أقصى 100 صنف.');
- if(!EXPENSE_EMPLOYEES.some(([name])=>name===values.paid_by)&&
+ const knownStaff=[...new Set([...(s.data.employees||[]).map(row=>row.name),
+  ...EXPENSE_EMPLOYEES.map(([name])=>name)])];
+ if(!knownStaff.includes(values.paid_by)&&
   !(values.id&&values.paid_by===lookup('company_expenses',values.id)?.paid_by))
   throw Error('يرجى تحديد الموظف المسؤول أو المستلم من القائمة.');
  for(let i=0;i<items.length;i++){
@@ -640,6 +642,13 @@ function expenseInvoiceValidated(values,items){
    throw Error('كمية الصنف رقم '+(i+1)+' يجب أن تكون عدداً صحيحاً موجباً.');
   if(!(Number(x.unit_price)>0)||!Number.isFinite(Number(x.unit_price))||Number(x.unit_price)>100000000000)
    throw Error('يرجى تحديد سعر الوحدة للصنف رقم '+(i+1)+'.');
+ }
+ const salaryLines=items.filter(item=>item.category==='salaries');
+ if(salaryLines.length){
+  if(items.length!==salaryLines.length)
+   throw Error('فاتورة الراتب تكون خاصة بموظف واحد؛ سجّل المصروفات الأخرى بفاتورة منفصلة.');
+  if(!lookup('employees',values.employee_id))
+   throw Error('اختر الموظف المستفيد من الراتب من قسم الموظفين والرواتب.');
  }
  const amount=expenseInvoiceTotal(items);
  if(!(amount>0)||!Number.isFinite(amount))throw Error('إجمالي الفاتورة غير صالح.');
@@ -1630,7 +1639,13 @@ function expenseInvoiceForm(v){
  const status=v.status||expensePaymentStatus(v),currency=v.currency||s.displayCurrency;
  const departmentOptions=EXPENSE_DEPARTMENTS;
  const categoryOptions=EXPENSE_CATEGORY_OPTIONS.map(id=>[id,EXPENSE_CATEGORY_LABELS[id]]);
- const employeeOptions=EXPENSE_EMPLOYEES.map(([name,role])=>[name,name+' — '+role]);
+ const employeeOptions=(s.data.employees?.length?
+   s.data.employees.filter(row=>row.active||row.name===v.paid_by)
+    .map(row=>[row.name,row.name+' — '+(row.job_title||'موظف')]):
+   EXPENSE_EMPLOYEES.map(([name,role])=>[name,name+' — '+role]));
+ const payrollOptions=(s.data.employees||[]).filter(row=>row.active||row.id===v.employee_id)
+   .map(row=>[row.id,row.name+' — '+(row.job_title||'موظف')]);
+ const hasSalaryItem=items.some(item=>item.category==='salaries');
  const line=(item,index)=>'<article class="expense-line" data-expense-item>'+
   '<div class="expense-line-heading"><strong>الصنف '+serial4(index+1)+'</strong>'+
   (items.length>1?'<button type="button" class="expense-remove-line" data-expense-remove="'+index+'" title="حذف الصنف">'+uiIcon('trash',15)+' حذف الصنف</button>':'')+
@@ -1656,7 +1671,10 @@ function expenseInvoiceForm(v){
   '<div class="expense-invoice-grid">'+
    '<label class="field"><span>تاريخ الفاتورة *</span><input name="expense_date" type="date" required value="'+E(v.expense_date||today())+'"></label>'+
    '<label class="field"><span>رقم الفاتورة / الوصل (اختياري)</span><input name="receipt_number" maxlength="80" placeholder="وفقاً للرقم المطبوع على الوصل" value="'+E(v.receipt_number||'')+'"></label>'+
-   '<label class="field"><span>الموظف المسؤول / المستلم *</span><select name="paid_by" required>'+expenseOptionList(employeeOptions,v.paid_by)+'</select></label>'+
+   '<label class="field"><span>الموظف المسؤول عن صرف الفاتورة *</span><select name="paid_by" required>'+expenseOptionList(employeeOptions,v.paid_by)+'</select></label>'+
+   '<label class="field" id="expenseSalaryEmployeeField"'+(hasSalaryItem?'':' hidden')+'><span>الموظف المستفيد من الراتب *</span>'+
+    '<select name="employee_id"'+(hasSalaryItem?' required':' disabled')+'>'+expenseOptionList(payrollOptions,v.employee_id)+'</select>'+
+    '<small class="subtle">يرتبط الراتب بسجل الموظف ويظهر في كشف رواتبه.</small></label>'+
    '<label class="field"><span>عملة الفاتورة *</span><select name="currency" required>'+expenseOptionList([['IQD','دينار عراقي (IQD)'],['USD','دولار أمريكي (USD)']],currency,false)+'</select></label>'+
    '<label class="field expense-full"><span>موضوع الفاتورة (اختياري)</span><input name="title" type="text" maxlength="200" placeholder="يُستكمل تلقائياً من بيانات الأصناف إذا تُرك فارغاً" value="'+E(v.title||'')+'"></label>'+
   '</div></section>'+
@@ -1754,6 +1772,13 @@ function bindExpenseInvoiceForm(form){
    toast(error.textContent,true);
   }
  },true);
+ const salaryRecipient=form.elements.namedItem('employee_id');
+ const toggleSalaryRecipient=()=>{
+  const usesSalary=expenseCurrentItems(form).some(row=>row.category==='salaries');
+  const holder=form.querySelector('#expenseSalaryEmployeeField');
+  if(holder)holder.hidden=!usesSalary;
+  if(salaryRecipient){salaryRecipient.disabled=!usesSalary;salaryRecipient.required=usesSalary;}
+ };
  form.addEventListener('input',event=>{
   clearIssue();
   if(event.target.matches('[data-expense-field], [name="paid_amount"]'))updateExpenseInvoiceTotals(form);
@@ -1761,6 +1786,7 @@ function bindExpenseInvoiceForm(form){
  form.addEventListener('change',event=>{
   clearIssue();
   if(event.target.matches('[name="expense_payment_status"], [name="payment_method"]'))updateExpenseInvoiceTotals(form);
+  if(event.target.matches('[data-expense-field="category"]'))toggleSalaryRecipient();
  });
  const add=form.querySelector('[data-expense-add]');
  if(add)add.onclick=()=>{
@@ -1802,6 +1828,7 @@ function bindExpenseInvoiceForm(form){
   s.modal.data.currency=next;
   render();
  };
+ toggleSalaryRecipient();
  updateExpenseInvoiceTotals(form);
 }
 
@@ -3041,6 +3068,7 @@ async function saveExpenseInvoice(form){
    amount:details.amount,currency:values.currency,
    paid_by:values.paid_by,receipt_number:values.receipt_number||null,
    payment_method:values.payment_method,paid_amount:details.paid_amount,
+   employee_id:items.some(item=>item.category==='salaries')?values.employee_id:null,
    expense_items:items,transfer_proof_path:proof,
    notes:String(values.notes||'').trim()||null
   };
@@ -3052,7 +3080,8 @@ async function saveExpenseInvoice(form){
     if(cleanup)toast('تم حفظ الفاتورة، وتعذر تنظيف المرفق السابق: '+cleanup.message,true);
    }catch(error){toast('تم حفظ الفاتورة، ولكن تعذر تنظيف المرفق السابق: '+(error?.message||String(error)),true);}
   }
-  s.modal=null;s.view='company_expenses';s.search='';s.expenseCategory='';
+  const returnToEmployees=Boolean(modal.salaryFromEmployee);
+  s.modal=null;s.view=returnToEmployees?'employees':'company_expenses';s.search='';s.expenseCategory='';
   if(s.demo)render();else await load();
   toast('تم اعتماد الفاتورة وتحديث أرصدة السداد بنجاح.');
  }catch(e){
