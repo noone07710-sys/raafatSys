@@ -1427,47 +1427,186 @@ function employeeSalaryExpenses(employeeId){
   .filter(row=>row.employee_id===employeeId&&expenseLineItems(row).some(item=>item.category==='salaries'))
   .sort((a,b)=>String(b.expense_date||'').localeCompare(String(a.expense_date||'')));
 }
+
+function employeePayrollPayments(employeeId){
+ return (s.data.payroll_payments||[]).filter(row=>row.employee_id===employeeId)
+  .sort((a,b)=>String(b.paid_at||'').localeCompare(String(a.paid_at||'')));
+}
+function payrollReceiptPayload(payment){
+ const employee=lookup('employees',payment.employee_id);
+ return {
+  receiptNumber:payment.receipt_number,
+  employeeName:payment.employee_name_snapshot||employee?.name||'—',
+  jobTitle:payment.job_title_snapshot||employee?.job_title||'—',
+  department:EXPENSE_DEPARTMENTS.find(([id])=>id===(payment.department_snapshot||employee?.department))?.[1]||
+   payment.department_snapshot||employee?.department||'—',
+  salaryMonth:String(payment.salary_month||'').slice(0,7),
+  paidAt:payment.paid_at,amount:Number(payment.amount),currency:payment.currency,
+  paidBy:payment.paid_by,companyName:companyValue('company_name')
+ };
+}
+async function downloadPayrollReceipt(id){
+ const payment=lookup('payroll_payments',id);
+ if(!payment)return toast('سند صرف الراتب غير موجود.',true);
+ if(!canAccess('payroll','read'))return toast('ليس لديك صلاحية عرض سندات الرواتب.',true);
+ const generator=window?.RaafatPayrollReceipt;
+ if(!generator?.download)return toast('قالب وصل الرواتب غير متاح. حدّث الصفحة.',true);
+ try{
+  await generator.download(payrollReceiptPayload(payment));
+  toast('تم تنزيل وصل راتب '+payrollReceiptPayload(payment).employeeName+' بقياس نصف A4.');
+ }catch(error){toast('تعذر تنزيل الوصل: '+(error.message||String(error)),true)}
+}
+function openPayrollPayment(employeeId){
+ if(!canAccess('payroll','edit'))return toast('صرف الرواتب يحتاج صلاحية الرواتب.',true);
+ const employee=lookup('employees',employeeId);
+ if(!employee)return toast('الموظف غير موجود.',true);
+ if(!employee.active)return toast('الموظف غير فعال. فعّله قبل تسجيل صرف جديد.',true);
+ s.modal={kind:'payrollPayment',data:{
+  employee_id:employee.id,salary_month:today().slice(0,7),
+  paid_at:today(),amount:Number(employee.salary_amount)||0,
+  currency:employee.salary_currency||'IQD',paid_by:'',
+  notes:''
+ }};
+ render();
+}
+function payrollPaymentHtml(){
+ const v=s.modal?.data||{},employee=lookup('employees',v.employee_id);
+ if(!employee)return '<div class="notice">الموظف غير موجود.</div>';
+ const dept=EXPENSE_DEPARTMENTS.find(([code])=>code===employee.department)?.[1]||'—';
+ return '<div class="overlay"><div class="modal payroll-payment-modal" role="dialog" aria-modal="true">'+
+  '<div class="modalhead"><div><h2>صرف راتب موظف</h2>'+
+  '<p class="subtle">تسجل الدفعة في كشف الرواتب حصراً، وتصدر وصل استلام مستقل بقياس نصف A4.</p></div>'+
+  '<button class="close" type="button" data-action="close">'+uiIcon('x',18)+'</button></div>'+
+  '<div class="payroll-payee"><div><small>اسم الموظف المستلم</small><strong>'+E(employee.name)+'</strong>'+
+  '<span>'+E(employee.job_title||'موظف')+' • '+E(dept)+'</span></div>'+
+  '<div><small>الراتب الشهري المسجّل</small><strong>'+E(money(employee.salary_amount,employee.salary_currency))+'</strong></div></div>'+
+  '<form id="payrollPaymentForm" class="payroll-payment-form">'+
+  '<input type="hidden" name="employee_id" value="'+E(employee.id)+'">'+
+  '<div class="formgrid">'+
+  '<label class="field"><span>راتب شهر *</span><input type="month" name="salary_month" required value="'+E(v.salary_month)+'"></label>'+
+  '<label class="field"><span>تاريخ صرف المبلغ *</span><input type="date" name="paid_at" required value="'+E(v.paid_at)+'"></label>'+
+  '<label class="field"><span>المبلغ الذي استلمه الموظف *</span><input type="number" name="amount" min="0.01" step="0.01" required value="'+E(v.amount)+'"></label>'+
+  '<label class="field"><span>عملة الراتب</span><input value="'+E(employee.salary_currency==='USD'?'دولار أمريكي (USD)':'دينار عراقي (IQD)')+'" disabled></label>'+
+  '<label class="field full"><span>اسم الشخص الذي سلّم الراتب للموظف *</span>'+
+  '<input name="paid_by" required maxlength="150" autocomplete="off" list="payrollPayers" placeholder="مثال: مدير الحسابات أو مسؤول الصرف" value="'+E(v.paid_by)+'">'+
+  '<datalist id="payrollPayers">'+(s.data.employees||[]).map(x=>'<option value="'+E(x.name)+'"></option>').join('')+'</datalist></label>'+
+  '<label class="field full"><span>ملاحظات اختيارية</span><textarea name="notes" rows="2" placeholder="مثلاً: راتب جزئي أو صرف دفعة إضافية">'+E(v.notes||'')+'</textarea></label>'+
+  '</div><div class="payroll-receipt-hint">'+uiIcon('file',18)+
+  '<p>بعد اعتماد الصرف تظهر نافذة لتحميل وصل الاستلام، وفي الوصل اسم الموظف، رقم السند، راتب الشهر، المبلغ، اسم مسؤول الصرف، وخانتان فارغتان للتوقيع.</p></div>'+
+  '<div class="actions"><button class="btn" type="submit">'+uiIcon('check',16)+' اعتماد الصرف وإصدار الوصل</button>'+
+  '<button class="btn secondary" type="button" data-action="close">إلغاء</button></div>'+
+  '</form></div></div>';
+}
+function payrollReceiptReadyHtml(){
+ const payment=lookup('payroll_payments',s.modal.paymentId);
+ if(!payment)return '<div class="notice">لا يمكن العثور على سند صرف الراتب.</div>';
+ const payload=payrollReceiptPayload(payment);
+ return '<div class="overlay"><div class="modal payroll-receipt-ready" role="dialog" aria-modal="true">'+
+  '<div class="modalhead"><h2>تم تسجيل صرف الراتب</h2><button class="close" type="button" data-action="close">'+uiIcon('x',18)+'</button></div>'+
+  '<div class="payroll-success-mark">'+uiIcon('check',26)+'</div>'+
+  '<h3>'+E(payload.employeeName)+'</h3>'+
+  '<p>تم اعتماد مبلغ '+E(money(payload.amount,payload.currency))+' مقابل راتب '+E(payload.salaryMonth)+'.</p>'+
+  '<p class="subtle">رقم الوصل: <b>'+E(payload.receiptNumber)+'</b> — الصرف بواسطة '+E(payload.paidBy)+'</p>'+
+  '<p class="subtle">وصل رسمي A5 (نصف A4) جاهز للطباعة والتوقيع من الموظف ومسؤول الصرف.</p>'+
+  '<div class="actions"><button class="btn" type="button" data-payroll-receipt="'+E(payment.id)+'">'+
+   uiIcon('download',17)+' تحميل وصل استلام الراتب PDF</button>'+
+   '<button class="btn secondary" type="button" data-action="close">إغلاق</button></div></div></div>';
+}
+async function savePayrollPayment(form){
+ if(s.savingPayroll)return;
+ if(!canAccess('payroll','edit'))return toast('ليس لديك صلاحية صرف الرواتب.',true);
+ const values=Object.fromEntries(new FormData(form).entries());
+ const employee=lookup('employees',values.employee_id);
+ if(!employee||!employee.active)return toast('اختر موظفاً فعالاً من القائمة.',true);
+ if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(String(values.salary_month||'')))
+  return toast('حدد شهر الراتب الصحيح.',true);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(values.paid_at||''))||
+    Number.isNaN(Date.parse(values.paid_at+'T00:00:00Z')))
+  return toast('حدد تاريخ صرف صحيحاً.',true);
+ const amount=Number(values.amount),payer=String(values.paid_by||'').trim();
+ if(!Number.isFinite(amount)||amount<=0||amount>100000000000)
+  return toast('أدخل مبلغ الراتب الذي تم استلامه بشكل صحيح.',true);
+ if(payer.length<2||payer.length>150)return toast('اكتب اسم الشخص المسؤول عن تسليم الراتب.',true);
+ const record={
+  employee_id:employee.id,salary_month:values.salary_month+'-01',
+  paid_at:values.paid_at,amount:roundAmount(amount),currency:employee.salary_currency||'IQD',
+  paid_by:payer,notes:String(values.notes||'').trim()||null,
+  employee_name_snapshot:employee.name,job_title_snapshot:employee.job_title,
+  department_snapshot:employee.department
+ };
+ s.savingPayroll=true;
+ const button=form.querySelector?.('[type="submit"]');if(button)button.disabled=true;
+ try{
+  let saved;
+  if(s.demo){
+   const index=1+(s.data.payroll_payments||[]).length;
+   saved={...record,id:uid(),receipt_number:'PR-'+serial4(index),created_at:new Date().toISOString()};
+   s.data.payroll_payments.unshift(saved);
+  }else{
+   const {data,error}=await s.client.from('payroll_payments').insert(record).select().single();
+   if(error||!data)throw Error(error?.message||'تعذر اعتماد الصرف.');
+   saved=data;
+  }
+  s.view='employees';s.employeeFocus=employee.id;s.modal=null;
+  if(!s.demo)await load();
+  s.modal={kind:'payrollReceiptReady',paymentId:saved.id};
+  render();
+ }catch(error){toast('تعذر صرف الراتب: '+(error.message||String(error)),true);if(button)button.disabled=false}
+ finally{s.savingPayroll=false}
+}
 function employeesOverview(){
- if(!s.demo&&s.staff?.role!=='admin')return '<div class="notice">هذا القسم خاص بإدارة الشركة.</div>';
- const items=s.data.employees||[];
- const query=s.search.trim().toLocaleLowerCase();
- const filtered=items.filter(item=>
-  !query||[item.name,item.job_title,item.department,item.phone].some(v=>String(v||'').toLocaleLowerCase().includes(query)));
- const count=items.filter(item=>item.active).length;
- const salaryBudget=items.filter(item=>item.active).reduce((total,item)=>
-  total+convert(Number(item.salary_amount)||0,item.salary_currency||'IQD',s.displayCurrency),0);
- const historyFor=s.employeeFocus?lookup('employees',s.employeeFocus):null;
- const history=historyFor?employeeSalaryExpenses(historyFor.id):[];
- const allSalary=items.flatMap(row=>employeeSalaryExpenses(row.id));
- const paid=allSalary.reduce((sum,row)=>sum+convert(expensePaidAmount(row),row.currency,s.displayCurrency),0);
- return '<div class="hr-page"><div class="hr-stats">'+[
-  ['الموظفون المسجّلون',items.length],
-  ['الموظفون الفعالون',count],
-  ['إجمالي الرواتب الشهرية',money(roundAmount(salaryBudget),s.displayCurrency)],
-  ['الرواتب المدفوعة المسجّلة',money(roundAmount(paid),s.displayCurrency)]
- ].map(([label,val])=>'<div class="box hr-stat"><small>'+label+'</small><strong>'+E(val)+'</strong></div>').join('')+
- '</div><div class="notice">ربط الرواتب يتم من قسم الفواتير والمصروفات، عند اختيار تصنيف «رواتب وأجور الموظفين» وتحديد الموظف المستفيد. الموظف المسؤول عن تسليم المبلغ يُسجّل بشكل مستقل.</div>'+
- '<div class="toolbar"><input id="search" class="search" placeholder="بحث باسم الموظف أو القسم أو الهاتف..." value="'+E(s.search)+'">'+
- '<button class="btn" type="button" data-new="employees">'+uiIcon('plus',16)+' إضافة موظف</button></div>'+
- '<div class="box tablewrap"><table class="table"><thead><tr><th>اسم الموظف</th><th>الوظيفة والقسم</th><th>الراتب الشهري</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>'+
- (filtered.length?filtered.map(item=>
-  '<tr><td><strong>'+E(item.name)+'</strong><small class="subtle hr-phone">'+E(item.phone||'')+'</small></td>'+
-  '<td>'+E(item.job_title||'—')+'<small class="subtle hr-phone">'+E(EXPENSE_DEPARTMENTS.find(([id])=>id===item.department)?.[1]||'—')+'</small></td>'+
-  '<td>'+E(money(item.salary_amount,item.salary_currency))+'</td>'+
-  '<td><span class="pill '+(item.active?'active':'inactive')+'">'+(item.active?'فعال':'غير فعال')+'</span></td>'+
-  '<td class="hr-actions"><button type="button" class="linkbtn" data-edit="employees:'+E(item.id)+'">'+uiIcon('pencil',14)+' تعديل</button>'+
-  '<button type="button" class="linkbtn" data-salary-expense="'+E(item.id)+'">'+uiIcon('wallet',14)+' تسجيل راتب</button>'+
-  '<button type="button" class="linkbtn" data-employee-history="'+E(item.id)+'">'+uiIcon('history',14)+' سجل الرواتب</button></td></tr>'
- ).join(''):'<tr><td colspan="5" class="empty">لا توجد بيانات موظفين مطابقة.</td></tr>')+
- '</tbody></table></div>'+
- (historyFor?'<div class="box hr-history"><div class="hr-history-top"><h3>سجل الرواتب — '+E(historyFor.name)+'</h3>'+
- '<button type="button" class="btn secondary mini" data-employee-history="">إغلاق السجل</button></div>'+
- '<p class="subtle">يعرض الفواتير المرتبطة بهذا الموظف فقط. يُحسب المدفوع من الفواتير المعتمدة، والرصيد غير المسدد بشكل منفصل.</p>'+
- (history.length?'<div class="tablewrap"><table class="table"><thead><tr><th>تاريخ الراتب</th><th>بيان الفاتورة</th><th>الإجمالي</th><th>المدفوع</th><th>المتبقي</th></tr></thead><tbody>'+
-  history.map(row=>'<tr><td>'+E(row.expense_date)+'</td><td>'+E(row.title)+'</td><td>'+E(money(row.amount,row.currency))+
-   '</td><td>'+E(money(expensePaidAmount(row),row.currency))+'</td><td>'+E(money(Math.max(0,Number(row.amount)-expensePaidAmount(row)),row.currency))+'</td></tr>').join('')+
- '</tbody></table></div>':'<p class="notice">ماكو رواتب مسجّلة لهذا الموظف بعد. تقدر تسجل راتب من الزر أعلاه.</p>')+
- '</div>':'')+'</div>';
+ if(!canAccess('employees','read'))return '<div class="notice">هذا القسم محمي بصلاحيات الإدارة.</div>';
+ const staff=s.data.employees||[],search=s.search.trim().toLocaleLowerCase();
+ const shown=staff.filter(emp=>!search||[emp.name,emp.job_title,emp.department,emp.phone]
+  .some(x=>String(x||'').toLocaleLowerCase().includes(search)));
+ const active=staff.filter(emp=>emp.active);
+ const salaryBudget=active.reduce((total,x)=>total+convert(Number(x.salary_amount)||0,x.salary_currency||'IQD',s.displayCurrency),0);
+ const payments=s.data.payroll_payments||[];
+ const legacy=(s.data.company_expenses||[]).filter(expense=>
+  expense.employee_id&&expenseLineItems(expense).some(item=>item.category==='salaries'));
+ const settled=payments.reduce((total,row)=>total+convert(row.amount,row.currency,s.displayCurrency),0)+
+  legacy.reduce((total,row)=>total+convert(expensePaidAmount(row),row.currency,s.displayCurrency),0);
+ const selected=s.employeeFocus?lookup('employees',s.employeeFocus):null;
+ const history=selected?employeePayrollPayments(selected.id):[];
+ const old=selected?employeeSalaryExpenses(selected.id):[];
+ const cards=[
+  ['الموظفون المسجّلون',staff.length],
+  ['الموظفون الفعالون',active.length],
+  ['الرواتب الشهرية المتوقعة',money(roundAmount(salaryBudget),s.displayCurrency)],
+  ['الرواتب المصروفة المسجّلة',money(roundAmount(settled),s.displayCurrency)]
+ ];
+ return '<div class="hr-page"><div class="hr-stats">'+cards.map(([label,value])=>
+  '<div class="box hr-stat"><small>'+E(label)+'</small><strong>'+E(value)+'</strong></div>').join('')+'</div>'+
+  '<div class="notice">صرف الرواتب وأرشفتها وتحميل وصولات الاستلام صار من هنا فقط. الرواتب السابقة المسجلة داخل المصروفات محفوظة كأرشيف، وليست ضمن فواتير المصروفات الجديدة.</div>'+
+  '<div class="toolbar"><input id="search" class="search" placeholder="بحث باسم الموظف أو قسمه..." value="'+E(s.search)+'">'+
+   (canAccess('employees','edit')?'<button type="button" class="btn" data-new="employees">'+uiIcon('plus',16)+' إضافة موظف</button>':'')+
+  '</div><div class="box tablewrap"><table class="table"><thead><tr>'+
+  '<th>اسم الموظف</th><th>المسمّى والقسم</th><th>الراتب الشهري</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>'+
+  (shown.length?shown.map(emp=>
+   '<tr><td><strong>'+E(emp.name)+'</strong><small class="subtle hr-phone">'+E(emp.phone||'')+'</small></td>'+
+   '<td>'+E(emp.job_title||'—')+'<small class="subtle hr-phone">'+
+    E(EXPENSE_DEPARTMENTS.find(([code])=>code===emp.department)?.[1]||'—')+'</small></td>'+
+   '<td>'+E(money(emp.salary_amount,emp.salary_currency||'IQD'))+'</td>'+
+   '<td>'+E(emp.active?'فعال':'غير فعال')+'</td>'+
+   '<td class="hr-actions">'+
+   (canAccess('employees','edit')?'<button class="linkbtn" data-edit="employees:'+E(emp.id)+'">'+uiIcon('pencil',14)+' تعديل</button>':'')+
+   (canAccess('payroll','edit')?'<button class="linkbtn" type="button" data-payroll-create="'+E(emp.id)+'">'+uiIcon('wallet',14)+' صرف راتب</button>':'')+
+   '<button class="linkbtn" type="button" data-employee-history="'+E(emp.id)+'">'+uiIcon('history',14)+' سجل الرواتب</button></td></tr>'
+  ).join(''):'<tr><td colspan="5" class="empty">لا يوجد موظفون مطابقون.</td></tr>')+'</tbody></table></div>'+
+  (selected?'<section class="box hr-history"><div class="hr-history-top"><h3>الرواتب والسندات — '+E(selected.name)+'</h3>'+
+  '<button class="btn secondary mini" type="button" data-employee-history="">إغلاق السجل</button></div>'+
+  (history.length?'<div class="tablewrap"><table class="table"><thead><tr>'+
+    '<th>رقم السند</th><th>راتب شهر</th><th>تاريخ الصرف</th><th>المبلغ المصروف</th><th>مسؤول الصرف</th><th>الوصل</th>'+
+    '</tr></thead><tbody>'+history.map(pay=>
+    '<tr><td>'+E(pay.receipt_number)+'</td><td>'+E(String(pay.salary_month).slice(0,7))+'</td>'+
+    '<td>'+E(pay.paid_at)+'</td><td>'+E(money(pay.amount,pay.currency))+'</td>'+
+    '<td>'+E(pay.paid_by)+'</td><td><button type="button" class="linkbtn" data-payroll-receipt="'+E(pay.id)+'">'+
+      uiIcon('download',15)+' تحميل PDF</button></td></tr>').join('')+'</tbody></table></div>':
+   '<p class="notice">ماكو دفعات راتب حديثة لهذا الموظف بعد.</p>')+
+  (old.length?'<div class="hr-legacy"><h4>الأرشيف السابق من المصروفات</h4>'+
+   old.map(row=>'<p>'+E(row.expense_date)+' — '+E(row.title)+' — '+E(money(expensePaidAmount(row),row.currency))+
+   ' — الصرف بواسطة '+E(row.paid_by||'—')+'</p>').join('')+'</div>':'')+
+  '</section>':'')+'</div>';
 }
 function activityDetail(log){
  const map={
