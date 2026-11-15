@@ -327,6 +327,9 @@ function authPage(){return '<div class="welcome"><div class="authbox"><h1>رأف
 
 // Consistent inline outline SVG icons — no external icon fonts or CDN.
 const UI_ICON_PATHS={
+ bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
+ message:'<path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/>',
+ copy:'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
  users:'<circle cx="9" cy="7" r="4"/><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M17 3a4 4 0 0 1 0 8M22 21v-2a5 5 0 0 0-4-5"/>',
  user:'<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
@@ -414,7 +417,7 @@ function bindNav(){
  document.querySelectorAll('[data-nav-group]').forEach(x=>x.onclick=()=>changeNavGroup(x.dataset.navGroup));
 }
 function shell(content){
- return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
+ return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='alerts'?'التنبيهات':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length?'<span>'+E(alertsList().length>99?'99+':alertsList().length)+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
 }
 // Alerts are derived from live balances and contracts; they do not mutate records.
 function alertsLocalDate(){
@@ -501,6 +504,49 @@ function reminderText(item){
  return intro+'نود تذكيركم بأن عقدكم الإعلاني'+contract+' الخاص بـ«'+item.subject+'»'+
   (item.days<0?' انتهى بتاريخ ':' سينتهي بتاريخ ')+item.date+
   '. يسعدنا التنسيق معكم بخصوص تجديد العقد واستمرار الإعلان، شكراً لثقتكم.';
+}
+
+
+function alertsView(){
+ const all=alertsList(),filter=s.alertFilter||'all';
+ const shown=all.filter(a=>filter==='all'||filter===a.kind||filter==='due'&&a.days<=0);
+ const urgent=all.filter(a=>a.days<=0).length;
+ const tabs=[['all','الكل'],['due','المستحق الآن'],['payment','الدفعات'],['expiry','العقود']];
+ const cards=shown.map(a=>'<article class="reminder-card '+(a.days<=0?'reminder-overdue':'')+'">'+
+  '<div class="reminder-card-main"><div class="reminder-card-flags"><span class="reminder-type">'+
+  uiIcon(a.kind==='payment'?'wallet':'calendar',15)+' '+(a.kind==='payment'?'دفعة':'عقد')+
+  '</span><span class="reminder-days">'+E(alertWhen(a))+'</span></div>'+
+  '<h3>'+E(a.title)+'</h3><p>'+E(a.name)+' <span>·</span> '+E(a.subject)+'</p>'+
+  '<small>'+E(a.date)+' <span>·</span> '+E(a.description)+
+  (a.amount!=null?' <span>·</span> '+E(money(a.amount,a.currency)):'')+'</small></div>'+
+  '<div class="reminder-actions"><button type="button" class="btn mini" data-reminder-compose="'+E(a.key)+'">'+
+  uiIcon('message',15)+' تجهيز رسالة</button>'+
+  '<button type="button" class="btn mini secondary" data-reminder-open="'+E(a.key)+'">فتح السجل</button></div></article>').join('');
+ return '<section class="reminders-page">'+
+  '<div class="reminder-title"><div><h2>التنبيهات والمواعيد</h2>'+
+  '<p>مواعيد من بيانات الشركة، والرسائل تُرسل يدوياً بعد مراجعتها.</p></div>'+
+  '<span class="reminder-total">'+all.length+' تنبيه'+(urgent?' · '+urgent+' مستحق':'')+'</span></div>'+
+  '<div class="reminder-filters">'+tabs.map(([value,title])=>
+  '<button type="button" data-reminder-filter="'+value+'" class="reminder-filter '+(value===filter?'selected':'')+'">'+title+'</button>').join('')+'</div>'+
+  '<div class="reminders-list">'+(cards||'<div class="reminders-empty">'+uiIcon('check',23)+
+  '<strong>ماكو تنبيهات بهذا التصنيف</strong><small>تظهر المواعيد قبل 30 يوم.</small></div>')+
+  '</div><p class="reminders-footnote">الدفعات المتأخرة تبقى ظاهرة حتى التسديد. انتهاء العقود يظهر قبل 30 يوماً وبعده لمدة 30 يوماً. لا تُرسل رسائل تلقائياً.</p></section>';
+}
+function reminderMessageDialog(){
+ const item=alertsList().find(a=>a.key===s.modal?.alertKey);
+ if(!item)return '<div class="overlay"><div class="modal"><div class="notice">هذا التنبيه لم يعد مستحقاً أو تغيّر السجل.</div><button class="btn secondary" data-action="close">إغلاق</button></div></div>';
+ const phone=whatsappIraqNumber(item.phone);
+ return '<div class="overlay"><div class="modal reminder-modal"><div class="modalhead"><h2>تجهيز رسالة التذكير</h2>'+
+  '<button type="button" class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+  '<div class="reminder-recipient"><strong>'+E(item.name)+'</strong><small>'+E(item.phone||'لا يوجد رقم هاتف')+'</small></div>'+
+  '<label class="field"><span>تگدر تعدّل النص قبل إرساله</span>'+
+  '<textarea id="reminderMessageText" rows="8">'+E(reminderText(item))+'</textarea></label>'+
+  '<p class="subtle">واتساب يفتح الرسالة جاهزة، والإرسال النهائي يصير بإيدك فقط.</p>'+
+  '<div class="actions"><button type="button" class="btn secondary" data-reminder-copy>'+
+  uiIcon('copy',15)+' نسخ النص</button>'+
+  '<button type="button" class="btn" data-reminder-whatsapp'+(phone?'':' disabled')+'>'+
+  uiIcon('message',16)+' فتح واتساب</button></div>'+
+  (phone?'':'<div class="notice">رقم الهاتف غير صالح لواتساب. صححه ببيانات الزبون أو المالك.</div>')+'</div></div>';
 }
 
 const EXPENSE_CATEGORY_LABELS={hospitality:'ضيافة ومشروبات',office:'قرطاسية ومكتبية',transport:'نقل ووقود',maintenance:'صيانة',supplies:'مستلزمات',utilities:'خدمات وفواتير',other:'أخرى'};
@@ -996,7 +1042,7 @@ function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>ا
 function render(){
  let target=$('#app');
  if(typeof document!=='undefined')document.title=companyValue('company_short_name')+' | نظام الإدارة';
- let content=s.view==='dashboard'?dashboard():s.view==='reports'?reports():s.view==='settings'?settings():listing(s.view);
+ let content=s.view==='dashboard'?dashboard():s.view==='alerts'?alertsView():s.view==='reports'?reports():s.view==='settings'?settings():listing(s.view);
  if(s.passwordRecovery){target.innerHTML=passwordRecoveryPage();}
  else if(s.resetRequest){target.innerHTML=passwordResetRequestPage();}
  else if(!s.demo&&!s.session){target.innerHTML=authPage();}
@@ -1301,6 +1347,7 @@ function leasePlanSummary(v){
 }
 
 function modalHtml(){
+ if(s.modal?.kind==='reminderMessage')return reminderMessageDialog();
  let m=s.modal,k=m.table,v=m.data||{},meta=defs[k];if(m.kind==='preview')return k==='customer_contracts'?customerContractPreview(v):previewHtml(v);
  if(m.kind==='deleteCustomer')return customerDeleteDialog(v);
  if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
@@ -1586,6 +1633,34 @@ function updateSettingsPreview(form){
 
 function bind(){
  bindNav();
+
+ const alertNav=document.querySelector('[data-alerts-nav]');
+ if(alertNav)alertNav.onclick=()=>{s.view='alerts';s.modal=null;s.alertFilter='all';render()};
+ document.querySelectorAll('[data-reminder-filter]').forEach(btn=>btn.onclick=()=>{
+  s.alertFilter=btn.dataset.reminderFilter;render();
+ });
+ document.querySelectorAll('[data-reminder-compose]').forEach(btn=>btn.onclick=()=>{
+  s.modal={kind:'reminderMessage',alertKey:btn.dataset.reminderCompose};render();
+ });
+ document.querySelectorAll('[data-reminder-open]').forEach(btn=>btn.onclick=()=>{
+  const notice=alertsList().find(a=>a.key===btn.dataset.reminderOpen);
+  if(notice){const rec=lookup(notice.table,notice.id);if(rec)openForm(notice.table,rec)}
+ });
+ const send=document.querySelector('[data-reminder-whatsapp]');
+ if(send)send.onclick=()=>{
+  const notice=alertsList().find(a=>a.key===s.modal?.alertKey);
+  const phone=whatsappIraqNumber(notice?.phone);
+  const message=document.querySelector('#reminderMessageText')?.value?.trim();
+  if(!phone||!message)return toast('تأكد من رقم الهاتف ونص الرسالة',true);
+  window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');
+ };
+ const copy=document.querySelector('[data-reminder-copy]');
+ if(copy)copy.onclick=async()=>{
+  const value=document.querySelector('#reminderMessageText')?.value||'';
+  try{await navigator.clipboard.writeText(value);toast('تم نسخ رسالة التذكير')}
+  catch(e){toast('تعذر النسخ التلقائي. حدّد النص وانسخه يدوياً.',true)}
+ };
+
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
  document.querySelectorAll('[data-edit]').forEach(x=>x.onclick=()=>{let [k,id]=x.dataset.edit.split(':');openForm(k,lookup(k,id))});
  document.querySelectorAll('[data-delete-customer]').forEach(x=>x.onclick=()=>openCustomerDelete(x.dataset.deleteCustomer));
