@@ -1511,6 +1511,7 @@ function expenseInvoiceForm(v){
   '<p class="subtle">يمكن إدراج عدة أصناف ضمن فاتورة واحدة، مع تحديد المستفيد والتصنيف لكل صنف.</p></div>'+
   '<button type="button" class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
   '<form id="recordForm" class="expense-invoice-form">'+
+  '<p class="error expense-form-error" id="expenseFormError" role="alert" hidden></p>'+
   '<section class="expense-invoice-section"><div class="expense-invoice-section-title"><strong>بيانات الفاتورة</strong><span>01</span></div>'+
   '<div class="expense-invoice-grid">'+
    '<label class="field"><span>تاريخ الفاتورة *</span><input name="expense_date" type="date" required value="'+E(v.expense_date||today())+'"></label>'+
@@ -1585,17 +1586,39 @@ function updateExpenseInvoiceTotals(form){
  if(b)b.textContent=money(due,currency);
  if(hidden)hidden.value=String(total);
  if(partial)partial.hidden=status!=='partial';
- if(paidField)paidField.required=status==='partial';
- if(transfer)transfer.hidden=form.elements.namedItem('payment_method')?.value!=='mastercard';
+ // Hidden numeric fields with min=0.01 still block native submission when
+ // their value is 0. Disabling inactive fields removes them from validation.
+ if(paidField){paidField.disabled=status!=='partial';paidField.required=status==='partial';}
+ const isTransfer=form.elements.namedItem('payment_method')?.value==='mastercard';
+ if(transfer)transfer.hidden=!isTransfer;
  const picture=form.elements.namedItem('transfer_image');
- if(picture)picture.required=form.elements.namedItem('payment_method')?.value==='mastercard'&&paid>0&&
-  !s.modal.transferFile&&!s.modal.data.transfer_proof_path;
+ if(picture){
+  picture.disabled=!isTransfer;
+  picture.required=isTransfer&&paid>0&&!s.modal.transferFile&&!s.modal.data.transfer_proof_path;
+ }
 }
 function bindExpenseInvoiceForm(form){
+ // Native browser invalid events do not bubble; capture to show which field
+ // prevents the form submit event from firing.
+ const clearIssue=()=>{
+  const error=form.querySelector('#expenseFormError');
+  if(error){error.hidden=true;error.textContent='';}
+ };
+ form.addEventListener('invalid',event=>{
+  const field=event.target.closest('.field');
+  const label=field?.querySelector('span')?.textContent?.replace(/\s*\*\s*$/,'').trim()||'أحد الحقول المطلوبة';
+  const error=form.querySelector('#expenseFormError');
+  if(error&&error.hidden){
+   error.textContent='يرجى مراجعة حقل «'+label+'» وإدخال قيمة صحيحة قبل اعتماد الفاتورة.';
+   error.hidden=false;
+  }
+ },true);
  form.addEventListener('input',event=>{
+  clearIssue();
   if(event.target.matches('[data-expense-field], [name="paid_amount"]'))updateExpenseInvoiceTotals(form);
  });
  form.addEventListener('change',event=>{
+  clearIssue();
   if(event.target.matches('[name="expense_payment_status"], [name="payment_method"]'))updateExpenseInvoiceTotals(form);
  });
  const add=form.querySelector('[data-expense-add]');
