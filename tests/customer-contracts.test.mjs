@@ -33,7 +33,7 @@ test('package dimensions, client contract print and landlord individual rooftops
  const saved=await persist('customer_contracts',clean('customer_contracts',contract));
  assert.equal(saved.contract_number,'RC-0001');
  assert.match(customerContractPreview(saved),/عقد حجز وتأجير مساحة إعلانية للزبون/);
- assert.match(customerContractPreview(saved),/تحميل عقد PDF بتصميم رأفت/);
+ assert.match(customerContractPreview(saved),/مراجعة وتعديل ثم تنزيل PDF/);
  assert.match(customerContractPreview(saved),/data-customer-pdf="/);
  assert.match(listing('customer_contracts'),/طباعة العقد/);
  assert.match(relatedDetails('customers',s.data.customers[0]),/RC-0001/);
