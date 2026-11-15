@@ -3627,9 +3627,10 @@ function formValidate(k,v){
   if(campaign&&!v.id){
    if(!campaign.start_date)throw Error('حدد تاريخ بدء الحملة أولاً حتى يتم تحديد مدة العقد');
    const expected=campaignContractData(campaign);
-   for(const key of ['customer_id','package_id','contract_type','duration_months','site_id','currency','start_date','end_date','amount','ad_faces']){
+   for(const key of ['customer_id','package_id','contract_type','duration_months','site_id','currency','start_date','end_date','amount']){
     if(String(v[key]??'')!==String(expected[key]??''))throw Error('بيانات العقد يجب أن تتطابق مع الحملة؛ لا تغيّر التفاصيل المنقولة منها');
    }
+   if(v.ad_faces!=null&&Number(v.ad_faces)!==expected.ad_faces)throw Error('عدد الأوجه بالعقد يجب أن يطابق الحملة المسجلة');
    if(String(v.rented_area_m2??'')!==String(expected.rented_area_m2??''))throw Error('مساحة العقد يجب أن تتطابق مع الحملة');
   }
   const customer=lookup('customers',v.customer_id),pkg=lookup('packages',v.package_id);
