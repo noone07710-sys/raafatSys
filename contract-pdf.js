@@ -25,7 +25,18 @@
  }
  function number(value){return new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(Number(value)||0)}
  function amount(value,currency){return number(value)+' '+(currency==='IQD'?'د.ع':'$')}
- function filename(value){return String(value||'RC-0000').replace(/[^a-zA-Z0-9_-]+/g,'-')}
+ function filename(value){
+  // Preserve Arabic names while stripping unsafe filename symbols.
+  return String(value||'غير-مسمى').normalize('NFC')
+   .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]+/g,'-')
+   .replace(/[^\p{L}\p{N}._ -]+/gu,'-')
+   .replace(/\s+/g,'-').replace(/-+/g,'-').replace(/^[ .-]+|[ .-]+$/g,'').slice(0,90)||'غير-مسمى';
+ }
+ function contractFileName(payload){
+  const person=payload.kind==='landlord'?payload.landlordName:payload.customerName;
+  const prefix=payload.kind==='landlord'?'عقد-سطح-':'عقد-زبون-';
+  return prefix+filename(person)+'-'+filename(payload.number)+'.pdf';
+ }
  function loadScript(src){
   return new Promise((resolve,reject)=>{
    const script=document.createElement('script');
@@ -554,16 +565,16 @@
  }
  async function download(payload){
   const blob=await generate(payload);
-  saveBlob(blob,'Raafat-Contract-'+filename(payload.number)+'.pdf');
+  saveBlob(blob,contractFileName(payload));
   return blob;
  }
  async function preview(payload,win){
   const blob=await generate(payload);
   const url=URL.createObjectURL(blob);
   if(win&&!win.closed){win.location.replace(url);return blob}
-  saveBlob(blob,'Raafat-Contract-'+filename(payload.number)+'.pdf');
+  saveBlob(blob,contractFileName(payload));
   return blob;
  }
- scope.RaafatContractPdf=Object.freeze({generate,download,preview,TEMPLATE_URL,
+ scope.RaafatContractPdf=Object.freeze({generate,download,preview,contractFileName,TEMPLATE_URL,
   defaultClauses:DEFAULT_CUSTOMER_CLAUSES,defaultLandlordClauses:landlordClauses});
 })(window);
