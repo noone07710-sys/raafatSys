@@ -72,7 +72,7 @@
   const name=currency==='USD'?'دولار أمريكي':'دينار عراقي';
   let words=arabicInteger(whole)+' '+name;
   if(fraction)words+=' و'+arabicInteger(fraction)+(currency==='USD'?' سنت':' فلس');
-  return amount(numeric,currency)+' ('+words+' لا غير)';
+  return amount(numeric,currency)+' — '+words+' لا غير';
  }
 
  function filename(value){
