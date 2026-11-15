@@ -34,8 +34,11 @@
  }
  function contractFileName(payload){
   const person=payload.kind==='landlord'?payload.landlordName:payload.customerName;
+  const phone=payload.kind==='landlord'?payload.landlordPhone:payload.customerPhone;
   const prefix=payload.kind==='landlord'?'عقد-سطح-':'عقد-زبون-';
-  return prefix+filename(person)+'-'+filename(payload.number)+'.pdf';
+  // Include the person's phone (when available) and the official contract reference.
+  return prefix+filename(person)+(String(phone||'').trim()&&phone!=='—'?'-'+filename(phone):'')+
+   '-'+filename(payload.number)+'.pdf';
  }
  function loadScript(src){
   return new Promise((resolve,reject)=>{
