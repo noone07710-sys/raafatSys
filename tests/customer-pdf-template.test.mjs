@@ -79,14 +79,18 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  };
  const blob=await pdf.generate(data);
  assert.equal(blob.type,'application/pdf');
- assert.equal(calls.added,1,'every generated customer contract must be one A4 page');
- assert.equal(calls.copied,1,'use the original Photoshop A4 background exactly once');
- assert.equal(calls.images,1,'the single page gets its transparent writing overlay');
+ assert.equal(calls.added,2,'customer contracts must have a contract page and a separate terms/signatures page');
+ assert.equal(calls.copied,2,'both customer pages retain the original Photoshop A4 background');
+ assert.equal(calls.images,2,'each original-template page receives its separate transparent writing overlay');
  assert.equal(calls.out,1);
  assert.match(calls.title,/RC-0007/);
  assert.ok(calls.canvasTexts.some(x=>x.includes('مكتبة حبر')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('A004')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('4,200')));
+ assert.ok(calls.canvasTexts.some(x=>x.includes('07766663304 - 07866663304')),'company phones are printed');
+ assert.ok(calls.canvasTexts.some(x=>x.includes('رقم عقد الزبون')),'number is attached to the customer section');
+ assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد كالتالي')),'terms have their own sheet title');
+ assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول المؤجر')),'signature left party caption is included');
  assert.ok(calls.canvasTexts.some(x=>x.includes('الطرف الأول')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('الشروط')));
  assert.ok(calls.canvasTexts.some(x=>x.includes('توقيع')));
@@ -99,7 +103,7 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
   ()=>pdf.generate({...data,
    sites:Array.from({length:100},(_,i)=>({code:'E'+i,name:'لوحة إعلان رقم '+i,address:'تكريت شارع الزهور'})),
    terms:'شرط طويل يتكرر حتى يتجاوز مساحة الورقة '.repeat(200)}),
-  /لا تكفي صفحة A4 واحدة/
+  /لا تكفي صفحة A4 الأولى|الشروط والملاحظات أطول/
  );
  assert.equal(calls.added,pagesBefore,'extremely long legal agreements must not generate extra pages or incomplete files');
 });
@@ -110,7 +114,7 @@ test('live saved-contract data drives PDF fields without replacing original comp
   createElement:()=>({style:{},remove(){}}),body:{append(){}}};
  let serial=0;
  const app=new Function('localStorage','document','crypto','createClient','window',
-  appSource+'\nreturn {s,customerContractPdfPayload,generateCustomerContractPdf,render,customerContractPreview,seededDemoPackages,seededDemoRates};'
+  appSource+'\nreturn {s,customerContractPdfPayload,generateCustomerContractPdf,render,customerContractPreview,openCustomerPdfEditor,customerPdfEditorHtml,seededDemoPackages,seededDemoRates};'
  )({getItem:()=>null,setItem:()=>{}},document,{randomUUID:()=>String(++serial)},()=>{},{});
  const {s}=app;s.demo=true;s.staff={role:'admin'};
  s.data.packages=app.seededDemoPackages();s.data.package_rates=app.seededDemoRates();
@@ -158,4 +162,44 @@ test('live saved-contract data drives PDF fields without replacing original comp
  assert.match(app.customerContractPreview(contract),/data-pdf-mode="preview"/);
  assert.doesNotMatch(app.customerContractPreview(contract),/الرقم الوطني|رقم البطاقة الموحدة/,'the HTML contract preview must never display an ID number');
  assert.doesNotMatch(app.customerContractPreview(contract),/data-action="print"/);
+});
+
+
+test('print editor allows editing customer contract, each site, numbered terms and both signature dates without mutating saved records',()=>{
+ const rootElement={innerHTML:''};
+ const document={title:'',querySelector:q=>q==='#app'?rootElement:null,
+  querySelectorAll:()=>[],createElement:()=>({style:{},remove(){}}),body:{append(){}}};
+ const src=readFileSync(new URL('../app.js',import.meta.url),'utf8')
+  .replace(/^import[^\n]*\n/,'').replace(/\nbootstrap\(\);\s*$/,'');
+ const app=new Function('localStorage','document','crypto','createClient','window',
+  src+'\nreturn {s,openCustomerPdfEditor,customerPdfEditorHtml};'
+ )({getItem:()=>null,setItem:()=>{}},document,{randomUUID:()=> 'x'},()=>{},{});
+ app.s.demo=true;app.s.staff={role:'admin'};
+ app.s.data.customers=[{id:'client',name:'زبون العقد',phone:'07700000000'}];
+ app.s.data.customer_contracts=[{
+  id:'cc',contract_number:'RC-0015',customer_id:'client',start_date:'2026-11-15',
+  end_date:'2026-12-15',amount:3000,currency:'IQD',
+  customer_representative:'ممثل العميل',company_representative:'ممثل رأفت',
+  campaign_sites_snapshot:[{code:'A-1',name:'لوحة الإعلان',address:'تكريت'}],
+  customer_name_snapshot:'الزبون المحفوظ',campaign_title_snapshot:'الحملة المحفوظة'
+ }];
+ const saved=JSON.stringify(app.s.data.customer_contracts[0]);
+ app.openCustomerPdfEditor('cc');
+ const draft=app.s.modal.printDraft;
+ assert.equal(draft.companyPhones,'07766663304 - 07866663304');
+ assert.equal(draft.firstSignatureLabel,'الطرف الأول المؤجر');
+ assert.equal(draft.secondSignatureLabel,'الطرف الثاني — ممثل الشركة');
+ assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','4','5','6','7','8','9','10']);
+ const html=app.customerPdfEditorHtml();
+ assert.match(html,/data-print-site-field="address"/);
+ assert.match(html,/data-print-site-add/);
+ assert.match(html,/data-pdf-editor-preview/);
+ assert.match(html,/data-pdf-editor-download/);
+ assert.match(html,/name="firstSignatureDate"/);
+ assert.match(html,/name="secondSignatureDate"/);
+ assert.match(html,/25\$/);
+ draft.customerName='محرر قبل الطباعة';
+ draft.sites[0].address='عنوان محرر قبل الطباعة';
+ draft.clauses[0].text='شرط محرر للطباعة';
+ assert.equal(JSON.stringify(app.s.data.customer_contracts[0]),saved,'edits do not touch the saved contract snapshot');
 });
