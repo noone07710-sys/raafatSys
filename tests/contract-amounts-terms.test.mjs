@@ -28,9 +28,9 @@ test('rooftop default clauses include five years, annual advance and mutual amen
   graceDays:14,startDate:'2026-11-15',endDate:'2031-11-14'
  });
  assert.equal(clauses.length,10);
- assert.match(clauses[1].text,/خمس سنوات قابلة للتجديد/);
+ assert.equal(clauses[1].text,'مدة العقد خمس سنوات قابلة للتجديد، ويدفع الطرف الثاني إيجار كل سنة مقدماً للطرف الأول.');
  assert.match(clauses[1].text,/إيجار كل سنة مقدماً للطرف الأول/);
- assert.match(clauses[9].text,/موافقة الطرف الأول والطرف الثاني/);
+ assert.equal(clauses[9].text,'أي تغيير على بنود العقد يجب أن يكون بموافقة الطرف الأول والطرف الثاني، ويُحرَّر العقد بنسخ جديدة موقعة من الطرفين.');
  assert.match(clauses[9].text,/نسخ جديدة موقعة من الطرفين/);
 });
 
