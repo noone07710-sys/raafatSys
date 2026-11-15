@@ -32,10 +32,10 @@ test('finance expenses: create tea/water expense, sum in IQD/USD, search and fil
  s.view='company_expenses';
  assert.match(app.nav(),/data-nav="company_expenses"/);
  app.render();
- assert.match(root.innerHTML,/مصروفات الشركة/);
+ assert.match(root.innerHTML,/المصروفات والفواتير الداخلية/);
  app.openForm('company_expenses');
- assert.match(root.innerHTML,/تسجيل مصروف جديد/);
- assert.match(root.innerHTML,/ضيافة ومشروبات/);
+ assert.match(root.innerHTML,/تسجيل فاتورة مصروفات/);
+ assert.match(root.innerHTML,/ضيافة ونثريات المكتب/);
  await app.saveForm({values:{expense_date:'2026-11-14',title:'جاي قهوة ماي',category:'hospitality',
   amount:'5000',currency:'IQD',paid_by:'أحمد',notes:'ضيافة'},querySelectorAll:()=>[]});
  assert.equal(s.data.company_expenses.length,1);
