@@ -48,10 +48,10 @@ test('authorized company manager appears with name in both signature draft field
 });
 
 test('previously saved lease and customer contracts use authorized-manager title on reprint',()=>{
- const code=appSource.replace(/^import[^\\n]*\\n/,'').replace(/\\nbootstrap\\(\\);\\s*$/,'');
+ const code=appSource.replace(/^import[^\n]*\n/,'').replace(/\nbootstrap\(\);\s*$/,'');
  const doc={baseURI:'https://example.test/raafatSys/'};
  const app=new Function('localStorage','document','crypto','createClient','window','FormData','File','setTimeout',
-  code+'\\nreturn {s,landlordContractPdfPayload,customerContractPdfPayload};'
+  code+'\nreturn {s,landlordContractPdfPayload,customerContractPdfPayload};'
  )({getItem:()=>null,setItem:()=>{}},doc,
   {randomUUID:()=> 'sample-id'},()=>{}, {},class {},class {},()=>{});
  app.s.demo=true;
