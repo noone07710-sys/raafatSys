@@ -3342,10 +3342,43 @@ function leaseInstallmentPlan(v){
  const count=Math.max(1,dueDates.length),base=Math.floor(remaining/count),rest=remaining-base*count;
  return dueDates.map((date,i)=>({lease_id:v.id,due_date:date,amount:(base+(i===count-1?rest:0))/100,paid_amount:0}));
 }
-async function generateInstallments(v){
+function validateManualLeasePlan(lease,rows){
+ if(!lease.start_date||!lease.end_date||lease.end_date<lease.start_date)
+  throw Error('تأكد من تواريخ بداية ونهاية عقد الإيجار.');
+ const total=Math.round(Number(lease.rent_total)*100),advance=Math.round(Number(lease.advance_amount||0)*100);
+ if(!Number.isSafeInteger(total)||!Number.isSafeInteger(advance)||total<0||advance<0||advance>total)
+  throw Error('قيمة الإيجار والمقدم غير صالحة.');
+ if(!Array.isArray(rows)||rows.length>30)throw Error('الحد الأقصى 30 قسطاً.');
+ const due=total-advance;
+ if(!due&&rows.length)throw Error('المقدم يغطي كامل الإيجار. احذف الأقساط اليدوية.');
+ if(due&&!rows.length)throw Error('أدخل قسطاً واحداً على الأقل للمتبقي من الإيجار.');
+ const plan=rows.map((r,i)=>{
+  const date=String(r.due_date||''),raw=String(r.amount??'').trim(),cents=Math.round(Number(raw)*100);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+'T00:00:00Z'))||
+     new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)
+   throw Error('حدد تاريخاً صحيحاً للقسط '+serial4(i+1));
+  if(!raw||!Number.isSafeInteger(cents)||cents<=0)throw Error('راجع مبلغ القسط '+serial4(i+1));
+  return {due_date:date,amount:cents/100};
+ });
+ const sum=plan.reduce((n,r)=>n+Math.round(r.amount*100),0);
+ if(sum!==due)throw Error('مجموع الأقساط ('+money(sum/100,lease.currency)+
+  ') يجب أن يساوي المتبقي بعد المقدم ('+money(due/100,lease.currency)+').');
+ return plan.sort((a,b)=>a.due_date.localeCompare(b.due_date));
+}
+function captureLeasePlan(form){
+ if(s.modal?.table!=='leases'||s.modal?.data?.id||s.modal.leasePlanMode!=='manual')return;
+ s.modal.leaseDraft=[...(form?.querySelectorAll?.('[data-lease-draft-row]')||[])].map(row=>({
+  due_date:row.querySelector('[data-lease-due]')?.value||'',
+  amount:row.querySelector('[data-lease-amount]')?.value??''
+ }));
+}
+async function generateInstallments(v,customPlan=null){
  const previous=s.data.lease_installments.filter(x=>x.lease_id===v.id);
  if(previous.length)throw Error('أقساط هذا العقد موجودة مسبقاً. لن ننشئ أقساط مكررة.');
- const plan=leaseInstallmentPlan(v);
+ const plan=customPlan===null?leaseInstallmentPlan(v):
+  validateManualLeasePlan(v,customPlan).map(row=>({
+   lease_id:v.id,due_date:row.due_date,amount:row.amount,paid_amount:0
+  }));
  for(const record of plan)await persist('lease_installments',record);
  return plan;
 }
@@ -3459,6 +3492,7 @@ async function saveForm(form){
  // The structured invoice form has independent line items and attachment state.
  if(k==='company_expenses'&&form.querySelectorAll?.('[data-expense-item]')?.length)return saveExpenseInvoice(form);
  captureForm(form);
+ if(k==='leases')captureLeasePlan(form);
  if(k==='landlords')captureRoofDrafts();
  let v=m.data;
  // Recompute the auto-quoted amount from the actual selected sites before the final save.
@@ -3522,6 +3556,8 @@ async function saveForm(form){
    }
   }
   formValidate(k,normalized);
+  const customLeasePlan=k==='leases'&&!v.id&&m.leasePlanMode==='manual'?
+    validateManualLeasePlan(normalized,m.leaseDraft||[]):null;
   if(k==='landlords'){
    if(!v.id&&!m.roofs.length)throw Error('سجّل على الأقل سطحاً واحداً للمالك مع قياسه');
    for(const roof of m.roofs){
@@ -3581,7 +3617,7 @@ async function saveForm(form){
   }
   if(k==='leases'&&wasNew){
    m.data.id=saved.id;
-   try{await generateInstallments(saved)}
+   try{await generateInstallments(saved,customLeasePlan)}
    catch(e){toast('تم إنشاء العقد لكن بعض الأقساط لم تُنشأ: '+e.message,true)}
   }
   s.modal=null;
