@@ -1398,7 +1398,55 @@ function render(){
  else{target.innerHTML=shell(content)+(s.modal?modalHtml():'');}
  bind();
 }
-function optionText(k,x){return k==='landlords'||k==='customers'?x.name:k==='properties'?x.title+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+' / '+(labels[x.package_type]||x.package_type||'')+')':k==='ad_sites'?x.code+' — '+x.name:k==='leases'?numberedContract(x.contract_number)+' — '+nameOf('landlords',x.landlord_id):k==='customer_contracts'?numberedContract(x.contract_number)+' — '+nameOf('customers',x.customer_id):k==='campaigns'?x.title+' — '+nameOf('customers',x.customer_id):'—';}
+
+function rooftopSizeDetails(property){
+ if(!property)return {dimensions:'القياس غير مسجل',area:'غير مسجلة',quantity:'غير مسجل'};
+ const width=Number(property.width_m),height=Number(property.height_m);
+ const dimensions=width>0&&height>0?fmt(width)+' × '+fmt(height)+' م':
+  String(property.dimensions||'').trim()||'القياس غير مسجل';
+ const area=Number(property.area_m2)>0?Number(property.area_m2):
+  width>0&&height>0?width*height:0;
+ const quantity=Number(property.quantity)>0?fmt(property.quantity):'غير مسجل';
+ return {dimensions,area:area>0?fmt(area)+' م²':'غير مسجلة',quantity};
+}
+function rooftopChoiceLabel(property){
+ const size=rooftopSizeDetails(property);
+ return String(property?.title||'سطح دون اسم')+' — '+size.dimensions+
+  ' · المساحة '+size.area+' · العدد '+size.quantity;
+}
+function leasePropertyPicker(lease){
+ const owner=lookup('landlords',lease?.landlord_id);
+ const roofs=owner?s.data.properties.filter(row=>row.landlord_id===owner.id):[];
+ if(!owner)return '<div class="lease-roof-guide full">'+
+  '<div class="lease-roof-guide-heading">'+uiIcon('house',19)+
+  '<span><strong>اختيار السطح المؤجّر</strong><small>اختر اسم المالك أولاً حتى تظهر أسطحه مع الأبعاد والمساحات.</small></span></div></div>';
+ const choices=roofs.map((property,index)=>{
+  const m=rooftopSizeDetails(property),chosen=String(lease?.property_id||'')===String(property.id);
+  return '<button type="button" class="lease-roof-choice'+(chosen?' selected':'')+
+   '" data-lease-property="'+E(property.id)+'" aria-pressed="'+chosen+'">'+
+   '<span class="lease-roof-choice-top"><span class="lease-roof-number">السطح '+serial4(index+1)+'</span>'+
+   '<span class="lease-roof-check">'+(chosen?uiIcon('check',16):uiIcon('house',16))+'</span></span>'+
+   '<strong class="lease-roof-name">'+E(property.title||'سطح بدون اسم')+'</strong>'+
+   '<span class="lease-roof-metrics"><span><small>الطول × العرض</small><b>'+E(m.dimensions)+'</b></span>'+
+   '<span><small>المساحة</small><b>'+E(m.area)+'</b></span>'+
+   '<span><small>العدد</small><b>'+E(m.quantity)+'</b></span></span>'+
+   (property.notes?'<span class="lease-roof-hint">'+E(String(property.notes).slice(0,150))+'</span>':'')+
+   '</button>';
+ }).join('');
+ const selected=roofs.find(x=>String(x.id)===String(lease?.property_id||''));
+ return '<section class="lease-roof-guide full" aria-label="الأسطح والعقارات المسجّلة للمالك">'+
+ '<div class="lease-roof-guide-heading">'+uiIcon('house',19)+
+ '<span><strong>أسطح المالك: '+E(owner.name)+'</strong>'+
+ '<small>'+(roofs.length?'راجع قياس كل سطح ومساحته واضغط على القطعة الصحيحة. اختيارك يتزامن مع حقل العقار بالأعلى.':
+ 'هذا المالك ما عنده أسطح مسجّلة. أضف العقار أولاً من قسم مالكي الأسطح.')+'</small></span>'+
+ '<span class="lease-roof-count">'+roofs.length+' سطح</span></div>'+
+ (selected?'<div class="lease-roof-selected">'+uiIcon('check',15)+
+  'المحدد حالياً: <b>'+E(rooftopChoiceLabel(selected))+'</b></div>':'')+
+ (roofs.length?'<div class="lease-roof-grid">'+choices+'</div>':'<div class="notice">لا توجد عقارات مسجّلة لهذا المالك.</div>')+
+ '</section>';
+}
+
+function optionText(k,x){return k==='landlords'||k==='customers'?x.name:k==='properties'?rooftopChoiceLabel(x)+' — '+nameOf('landlords',x.landlord_id):k==='packages'?x.name+' ('+x.code+' / '+(labels[x.package_type]||x.package_type||'')+')':k==='ad_sites'?x.code+' — '+x.name:k==='leases'?numberedContract(x.contract_number)+' — '+nameOf('landlords',x.landlord_id):k==='customer_contracts'?numberedContract(x.contract_number)+' — '+nameOf('customers',x.customer_id):k==='campaigns'?x.title+' — '+nameOf('customers',x.customer_id):'—';}
 
 function fieldCurrency(k,v){
  if(k==='campaign_payments')return v.entry_currency||lookup('campaigns',v.campaign_id)?.currency||s.displayCurrency;
@@ -1556,6 +1604,7 @@ function fieldHtml(f,v,all){
  if(type==='textarea')return '<label class="field full"><span>'+E(label)+'</span><textarea name="'+id+'">'+E(val)+'</textarea></label>';
  if(type.startsWith('lookup:')){
   let table=type.slice(7),rows=s.data[table].filter(x=>{
+   if(id==='property_id'&&k==='leases')return Boolean(all?.landlord_id)&&x.landlord_id===all.landlord_id;
    if(id==='property_id'&&all?.landlord_id)return x.landlord_id===all.landlord_id;
    if(k==='customer_contracts'&&id==='campaign_id'&&all?.customer_id)return x.customer_id===all.customer_id;
    if(k==='customer_contracts'&&id==='site_id'){
@@ -1567,7 +1616,11 @@ function fieldHtml(f,v,all){
    }
    return true;
   });
-  return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><select name="'+id+'" '+req+'><option value="">— اختر —</option>'+rows.map(x=>'<option value="'+E(x.id)+'" '+(val===x.id?'selected':'')+'>'+E(optionText(table,x))+'</option>').join('')+'</select></label>';
+  const note=k==='leases'&&id==='property_id'?'<small class="lease-roof-field-help">اختر السطح حسب القياس والمساحة والعدد؛ أو اضغط على بطاقته المفصّلة أدناه.</small>':'';
+  return '<label class="field"><span>'+E(label)+(required?' *':'')+'</span><select name="'+id+'" '+req+
+   (k==='leases'&&id==='property_id'&&!all?.landlord_id?' disabled':'')+
+   '><option value="">'+(k==='leases'&&id==='property_id'?'— اختر السطح الصحيح مع قياساته —':'— اختر —')+'</option>'+
+   rows.map(x=>'<option value="'+E(x.id)+'" '+(val===x.id?'selected':'')+'>'+E(optionText(table,x))+'</option>').join('')+'</select>'+note+'</label>';
  }
  if(type==='select')return '<label class="field"><span>'+E(label)+'</span><select name="'+id+'" '+req+'>'+opts.map(x=>'<option value="'+x+'" '+(String(val)===String(x)?'selected':'')+'>'+E((k==='company_expenses'?EXPENSE_CATEGORY_LABELS[x]:null)||labels[x]||x)+'</option>').join('')+'</select></label>';
  let monetary=['price','rent_total','amount','paid_amount','initial_payment_amount'].includes(id);
@@ -1946,7 +1999,7 @@ function modalHtml(){
    '<p class="subtle">تُحفظ الدفعة بعملة الحملة الأصلية، ويُحتسب المبلغ المقابل تلقائياً عند اختلاف عملة الاستلام.</p></div></div>';
  }
  if(k==='leases'){
-  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)).join('')+leasePlanSummary(v)+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الأقساط')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+E(v.id)+'">معاينة بيانات العقد</button><button type="button" class="btn" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',16)+' تحميل عقد PDF بقالب رأفت</button><button type="button" class="btn secondary" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة PDF</button><button class="btn secondary" data-renew="'+E(v.id)+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
+  return '<div class="overlay"><div class="modal"><div class="modalhead"><h2>'+(v.renewed_from?'تجديد العقد':v.id?'تعديل عقد '+E(numberedContract(v.contract_number)):'عقد إيجار جديد')+'</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><p class="subtle">تُسحب عقارات المالك تلقائياً، وتُولّد الأقساط حسب مدة العقد ودورية الدفع.</p><form id="recordForm"><div class="formgrid">'+fields.map(f=>fieldHtml(f,v,v)+(f[0]==='property_id'?leasePropertyPicker(v):'')).join('')+leasePlanSummary(v)+'</div><div class="actions"><button class="btn" type="submit">'+(v.id?'حفظ التعديلات':'حفظ العقد وإنشاء الأقساط')+'</button></div></form>'+(v.id?'<div class="inline"><button class="btn secondary" data-preview="'+E(v.id)+'">معاينة بيانات العقد</button><button type="button" class="btn" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="download">'+uiIcon('download',16)+' تحميل عقد PDF بقالب رأفت</button><button type="button" class="btn secondary" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('file',16)+' معاينة PDF</button><button class="btn secondary" data-renew="'+E(v.id)+'">تجديد العقد</button></div>':'')+relatedDetails(k,v)+'</div></div>';
  }
 
  if(k==='customer_contracts'){
@@ -2780,6 +2833,15 @@ function bind(){
  }
  const owner=form.elements.namedItem('landlord_id');
  if(owner&&k==='leases')owner.onchange=()=>{captureForm(form);v.landlord_id=owner.value;v.property_id='';render()};
+ const roofSelect=form.elements.namedItem('property_id');
+ if(roofSelect&&k==='leases')roofSelect.onchange=()=>{
+  captureForm(form);v.property_id=roofSelect.value;render();
+ };
+ if(k==='leases')document.querySelectorAll('[data-lease-property]').forEach(button=>button.onclick=()=>{
+  const choice=lookup('properties',button.dataset.leaseProperty);
+  if(!choice||choice.landlord_id!==v.landlord_id)return toast('هذا السطح لا يتبع المالك المحدد.',true);
+  captureForm(form);v.property_id=choice.id;render();
+ });
  const client=form.elements.namedItem('customer_id');
  if(client&&k==='campaigns')client.onchange=()=>{
   captureForm(form);
