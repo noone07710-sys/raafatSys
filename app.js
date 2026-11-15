@@ -224,7 +224,174 @@ function packageCatalog(){
  return '<div class="package-catalog">'+rows.map(p=>'<article class="box package-card"><div class="package-heading"><span class="package-symbol">'+E(p.code)+'</span><div><b>'+E(p.name)+'</b><small>'+E(p.pricing_mode==='sqm_month'?'قياس مخصص لكل سطح • تسعير مساحة':'قياس '+fmt(p.width_m)+' × '+fmt(p.height_m)+' متر • '+fmt(p.area_m2)+' م² • وجهان')+'</small></div></div>'+packageRatesMarkup(p)+'<div class="inline" style="margin-top:10px"><button class="btn secondary mini" data-edit="packages:'+p.id+'">عرض وتعديل الباقة</button></div></article>').join('')+'</div>';
 }
 
-function toast(text,bad=false){let x=document.createElement('div');x.className=bad?'error toast':'notice toast';x.textContent=text;document.body.append(x);Object.assign(x.style,{position:'fixed',bottom:'20px',left:'20px',zIndex:20,maxWidth:'min(90vw,500px)',boxShadow:'0 5px 30px #1113'});setTimeout(()=>x.remove(),4500)}
+// Centralized in-app popovers replace operating-system dropdowns for every
+// ordinary select while preserving the original <select> for forms, validation
+// and existing onChange handlers (financial conversions, package filters, etc.).
+let currentSelectPopup=null;
+let selectPopupEventsBound=false;
+function closeAppSelectPopup(refocus=false){
+ const popup=currentSelectPopup;
+ currentSelectPopup=null;
+ if(!popup)return;
+ popup.node?.remove();
+ popup.trigger?.setAttribute?.('aria-expanded','false');
+ if(refocus&&popup.trigger?.isConnected)popup.trigger.focus();
+}
+function appSelectLabel(select){
+ const holder=select.closest?.('label');
+ const text=holder?.querySelector?.(':scope > span:not(.app-select-shell)')?.textContent?.trim();
+ return (text||select.getAttribute?.('aria-label')||select.name||'اختيار').replace(/\s+\*$/,'');
+}
+function openAppSelectPopup(select,trigger){
+ if(select.disabled)return;
+ if(currentSelectPopup?.source===select){closeAppSelectPopup(true);return}
+ closeAppSelectPopup();
+ const options=Array.from(select.options||[]);
+ const choiceLabel=appSelectLabel(select);
+ const panel=document.createElement('div');
+ panel.className='app-select-popup';
+ panel.setAttribute('role','dialog');
+ panel.setAttribute('aria-label',choiceLabel);
+ panel.setAttribute('dir','rtl');
+ const enableSearch=options.length>=7;
+ const optionMarkup=options.map((option,index)=>{
+  const disabled=option.disabled||Boolean(option.parentElement?.disabled);
+  const selected=option.selected;
+  const label=String(option.textContent||'').trim();
+  const parts=label.split(' — ');
+  return '<button type="button" class="app-select-option'+(selected?' is-selected':'')+
+   '" data-app-choice="'+index+'" role="option" aria-selected="'+selected+'"'+(disabled?' disabled':'')+'>'+
+   '<span class="app-select-option-content"><strong>'+E(parts.shift()||'—')+'</strong>'+
+   (parts.length?'<small>'+E(parts.join(' — '))+'</small>':'')+'</span>'+
+   (selected?uiIcon('check',17):'<span class="app-select-empty-check" aria-hidden="true"></span>')+
+   '</button>';
+ }).join('');
+ panel.innerHTML='<div class="app-select-popup-head"><div><small>اختيار من القائمة</small><strong>'+E(choiceLabel)+
+ '</strong></div><button type="button" class="app-select-dismiss" data-app-select-close aria-label="إغلاق القائمة">'+
+ uiIcon('x',16)+'</button></div>'+
+ (enableSearch?'<label class="app-select-search">'+uiIcon('search',16)+
+  '<input type="search" data-app-select-search autocomplete="off" placeholder="ابحث داخل الخيارات..." aria-label="بحث في '+E(choiceLabel)+'"></label>':'')+
+ '<div class="app-select-options" role="listbox" aria-label="'+E(choiceLabel)+'">'+optionMarkup+'</div>'+
+ '<div class="app-select-popup-foot">'+options.length+' خيار</div>';
+ const width=window.innerWidth||document.documentElement.clientWidth||1000;
+ if(width>680){
+  const rect=trigger.getBoundingClientRect();
+  const maxWidth=Math.min(465,width-24);
+  const popupWidth=Math.max(240,Math.min(maxWidth,rect.width+75));
+  const viewportHeight=window.innerHeight||document.documentElement.clientHeight||800;
+  const preferredTop=rect.bottom+7;
+  const heightEstimate=Math.min(490,140+Math.min(6,options.length)*52);
+  const below=viewportHeight-rect.bottom;
+  const top=below<Math.min(240,heightEstimate)&&rect.top>below?
+   Math.max(12,rect.top-Math.min(heightEstimate,rect.top-14)-7):Math.max(12,preferredTop);
+  panel.style.top=top+'px';
+  panel.style.right=Math.max(12,width-rect.right)+'px';
+  panel.style.width=popupWidth+'px';
+  panel.style.maxHeight=Math.max(200,viewportHeight-top-13)+'px';
+ }
+ document.body.append(panel);
+ currentSelectPopup={node:panel,source:select,trigger};
+ trigger.setAttribute('aria-expanded','true');
+ const search=panel.querySelector('[data-app-select-search]');
+ const buttons=[...panel.querySelectorAll('[data-app-choice]')];
+ if(search)search.addEventListener('input',()=>{
+  const q=search.value.trim().toLocaleLowerCase();
+  for(const button of buttons){
+   const matches=button.textContent.toLocaleLowerCase().includes(q);
+   button.hidden=!matches;
+  }
+ });
+ panel.querySelector('[data-app-select-close]').onclick=()=>closeAppSelectPopup(true);
+ buttons.forEach(button=>button.onclick=()=>{
+  const option=options[Number(button.dataset.appChoice)];
+  if(!option||option.disabled)return;
+  const changed=select.value!==option.value;
+  select.value=option.value;
+  closeAppSelectPopup();
+  if(changed)select.dispatchEvent(new Event('change',{bubbles:true}));
+  else trigger.focus();
+  // Selection changes still use the old select and all existing handlers.
+ });
+ panel.addEventListener('keydown',event=>{
+  if(event.key!=='ArrowDown'&&event.key!=='ArrowUp')return;
+  const candidates=buttons.filter(button=>!button.hidden&&!button.disabled);
+  if(!candidates.length)return;
+  event.preventDefault();
+  const current=candidates.indexOf(document.activeElement);
+  const direction=event.key==='ArrowDown'?1:-1;
+  candidates[(current+direction+candidates.length)%candidates.length].focus();
+ });
+ if(search)search.focus();
+ else (buttons.find(button=>button.classList.contains('is-selected'))||buttons.find(button=>!button.disabled))?.focus();
+}
+function enhanceAppSelects(){
+ const selects=Array.from(document.querySelectorAll('select'));
+ for(const select of selects){
+  if(select.multiple||select.closest('.app-select-shell')||!select.parentNode)continue;
+  const shell=document.createElement('span');
+  shell.className='app-select-shell';
+  select.parentNode.insertBefore(shell,select);
+  shell.appendChild(select);
+  select.classList.add('app-select-native');
+  select.tabIndex=-1;
+  select.setAttribute('aria-hidden','true');
+  const trigger=document.createElement('button');
+  trigger.type='button';trigger.className='app-select-trigger';
+  trigger.setAttribute('aria-haspopup','listbox');
+  trigger.setAttribute('aria-expanded','false');
+  const sync=()=>{
+   const selected=select.selectedOptions?.[0]||select.options?.[select.selectedIndex];
+   trigger.innerHTML='<span>'+E(selected?.textContent?.trim()||'— اختر —')+
+    '</span>'+uiIcon('chevron',16);
+   trigger.setAttribute('aria-label',appSelectLabel(select)+': '+(selected?.textContent?.trim()||'اختر'));
+   trigger.disabled=select.disabled;
+  };
+  shell.appendChild(trigger);
+  select.addEventListener('change',sync);
+  trigger.onclick=()=>openAppSelectPopup(select,trigger);
+  sync();
+ }
+ if(!selectPopupEventsBound&&typeof document.addEventListener==='function'){
+  selectPopupEventsBound=true;
+  document.addEventListener('pointerdown',event=>{
+   const active=currentSelectPopup;
+   if(active&&!active.node.contains(event.target)&&!active.trigger.contains(event.target))
+    closeAppSelectPopup();
+  },true);
+  document.addEventListener('keydown',event=>{
+   if(currentSelectPopup&&event.key==='Escape'){event.preventDefault();closeAppSelectPopup(true);}
+  });
+  if(typeof window?.addEventListener==='function'){
+   window.addEventListener('resize',()=>closeAppSelectPopup());
+   window.addEventListener('scroll',event=>{
+    if(currentSelectPopup&&!currentSelectPopup.node.contains(event.target))closeAppSelectPopup();
+   },true);
+  }
+ }
+}
+function toast(text,bad=false){
+ // Branded non-blocking alerts, never Windows/browser alert() popups.
+ let stack=document.querySelector?.('#raafat-toast-stack');
+ if(!stack){
+  stack=document.createElement('div');
+  stack.id='raafat-toast-stack';
+  stack.className='raafat-toast-stack';
+  stack.setAttribute?.('aria-live',bad?'assertive':'polite');
+  document.body.append(stack);
+ }
+ const x=document.createElement('div');
+ x.className='raafat-toast'+(bad?' is-error':' is-success');
+ x.setAttribute?.('role',bad?'alert':'status');
+ x.innerHTML='<span class="raafat-toast-icon">'+uiIcon(bad?'alert':'check',19)+'</span>'+
+  '<span class="raafat-toast-copy"><strong>'+(bad?'تحتاج مراجعة':'تم التنفيذ')+
+  '</strong><span>'+E(text)+'</span></span>'+
+  '<button type="button" class="raafat-toast-close" aria-label="إغلاق التنبيه">'+uiIcon('x',16)+'</button>';
+ x.querySelector?.('.raafat-toast-close')?.addEventListener('click',()=>x.remove());
+ stack.append(x);
+ if(stack.children?.length>4)stack.firstElementChild?.remove();
+ setTimeout(()=>x.remove(),bad?7000:4800);
+}
+
 
 function subscribeToExchangeRate(){
  if(s.demo||!s.staff||!s.client||s.realtimeChannel)return;
@@ -1384,6 +1551,7 @@ function settings(){
 }
 function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>الصلاحية غير مفعلة</h1><p class="muted">تم تسجيل الدخول، لكن حسابك غير مضاف إلى موظفي نظام رأفت.</p><div class="notice">يجب إضافة معرّف حسابك إلى جدول staff_members من لوحة Supabase بدور admin أو staff، ثم تسجيل الدخول مجدداً.</div><button class="btn" data-action="logout">تسجيل خروج</button></div></div>'}
 function render(){
+ closeAppSelectPopup();
  if(![...keys,'dashboard','reports','settings','alerts','activity_logs'].includes(s.view))s.view='dashboard';
  if(s.staff&&s.staff.role!=='admin'&&['activity_logs','employees'].includes(s.view))s.view='dashboard';
  if((s.staff||s.demo)&&s.view)localStorage.setItem('raafat-last-view',s.view);
@@ -2634,6 +2802,7 @@ function updateSettingsPreview(form){
 
 function bind(){
  bindNav();
+ enhanceAppSelects();
 
  const alertNav=document.querySelector('[data-alerts-nav]');
  if(alertNav)alertNav.onclick=()=>{s.view='alerts';s.modal=null;s.alertFilter='all';render()};
