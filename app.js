@@ -1914,6 +1914,7 @@ function openLandlordPdfEditor(id,preferredMode='preview'){
   return toast('مكوّن شروط الإيجار لم يكتمل تحميله. حدّث الصفحة وحاول مجدداً.',true);
  const payload=landlordContractPdfPayload(lease);
  payload.clauses=generator.defaultLandlordClauses(payload).map((clause,index)=>({...clause,number:String(index+1)}));
+ payload._autoLandlordClauses=payload.clauses.map(item=>item.text);
  s.modal={kind:'landlordPdfEditor',table:'leases',data:lease,
   printDraft:payload,preferredMode};
  render();
@@ -2116,6 +2117,18 @@ function captureCustomerPdfEditor(form){
   payload.graceDays=Number(payload.graceDays);
   payload.remainingAfterAdvance=Math.max(0,Math.round((payload.rentTotal-payload.advanceAmount)*100)/100);
   payload.quantity=Number(payload.quantity)||0;
+  // Revise untouched financial/date clauses when their backing invoice values
+  // change in this editor; never silently overwrite a manually edited clause.
+  const autoTerms=window.RaafatContractPdf?.defaultLandlordClauses?.(payload)?.map(item=>item.text);
+  if(autoTerms){
+   const previous=modal.printDraft._autoLandlordClauses||[];
+   payload.clauses=payload.clauses.map(clause=>{
+    const oldIndex=previous.indexOf(clause.text);
+    return oldIndex>=0&&oldIndex<autoTerms.length?
+     {...clause,text:autoTerms[oldIndex]}:clause;
+   });
+   payload._autoLandlordClauses=autoTerms;
+  }
  }
  payload.clauses=[...form.querySelectorAll('[data-print-clause]')].map((row,index)=>({
   number:String(index+1),text:row.querySelector('textarea')?.value?.trim()||''
@@ -2152,6 +2165,11 @@ function bindCustomerPdfEditor(){
    else await generateCustomerContractPdf(m.data.id,mode,draft);
   }finally{if(button.isConnected)button.disabled=false;}
  });
+ if(s.modal?.kind==='landlordPdfEditor'){
+  form.querySelectorAll('[name="rentTotal"],[name="currency"],[name="graceDays"],[name="startDate"],[name="endDate"]').forEach(input=>{
+   input.addEventListener('change',()=>{captureCustomerPdfEditor(form);render();});
+  });
+ }
  const addClause=form.querySelector('[data-print-clause-add]');
  if(addClause)addClause.onclick=()=>{
   captureCustomerPdfEditor(form);
