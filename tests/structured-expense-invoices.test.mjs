@@ -15,7 +15,7 @@ function setup(){
  }
  let counter=0;
  const app=new Function('localStorage','document','crypto','createClient','window','FormData','File','setTimeout',
-  src+'\nreturn {s,openForm,saveForm,expenseLineItems,expensePaymentStatus,expenseInvoiceTotal,expenseInvoiceValidated,expenseOverview,expenseInvoiceForm,expenseCurrentItems};'
+  src+'\nreturn {s,openForm,saveForm,expenseLineItems,expensePaymentStatus,expenseInvoiceTotal,expenseInvoiceValidated,expenseOverview,expenseInvoiceForm,expenseCurrentItems,updateExpenseInvoiceTotals};'
  )({getItem:()=>null,setItem:()=>{}},doc,{randomUUID:()=> 'item-'+(++counter)},()=>{},
   {},MockFormData,MockFile,()=>{});
  app.s.demo=true;app.s.staff={role:'admin'};app.s.displayCurrency='IQD';app.s.settings.usd_iqd=1500;
@@ -118,4 +118,51 @@ test('invoice validation prevents incorrect partial payments and missing item al
   [product('اشتراك','invalid','development',1,5000)]),/التصنيف/);
  assert.deepEqual(app.expenseInvoiceValidated({...base,paid_amount:1000},items),
   {amount:5000,paid_amount:1000});
+});
+
+
+test('browser validation: hidden partial-paid input cannot silently block paid/unpaid invoice submit',()=>{
+ const {app}=setup();
+ app.s.modal={table:'company_expenses',data:{paid_amount:0,transfer_proof_path:null},expenseItems:[],transferFile:null};
+ const entries=[
+  product('اشتراك برنامج','design_subscriptions','graphic_design',1,15000)
+ ];
+ const inputs={
+  currency:{value:'IQD'},expense_payment_status:{value:'paid'},
+  payment_method:{value:'cash'},paid_amount:{value:'0',min:'0.01',required:false,disabled:false},
+  transfer_image:{value:'',required:false,disabled:false},
+  amount:{value:''}
+ };
+ const display={expenseInvoiceTotal:{},expenseInvoicePaid:{},
+  expenseInvoiceBalance:{},expensePartialField:{hidden:false},
+  expenseTransferField:{hidden:false}};
+ const item={querySelector:sel=>{
+  const field=sel.match(/data-expense-field="([^"]+)"/)?.[1];
+  return field?{value:String(entries[0][field]??'')}:null;
+ }};
+ const form={
+  elements:{namedItem:k=>inputs[k]||null},
+  querySelectorAll:sel=>sel==='[data-expense-item]'?[item]:
+   sel==='[data-expense-subtotal]'?[{textContent:''}]:[],
+  querySelector:sel=>display[sel.slice(1)]||null
+ };
+ app.updateExpenseInvoiceTotals(form);
+ assert.equal(inputs.paid_amount.disabled,true,'paid field must be disabled, not just hidden');
+ assert.equal(inputs.paid_amount.required,false);
+ assert.equal(display.expensePartialField.hidden,true);
+ assert.equal(inputs.transfer_image.disabled,true,'hidden upload should not participate in native validation');
+ assert.equal(display.expenseInvoicePaid.textContent,'15,000 د.ع');
+ inputs.expense_payment_status.value='unpaid';
+ app.updateExpenseInvoiceTotals(form);
+ assert.equal(inputs.paid_amount.disabled,true);
+ assert.equal(display.expenseInvoicePaid.textContent,'0 د.ع');
+ inputs.expense_payment_status.value='partial';inputs.paid_amount.value='3000';
+ inputs.payment_method.value='mastercard';
+ app.updateExpenseInvoiceTotals(form);
+ assert.equal(inputs.paid_amount.disabled,false);
+ assert.equal(inputs.paid_amount.required,true);
+ assert.equal(display.expensePartialField.hidden,false);
+ assert.equal(inputs.transfer_image.disabled,false);
+ assert.equal(inputs.transfer_image.required,true);
+ assert.equal(display.expenseInvoiceBalance.textContent,'12,000 د.ع');
 });
