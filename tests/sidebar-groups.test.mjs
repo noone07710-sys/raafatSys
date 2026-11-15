@@ -44,7 +44,8 @@ test('collapsible sidebar isolates customers and rooftop landlords and preserves
  assert.equal(navGroupForView('leases'),'landlords');
  assert.equal(navGroupForView('lease_installments'),'landlords');
  assert.equal(navGroupForView('company_expenses'),'finance');
- assert.deepEqual(NAV_GROUPS[2].items.map(item=>item[0]),['company_expenses']);
+ assert.deepEqual(NAV_GROUPS[2].items.map(item=>item[0]),['company_expenses','employees']);
+ assert.equal(navGroupForView('employees'),'finance');
  assert.equal(navGroupForView('dashboard'),null);
 
  s.view='dashboard';
