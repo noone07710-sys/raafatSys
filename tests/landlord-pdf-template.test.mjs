@@ -66,7 +66,7 @@ test('landlord contract payload maps only saved lease and roof values, excluding
  assert.match(dialog,/data-pdf-mode="preview"/);
  assert.doesNotMatch(dialog,/data-action="print"/);
  app.openForm('leases',original);
- assert.match(app.modalHtml(),/تحميل عقد PDF بقالب رأفت/);
+ assert.match(app.modalHtml(),/مراجعة العقد وتعديل \/ إضافة بنود/);
 });
 
 test('landlord PDF draws lease on first Photoshop A4 and nine numbered lease terms with signatures on second A4',async()=>{
