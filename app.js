@@ -41,7 +41,7 @@ const defs={
  package_rates:{title:'أسعار مدد الباقات',icon:'$',fields:[]},
  employees:{title:'الموظفون والرواتب',icon:'users',fields:[
   ['name','اسم الموظف','text',true],['job_title','المسمّى الوظيفي','text',true],
-  ['department','القسم','select',true,['general','graphic_design','production','marketing','development','services']],
+  ['department','القسم','select',true,['general','graphic_design','production','marketing','development','shared']],
   ['phone','رقم الهاتف','tel'],['salary_amount','الراتب الشهري','number',true],
   ['salary_currency','عملة الراتب','select',true,['IQD','USD']],['hired_at','تاريخ المباشرة','date'],
   ['active','حالة الموظف','select',true,['true','false']],['notes','ملاحظات','textarea']]},
@@ -406,7 +406,8 @@ function navLink(id,label,icon){
 }
 function navGroup(group){
  const expanded=s.navExpanded===group.id,contains=navGroupForView(s.view)===group.id;
- return '<div class="nav-group'+(contains?' has-active':'')+'"><button type="button" class="nav-group-toggle'+(expanded?' expanded':'')+'" data-nav-group="'+group.id+'" aria-expanded="'+expanded+'" aria-controls="nav-group-'+group.id+'"><span class="nav-group-icon" aria-hidden="true">'+uiIcon(group.icon,20)+'</span><span class="nav-group-copy"><strong>'+group.title+'</strong><small>'+group.subtitle+'</small></span><span class="nav-group-chevron" aria-hidden="true">'+uiIcon('chevron',17)+'</span></button><div class="nav-group-items" id="nav-group-'+group.id+'" role="group" aria-label="'+group.title+'"'+(expanded?'':' hidden')+'>'+group.items.map(([id,label,icon])=>navLink(id,label,icon)).join('')+'</div></div>';
+ return '<div class="nav-group'+(contains?' has-active':'')+'"><button type="button" class="nav-group-toggle'+(expanded?' expanded':'')+'" data-nav-group="'+group.id+'" aria-expanded="'+expanded+'" aria-controls="nav-group-'+group.id+'"><span class="nav-group-icon" aria-hidden="true">'+uiIcon(group.icon,20)+'</span><span class="nav-group-copy"><strong>'+group.title+'</strong><small>'+group.subtitle+'</small></span><span class="nav-group-chevron" aria-hidden="true">'+uiIcon('chevron',17)+'</span></button><div class="nav-group-items" id="nav-group-'+group.id+'" role="group" aria-label="'+group.title+'"'+(expanded?'':' hidden')+'>'+group.items.filter(([id])=>id!=='employees'||s.demo||s.staff?.role==='admin')
+ .map(([id,label,icon])=>navLink(id,label,icon)).join('')+'</div></div>';
 }
 function nav(){
  return navLink('dashboard','الرئيسية','dashboard')+
@@ -434,7 +435,8 @@ function bindNav(){
  document.querySelectorAll('[data-nav-group]').forEach(x=>x.onclick=()=>changeNavGroup(x.dataset.navGroup));
 }
 function shell(content){
- return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='alerts'?'التنبيهات':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length?'<span>'+E(alertsList().length>99?'99+':alertsList().length)+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
+ return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='alerts'?'التنبيهات':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':
+ s.view==='activity_logs'?'سجل الحركات':defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length?'<span>'+E(alertsList().length>99?'99+':alertsList().length)+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
 }
 // Alerts are derived from live balances and contracts; they do not mutate records.
 function alertsLocalDate(){
@@ -2629,7 +2631,8 @@ function bind(){
   localStorage.setItem('raafat-display-currency',s.displayCurrency);
   render();
  };
- if($('#search'))$('#search').oninput=e=>{let pos=e.target.selectionStart;s.search=e.target.value;const parent=e.target.closest('.content');parent.innerHTML=listing(s.view);bind();let n=$('#search');n.focus();n.setSelectionRange(pos,pos)};
+ if($('#search'))$('#search').oninput=e=>{let pos=e.target.selectionStart;s.search=e.target.value;const parent=e.target.closest('.content');parent.innerHTML=
+ (s.view==='employees'?employeesOverview():listing(s.view));bind();let n=$('#search');n.focus();n.setSelectionRange(pos,pos)};
  if($('#statusfilter'))$('#statusfilter').onchange=e=>{s.filter=e.target.value;render()};
  if($('#expenseCategory'))$('#expenseCategory').onchange=e=>{s.expenseCategory=e.target.value;render()};
  if($('#connectForm'))$('#connectForm').onsubmit=e=>{e.preventDefault();connect()};
