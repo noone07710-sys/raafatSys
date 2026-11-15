@@ -998,6 +998,10 @@ function showVal(k,row,f){
  if(f==='lease_balance')return displayMoney(leaseBalance(row),row.currency);
  if(f==='landlord_id')return E(nameOf('landlords',v));
  if(f==='customer_id')return E(nameOf('customers',v));
+ if(f==='property_id'&&k==='leases'){
+  const roof=lookup('properties',v),size=rooftopSizeDetails(roof);
+  return '<span class="lease-roof-cell"><strong>'+E(nameOf('properties',v))+'</strong><small>'+E(size.dimensions)+' · '+E(size.area)+'</small></span>';
+ }
  if(f==='property_id')return E(nameOf('properties',v));
  if(f==='rooftop_property_id')return E(v?nameOf('properties',v):'—');
  if(f==='package_id'&&k==='ad_sites'){
@@ -1847,6 +1851,15 @@ async function refreshActivityLogs(){
 }
 function openSalaryExpense(employeeId){return openPayrollPayment(employeeId)}
 
+function leaseRowActions(row){
+ const id=E(row.id),number=E(numberedContract(row.contract_number));
+ return '<div class="lease-row-actions" role="group" aria-label="إجراءات عقد '+number+'">'+
+  '<button type="button" class="lease-row-action" data-preview="'+id+'">'+uiIcon('file',15)+'<span>التفاصيل</span></button>'+
+  '<button type="button" class="lease-row-action" data-edit="leases:'+id+'">'+uiIcon('pencil',15)+'<span>تعديل العقد</span></button>'+
+  '<button type="button" class="lease-row-action lease-row-action-primary" data-landlord-pdf="'+id+'" data-pdf-mode="preview">'+uiIcon('printer',15)+'<span>مراجعة وطباعة</span></button>'+
+  '<button type="button" class="lease-row-action" data-lease-payments="'+id+'">'+uiIcon('receipt',15)+'<span>الأقساط والدفعات</span></button>'+
+ '</div>';
+}
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
  if(k==='company_expenses')return expenseOverview();
@@ -1859,10 +1872,8 @@ function listing(k){
   return match&&(k!=='customers'||s.filter==='all'||x.status===s.filter);
  });
  let labelsBy={campaign_payments:'تسجيل دفعة'};
- return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="'+(k==='customers'?'ابحث باسم العميل أو رقم هاتفه...':k==='leases'?'ابحث باسم المالك أو رقم العقد أو اسم السطح...':k==='customer_contracts'?'ابحث باسم الزبون أو رقم العقد...':'بحث بالاسم أو الرقم أو الموقع...')+'" value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">'+uiIcon('plus',16)+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td><button class="linkbtn" data-edit="'+k+':'+row.id+'">'+uiIcon('pencil',14)+' تفاصيل / تعديل</button>'+(k==='landlords'&&s.staff?.role==='admin'?'<button class="linkbtn customer-delete-link" type="button" data-delete-landlord="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف المالك</button>':'')+
- (k==='ad_sites'&&(s.demo||s.staff?.role==='admin')?'<button type="button" class="linkbtn customer-delete-link" data-delete-site="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف الموقع</button>':'')+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+(k==='leases'?'<button type="button" class="linkbtn" data-landlord-pdf="'+E(row.id)+'" data-pdf-mode="preview">'+
- uiIcon('pencil',15)+' مراجعة العقد وإضافة بنود</button>':
- k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'" >'+uiIcon('printer',15)+' طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
+ return (k==='packages'?packageCatalog():'')+(k==='leases'?'<div class="notice">هذه العقود بين شركة رأفت ومالكي البنايات لاستئجار الأسطح فقط، وليست عقود الزبائن.</div>':k==='customer_contracts'?'<div class="notice">عقود الزبائن للكابينات أو الأسطح تُنشأ من الباقات الإعلانية، وهي مستقلة عن عقود ملاك البنايات.</div>':'')+'<div class="toolbar"><div class="filters"><input class="search" style="width:min(320px,85vw)" id="search" placeholder="'+(k==='customers'?'ابحث باسم العميل أو رقم هاتفه...':k==='leases'?'ابحث باسم المالك أو رقم العقد أو اسم السطح...':k==='customer_contracts'?'ابحث باسم الزبون أو رقم العقد...':'بحث بالاسم أو الرقم أو الموقع...')+'" value="'+E(s.search)+'">'+(k==='customers'?'<select id="statusfilter" class="search" style="width:150px">'+[['all','جميع الحالات'],['active','فعال'],['inactive','غير فعال'],['inquiry','استفسار']].map(([v,t])=>'<option value="'+v+'" '+(s.filter===v?'selected':'')+'>'+t+'</option>').join('')+'</select>':'')+'</div><button class="btn" data-new="'+k+'">'+uiIcon('plus',16)+(labelsBy[k]||'إضافة جديد')+'</button></div><div class="box tablewrap"><table class="table"><thead><tr>'+columns[k].map(x=>'<th>'+x[1]+'</th>').join('')+'<th>إجراءات</th></tr></thead><tbody>'+ (rows.length?rows.map(row=>'<tr>'+columns[k].map(([f])=>'<td>'+showVal(k,row,f)+'</td>').join('')+'<td'+(k==='leases'?' class="lease-row-actions-cell"':'')+'>'+(k==='leases'?leaseRowActions(row):'<button class="linkbtn" data-edit="'+k+':'+row.id+'">'+uiIcon('pencil',14)+' تفاصيل / تعديل</button>')+(k==='landlords'&&s.staff?.role==='admin'?'<button class="linkbtn customer-delete-link" type="button" data-delete-landlord="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف المالك</button>':'')+
+ (k==='ad_sites'&&(s.demo||s.staff?.role==='admin')?'<button type="button" class="linkbtn customer-delete-link" data-delete-site="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف الموقع</button>':'')+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+(k==='customer_contracts'?'<button class="linkbtn" data-print-record="'+k+'|'+row.id+'" >'+uiIcon('printer',15)+' طباعة العقد</button>':'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
 }
 
 function reports(){
@@ -3321,6 +3332,11 @@ function bind(){
    if(k==='customer_contracts'&&parent){data.customer_id=parent.customer_id;data.package_id=parent.package_id;data.amount=parent.price;data.currency=parent.currency;}
   }if(field==='site_id')data.siteIds=[id];openForm(k,data)});
  document.querySelectorAll('[data-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'leases',data:lookup('leases',x.dataset.preview)};render()});
+ document.querySelectorAll('[data-lease-payments]').forEach(x=>x.onclick=()=>{
+  const lease=lookup('leases',x.dataset.leasePayments);
+  if(!lease)return toast('تعذّر فتح الأقساط: عقد السطح غير موجود.',true);
+  s.modal=null;s.search=numberedContract(lease.contract_number);s.view='lease_installments';render();
+ });
  document.querySelectorAll('[data-customer-preview]').forEach(x=>x.onclick=()=>{s.modal={kind:'preview',table:'customer_contracts',data:lookup('customer_contracts',x.dataset.customerPreview)};render()});
  document.querySelectorAll('[data-customer-pdf]').forEach(button=>button.onclick=()=>openCustomerPdfEditor(button.dataset.customerPdf,button.dataset.pdfMode||'preview'));
  bindCustomerPdfEditor();
