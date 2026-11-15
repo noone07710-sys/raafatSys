@@ -1259,7 +1259,10 @@ function activityDetail(log){
   salary_amount:'الراتب الشهري',salary_currency:'عملة الراتب',category:'التصنيف',
   payment_method:'طريقة الدفع',payment_frequency:'الدورية',department:'القسم',
   site_type:'نوع الموقع',expense_date:'تاريخ الفاتورة',employee_id:'الموظف المستفيد',
-  due_date:'الاستحقاق',quantity:'الكمية',price:'السعر',job_title:'المنصب',code:'رمز القطعة'
+  due_date:'الاستحقاق',quantity:'الكمية',price:'السعر',job_title:'المنصب',code:'رمز القطعة',
+  name:'الاسم',title:'العنوان',address:'الموقع',governorate:'المحافظة',package_id:'الباقة',
+  site_id:'قطعة الإعلان',landlord_id:'المالك',customer_id:'الزبون',property_id:'العقار',
+  rooftop_property_id:'السطح المرتبط'
  };
  const pairs=Object.entries(log.changes||{});
  if(!pairs.length)return '—';
