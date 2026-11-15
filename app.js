@@ -1611,6 +1611,7 @@ function bindExpenseInvoiceForm(form){
   if(error&&error.hidden){
    error.textContent='يرجى مراجعة حقل «'+label+'» وإدخال قيمة صحيحة قبل اعتماد الفاتورة.';
    error.hidden=false;
+   toast(error.textContent,true);
   }
  },true);
  form.addEventListener('input',event=>{
