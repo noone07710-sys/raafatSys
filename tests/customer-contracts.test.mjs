@@ -43,7 +43,7 @@ test('package dimensions, client contract print and landlord individual rooftops
  s.data.properties=[{id:'roof',title:'سطح البناية',landlord_id:'owner',dimensions:'10 × 8 m',width_m:10,height_m:8,area_m2:80}];
  assert.match(previewHtml(roofContract),/مالك البناية/);
  assert.match(previewHtml(roofContract),/10 × 8 m/);
- assert.match(previewHtml(roofContract),/تحميل عقد المالك PDF بقالب رأفت/);
+ assert.match(previewHtml(roofContract),/مراجعة عقد السطح وتعديل/);
  assert.match(previewHtml(roofContract),/data-pdf-mode="preview"/);
  s.modal={kind:'edit',table:'landlords',data:{},roofs:[
   {title:'سطح أول',width_m:10,height_m:8,quantity:1},
