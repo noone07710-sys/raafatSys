@@ -812,3 +812,13 @@
 @media(max-width:1000px){.hr-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:550px){.hr-stats{gap:9px}.hr-stat{padding:12px;min-height:90px}
  .hr-stat strong{font-size:15px}.hr-page .toolbar>.search{min-width:0;flex:1 1 100%}}
+
+
+/* Customer print draft currency conversion and first-sheet specifications */
+.customer-print-currency-note{
+ margin:3px 0 0;padding:10px 12px;border:1px solid #dce6ec;
+ border-radius:10px;background:#f7fafb;color:#445e6e;font-size:11px;line-height:2;
+}
+.customer-print-currency-note strong{color:#244557;font-weight:800}
+.customer-pdf-editor .customer-print-section:has(.customer-print-currency-note)
+ .customer-print-fields>.field[name="amount"]{min-width:0}
