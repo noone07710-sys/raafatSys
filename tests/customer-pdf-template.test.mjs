@@ -100,7 +100,7 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  assert.ok(boardName.x<code.x-16,'the board title must be left of its code badge, never overlap it');
  assert.ok(boardAddress.y>boardName.y+11,'board address must always be on a later row below the title');
  const customerRep=calls.draws.find(d=>d.canvasId===1&&d.text==='ممثل الزبون');
- const companyRep=calls.draws.find(d=>d.canvasId===1&&d.text==='ممثل الشركة');
+ const companyRep=calls.draws.find(d=>d.canvasId===1&&d.text==='المدير المفوض');
  assert.ok(customerRep&&companyRep&&companyRep.x>customerRep.x,'company representative must be in right column and customer in left');
  assert.equal(customerRep.y,companyRep.y,'both representatives must be ordinary side-by-side fields');
  assert.ok(calls.canvasTexts.some(x=>x.includes('شروط العقد كالتالي')),'terms have their own sheet title');
@@ -118,7 +118,7 @@ test('the shipped customer PDF generator keeps the original Photoshop A4 as the 
  const customerPhone=calls.draws.find(d=>d.canvasId===1&&d.text==='هاتف الزبون');
  assert.ok(companyParty&&customerParty&&companyParty.x>customerParty.x,'party one title must be right of party two');
  assert.ok(companyPhone&&customerPhone&&companyPhone.x>customerPhone.x,'party one phone must be right of party two');
- const signatureCompany=calls.draws.find(d=>d.canvasId===3&&d.text==='الطرف الأول — ممثل الشركة');
+ const signatureCompany=calls.draws.find(d=>d.canvasId===3&&d.text==='الطرف الأول — المدير المفوض لشركة رأفت');
  const signatureCustomer=calls.draws.find(d=>d.canvasId===3&&d.text==='الطرف الثاني — الزبون');
  assert.ok(signatureCompany&&signatureCustomer&&signatureCompany.x>signatureCustomer.x,
   'terms signature party one must be right of party two');
@@ -223,7 +223,7 @@ test('print editor allows editing customer contract, each site, numbered terms a
  app.openCustomerPdfEditor('cc');
  const draft=app.s.modal.printDraft;
  assert.equal(draft.companyPhones,'07766663304 - 07866663304');
- assert.equal(draft.firstSignatureLabel,'الطرف الأول — ممثل الشركة');
+ assert.equal(draft.firstSignatureLabel,'المدير المفوض — شركة رأفت (الطرف الأول)');
  assert.equal(draft.secondSignatureLabel,'الطرف الثاني — الزبون');
  assert.deepEqual(draft.clauses.map(x=>x.number),['1','2','3','4','5','6','7','8','9']);
  const html=app.customerPdfEditorHtml();
