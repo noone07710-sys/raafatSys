@@ -50,23 +50,21 @@ test('HR employees register is linked to salary expense records without confusin
  const history=app.employeeSalaryExpenses('employee-1');
  assert.equal(history.length,1);
  assert.equal(app.employeeSalaryExpenses('employee-2').length,0);
- assert.match(app.employeesOverview(),/250,000/);
+ assert.match(app.employeesOverview(),/250,000/,'previous payroll stays as a read-only archive');
  app.openSalaryExpense('employee-1');
- assert.equal(s.modal.table,'company_expenses');
+ assert.equal(s.modal.kind,'payrollPayment','salary must open in HR, not in general expenses');
  assert.equal(s.modal.data.employee_id,'employee-1');
- assert.equal(s.modal.expenseItems[0].category,'salaries');
- assert.equal(s.modal.expenseItems[0].unit_price,500000);
- const html=app.expenseInvoiceForm(s.modal.data);
- assert.ok(html.includes('name="employee_id"'));
- assert.ok(html.includes('الموظف المستفيد من الراتب'));
- assert.ok(html.includes('الموظف المسؤول عن صرف الفاتورة'));
+ assert.equal(s.modal.data.amount,500000);
+ const html=app.employeesOverview();
+ assert.match(html,/صرف راتب/);
+ assert.match(html,/أرشيف/);
+ const expenseRows=app.expenseInvoiceForm({id:null,title:'ورق الطباعة',currency:'IQD',
+  expense_date:'2026-11-15',paid_by:'حسين علاء'});
+ assert.doesNotMatch(expenseRows,/<option value="salaries"/);
+ const salary=[{category:'salaries',department:'general',description:'راتب',quantity:1,unit_price:500000}];
  const values={expense_date:'2026-11-15',currency:'IQD',paid_by:'حسين علاء',
   employee_id:'employee-1',status:'paid',payment_method:'cash',receipt_number:''};
- const items=s.modal.expenseItems;
- assert.equal(app.expenseInvoiceValidated(values,items).amount,500000);
- assert.throws(()=>app.expenseInvoiceValidated({...values,employee_id:''},items),/اختر الموظف المستفيد/);
- assert.throws(()=>app.expenseInvoiceValidated(values,[...items,
-  {category:'stationery',department:'general',description:'ورق',quantity:1,unit_price:10}]),/فاتورة الراتب/);
+ assert.throws(()=>app.expenseInvoiceValidated(values,salary),/صرف الرواتب صار حصراً/);
 });
 test('admin audit log describes source record changes, actor and recent operations',()=>{
  const {app}=model();
