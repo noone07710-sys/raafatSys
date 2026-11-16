@@ -22,7 +22,7 @@ function fixture(role='admin'){
  const app=new Function('localStorage','document','crypto','createClient','window','FormData','File','setTimeout',
   source+'\nreturn {s,canAccess,adminRoleLabel,employeesOverview,employeePayrollPayments,'+
   'openPayrollPayment,payrollPaymentHtml,savePayrollPayment,payrollReceiptPayload,payrollReceiptReadyHtml,'+
-  'expenseOverview,expenseInvoiceValidated,staffAdminView,openStaffRoleEditor,staffRoleEditorHtml,saveStaffRole,render};'
+  'expenseOverview,expenseInvoiceValidated,staffAdminView,openStaffRoleEditor,staffRoleEditorHtml,saveStaffRole,toAuthEmail,displayStaffLogin,render};'
  )({getItem:k=>memory[k]||null,setItem:(k,v)=>memory[k]=v},doc,
   {randomUUID:()=> 'generated-'+(++nextId)},()=>{},window,FakeFormData,FakeFile,()=>{});
  app.s.demo=true;app.s.staff={role,active:true};
@@ -97,11 +97,11 @@ test('permission labels are in Arabic and custom manager can see only explicitly
  assert.equal(app.canAccess('employees','read'),true);
  assert.equal(app.canAccess('employees','edit'),false);
 });
-test('superadmin may create role invitation with independent read and edit toggles',()=>{
+test('superadmin creates internal @raafat accounts with independent read and edit toggles',()=>{
  const {app}=fixture();
  app.s.managedStaff=[{user_id:'primary',role:'admin',active:true,display_name:'مدير رئيسي',email:'admin@example.test',permissions:[]}];
  const view=app.staffAdminView();
- assert.match(view,/دعوة مدير بصلاحيات مخصصة/);
+ assert.match(view,/إضافة أدمن جديد/);
  app.openStaffRoleEditor();
  assert.equal(app.s.modal.kind,'staffRoleEditor');
  const editor=app.staffRoleEditorHtml();
@@ -109,6 +109,12 @@ test('superadmin may create role invitation with independent read and edit toggl
  assert.match(editor,/value="payroll.edit"/);
  assert.match(editor,/value="customers.edit"/);
  assert.match(editor,/إضافة وتعديل/);
+ assert.match(editor,/name="password"/);
+ assert.match(editor,/name="email" dir="ltr"/);
+ assert.match(editor,/12 حرفاً على الأقل/);
+ assert.equal(app.toAuthEmail('ahmed@raafat'),'ahmed@raafat.example');
+ assert.equal(app.displayStaffLogin('ahmed@raafat.example'),'ahmed@raafat');
+ assert.equal(app.toAuthEmail('administrator@gmail.com'),'administrator@gmail.com');
 });
 test('half-A4 receipt is a real one-page A5 PDF with printable signature labels and payee',async()=>{
  const text=[],size=[];
