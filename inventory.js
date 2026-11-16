@@ -106,7 +106,7 @@ global.RaafatInventory=function(ctx){
    for(const r of result)if(r.error)throw r.error;
    [state.items,state.documents,state.lines,state.movements,state.notifications]=result.map(r=>r.data||[]);
    state.error='';state.loaded=true;state.lastLoad=Date.now();
-  }catch(error){state.error='تعذّر تحميل المخزن: '+(error?.message||String(error));}
+  }catch(error){state.error='تعذّر تحميل المخزن: '+(error?.message||String(error));state.loaded=true;}
   finally{state.loading=false;if(s.view==='inventory'||!silent)render();}
  }
  function startPolling(){
@@ -194,7 +194,7 @@ global.RaafatInventory=function(ctx){
      '<div class="inv-line-grid">'+
      '<label class="field inv-line-item"><span>'+ (returnMode?'العهدة المطلوب استرجاعها':'المادة')+' *</span><select name="item_'+i+'" data-inv-item-choice="'+i+'" required>'+
       selectOptions(kind,r)+'</select></label>'+
-     '<label class="field"><span>الكمية *</span><input type="number" name="quantity_'+i+'" min=".001" step="'+
+     '<label class="field"><span>الكمية *</span><input type="number" name="quantity_'+i+'" min="'+((unit==='piece'||unit==='carton')?'1':'.001')+'" step="'+
       ((unit==='piece'||unit==='carton')?'1':'.001')+'" required value="'+E(r.quantity)+'"'+(limit!=null?' max="'+E(Number(limit.toFixed(3)))+'"':'')+'></label>'+
      '<label class="field"><span>وحدة القياس</span><select name="unit_'+i+'" data-inv-unit-choice="'+i+'"'+(returnMode?' disabled':'')+'>'+
       choice(options,unit)+'</select></label>'+
@@ -342,7 +342,7 @@ global.RaafatInventory=function(ctx){
      '</article>').join(''):'<div class="inv-empty">ماكو إشعارات محفوظة بعد.</div>')+'</section>';
  }
  function page(){
-  if(!state.loaded&&!s.demo&&!state.loading&&s.session){
+  if(!state.loaded&&!s.demo&&!state.loading&&!state.error&&s.session){
    // Refresh outside the synchronous rendering path.
    Promise.resolve().then(()=>reload());
   }
@@ -579,7 +579,13 @@ global.RaafatInventory=function(ctx){
   });
   document.querySelectorAll('[data-inv-unit-choice]').forEach(select=>select.onchange=()=>{
    readDraft();const i=Number(select.dataset.invUnitChoice);
-   state.draft.lines[i].unit=select.value;render();
+   state.draft.lines[i].unit=select.value;
+   const chosen=item(state.draft.lines[i].item_id);
+   if(chosen&&chosen.unit==='carton'){
+    state.draft.lines[i].unit_price=select.value==='piece'?
+     Number((value(chosen.price)/Math.max(1,value(chosen.pieces_per_carton))).toFixed(2)):chosen.price;
+   }
+   render();
   });
   const docF=document.querySelector('#invDocForm');
   if(docF)docF.onsubmit=event=>{
@@ -607,6 +613,6 @@ global.RaafatInventory=function(ctx){
   if(print)print.onclick=()=>{if(typeof global.print==='function')global.print()};
  }
  return {page,bind,reload,startPolling,stopPolling,resetDemo,alertCount,alertHtml,printSheet,
-  setTab,get state(){return state}};
+  setTab,command,validateDraft,startDoc,outstanding,stockAvailable,get state(){return state}};
 };
 })(window);
