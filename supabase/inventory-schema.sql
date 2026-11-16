@@ -369,9 +369,10 @@ $func$;
 -- Only a thin invoker bridge is exposed via PostgREST. The privileged implementation
 -- lives in an unexposed schema and verifies the authenticated staff identity.
 create or replace function public.inventory_action(p_action text,p_payload jsonb)
- returns jsonb language sql security definer set search_path=''
+ returns jsonb language sql security invoker set search_path=''
  as $$select raafat_internal.inventory_action(p_action,p_payload)$$;
-revoke all on function raafat_internal.inventory_action(text,jsonb) from public,anon,authenticated;
-revoke usage on schema raafat_internal from authenticated;
+revoke all on function raafat_internal.inventory_action(text,jsonb) from public,anon;
+grant usage on schema raafat_internal to authenticated;
+grant execute on function raafat_internal.inventory_action(text,jsonb) to authenticated;
 revoke all on function public.inventory_action(text,jsonb) from public,anon;
 grant execute on function public.inventory_action(text,jsonb) to authenticated;
