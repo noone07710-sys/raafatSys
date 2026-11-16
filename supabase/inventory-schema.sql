@@ -233,6 +233,7 @@ begin
     select * into v_item from public.inventory_items where id=v_source.item_id for update;
     if v_item.item_kind<>'returnable' then raise exception 'المادة استهلاكية ولا يجوز استرجاعها عبر سجل العهد.';end if;
     v_unit:=v_source.unit; v_factor:=v_source.factor;
+    if v_unit in ('piece','carton') and v_qty<>trunc(v_qty) then raise exception 'عدد القطع والكارتونات المسترجعة لازم يكون عدداً صحيحاً.';end if;
     v_base:=v_qty*v_factor;
     select coalesce(sum(base_qty),0) into v_source_returned
      from public.inventory_document_lines rl
@@ -280,6 +281,25 @@ begin
      values(v_doc.id,v_id,v_item.id,v_base,case when v_kind='in' then 'received' else 'returned' end,v_user,v_actor);
    end if;
   end loop;
+  if v_kind='out' then
+   -- A request containing the same material more than once must not be able
+   -- to exceed the free quantity when its lines are added together.
+   for v_item in
+    select i.* from public.inventory_items i
+    where i.id in(select item_id from public.inventory_document_lines where document_id=v_doc.id)
+    order by i.id for update
+   loop
+    select coalesce(sum(base_qty),0) into v_total
+      from public.inventory_document_lines where document_id=v_doc.id and item_id=v_item.id;
+    select coalesce(sum(l.base_qty),0) into v_reserved
+      from public.inventory_document_lines l
+      join public.inventory_documents d on d.id=l.document_id
+      where l.item_id=v_item.id and d.document_type='out' and d.status='approved';
+    if v_total>v_item.stock_qty-v_reserved then
+      raise exception 'مجموع الكمية المطلوبة من % أكبر من المخزون المتاح.',v_item.name;
+    end if;
+   end loop;
+  end if;
   insert into public.inventory_notifications(event_type,document_id,message)
    values(case when v_kind='in' then 'received' when v_kind='out' then 'issue_requested' else 'returned' end,
    v_doc.id,case when v_kind='in' then 'إدخال مخزني '+v_number+' بواسطة '+v_actor
@@ -349,10 +369,9 @@ $func$;
 -- Only a thin invoker bridge is exposed via PostgREST. The privileged implementation
 -- lives in an unexposed schema and verifies the authenticated staff identity.
 create or replace function public.inventory_action(p_action text,p_payload jsonb)
- returns jsonb language sql security invoker set search_path=''
+ returns jsonb language sql security definer set search_path=''
  as $$select raafat_internal.inventory_action(p_action,p_payload)$$;
-revoke all on function raafat_internal.inventory_action(text,jsonb) from public,anon;
-grant usage on schema raafat_internal to authenticated;
-grant execute on function raafat_internal.inventory_action(text,jsonb) to authenticated;
+revoke all on function raafat_internal.inventory_action(text,jsonb) from public,anon,authenticated;
+revoke usage on schema raafat_internal from authenticated;
 revoke all on function public.inventory_action(text,jsonb) from public,anon;
 grant execute on function public.inventory_action(text,jsonb) to authenticated;
