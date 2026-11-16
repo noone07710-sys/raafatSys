@@ -54,6 +54,7 @@ create table if not exists public.inventory_document_lines(
  factor integer not null default 1 check(factor>0),
  base_qty numeric(17,3) not null check(base_qty>0),
  unit_price numeric(17,2) not null check(unit_price>=0),
+ currency text not null default 'IQD' check(currency in ('IQD','USD')),
  description text not null default '',
  source_line_id uuid references public.inventory_document_lines(id) on delete restrict,
  created_at timestamptz not null default now()
@@ -271,8 +272,9 @@ begin
      end if;
     end if;
    end if;
-   insert into public.inventory_document_lines(document_id,item_id,item_name,quantity,unit,factor,base_qty,unit_price,description,source_line_id)
+   insert into public.inventory_document_lines(document_id,item_id,item_name,quantity,unit,factor,base_qty,unit_price,currency,description,source_line_id)
    values(v_doc.id,v_item.id,v_item.name,v_qty,v_unit,v_factor,v_base,v_price,
+    case when v_kind='return' then v_source.currency else v_item.currency end,
     left(coalesce(v_line->>'description',''),1500),case when v_kind='return' then v_source.id else null end)
    returning id into v_id;
    if v_kind in ('in','return') then
