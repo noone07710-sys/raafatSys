@@ -1979,7 +1979,7 @@ function render(){
  else if(s.resetRequest){target.innerHTML=passwordResetRequestPage();}
  else if(!s.demo&&!s.session){target.innerHTML=authPage();}
  else if(!s.demo&&!s.staff&&!s.loading){target.innerHTML=accessDenied();}
- else{target.innerHTML=shell(content)+(s.modal?modalHtml():'')+inventory.printSheet();}
+ else{target.innerHTML=shell(content)+(s.modal?modalHtml():'')+(s.view==='inventory'?inventory.printSheet():'');}
  bind();
 }
 
