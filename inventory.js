@@ -13,7 +13,7 @@ global.RaafatInventory=function(ctx){
   itemDraft:null,confirm:null,printDocId:null,lastLoad:0,timer:null};
  const todayLocal=()=>String(today());
  const actor=()=>s.staff?.display_name||s.staff?.email||s.session?.user?.email||'الموظف المسجل';
- const manager=()=>s.demo||s.staff?.role==='admin';
+ const manager=()=>s.staff?.role==='admin';
  const canWrite=()=>s.demo||canAccess('inventory','create');
  const item=id=>state.items.find(x=>String(x.id)===String(id));
  const doc=id=>state.documents.find(x=>String(x.id)===String(id));
@@ -449,7 +449,7 @@ global.RaafatInventory=function(ctx){
   }
   if(['receive','request_out','return'].includes(action)){
    const kind=action==='receive'?'in':action==='request_out'?'out':'return';
-   const document={id:u,doc_number:kind.toUpperCase()+'-'+String(state.documents.length+1).padStart(6,'0'),
+   const document={id:u,doc_number:(kind==='return'?'RET':kind.toUpperCase())+'-'+String(state.documents.length+1).padStart(6,'0'),
     document_type:kind,status:kind==='out'?'pending':'posted',created_at:now,requested_by_name:actor(),
     requested_by:s.session?.user?.id||'demo-user',recipient_name:payload.recipient_name,
     receipt_number:payload.receipt_number||'',document_date:payload.document_date||todayLocal(),
