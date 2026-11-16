@@ -302,9 +302,9 @@ begin
   end if;
   insert into public.inventory_notifications(event_type,document_id,message)
    values(case when v_kind='in' then 'received' when v_kind='out' then 'issue_requested' else 'returned' end,
-   v_doc.id,case when v_kind='in' then 'إدخال مخزني '+v_number+' بواسطة '+v_actor
-      when v_kind='out' then 'طلب إخراج '+v_number+' من '+v_actor+' ينتظر موافقة المدير'
-      else 'استرجاع مواد للمخزن '+v_number+' بواسطة '+v_actor end);
+   v_doc.id,case when v_kind='in' then 'إدخال مخزني '||v_number||' بواسطة '||v_actor
+      when v_kind='out' then 'طلب إخراج '||v_number||' من '||v_actor||' ينتظر موافقة المدير'
+      else 'استرجاع مواد للمخزن '||v_number||' بواسطة '||v_actor end);
   return jsonb_build_object('id',v_doc.id,'doc_number',v_number,'status',v_doc.status);
  end if;
 
@@ -332,12 +332,12 @@ begin
    update public.inventory_documents set status='approved',approved_by=v_user,approved_by_name=v_actor,
     approved_at=v_now,approval_note=left(coalesce(p_payload->>'note',''),1000) where id=v_id;
    insert into public.inventory_notifications(event_type,document_id,recipient_id,message)
-    values('issue_approved',v_id,v_doc.requested_by,'تمت الموافقة على الإخراج '+v_doc.doc_number+' من المدير '+v_actor);
+    values('issue_approved',v_id,v_doc.requested_by,'تمت الموافقة على الإخراج '||v_doc.doc_number||' من المدير '||v_actor);
   else
    update public.inventory_documents set status='rejected',approved_by=v_user,approved_by_name=v_actor,
     approved_at=v_now,approval_note=left(coalesce(p_payload->>'note',''),1000) where id=v_id;
    insert into public.inventory_notifications(event_type,document_id,recipient_id,message)
-    values('issue_rejected',v_id,v_doc.requested_by,'تم رفض طلب الإخراج '+v_doc.doc_number+' من المدير '+v_actor);
+    values('issue_rejected',v_id,v_doc.requested_by,'تم رفض طلب الإخراج '||v_doc.doc_number||' من المدير '||v_actor);
   end if;
   return jsonb_build_object('id',v_id,'status',p_action);
  end if;
@@ -359,7 +359,7 @@ begin
   update public.inventory_documents set status='issued',issued_by=v_user,issued_by_name=v_actor,
     issued_at=v_now where id=v_id;
   insert into public.inventory_notifications(event_type,document_id,message)
-   values('issued',v_id,'خرجت المواد فعلياً من المخزن بموجب '+v_doc.doc_number+' بواسطة '+v_actor);
+   values('issued',v_id,'خرجت المواد فعلياً من المخزن بموجب '||v_doc.doc_number||' بواسطة '||v_actor);
   return jsonb_build_object('id',v_id,'status','issued');
  end if;
  raise exception 'لا يمكن تنفيذ العملية المطلوبة.';
