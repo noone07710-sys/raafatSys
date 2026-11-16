@@ -231,8 +231,8 @@ global.RaafatInventory=function(ctx){
       ((unit==='piece'||unit==='carton')?'1':'.001')+'" required value="'+E(r.quantity)+'"'+(limit!=null?' max="'+E(Number(limit.toFixed(3)))+'"':'')+'></label>'+
      '<label class="field"><span>وحدة القياس</span><select name="unit_'+i+'" data-inv-unit-choice="'+i+'"'+(returnMode?' disabled':'')+'>'+
       choice(options,unit)+'</select></label>'+
-     (kind==='in'?field('سعر المادة لهذه الحركة','unit_price_'+i,
-      r.unit_price===''?it?.price??'':r.unit_price,'number','min="0" step=".01"'):'')+
+     (kind!=='return'?field(kind==='in'?'سعر المادة لهذا الإدخال':'سعر المادة المعتمد','unit_price_'+i,
+      r.unit_price===''?it?.price??'':r.unit_price,'number',(kind==='out'?'readonly ':'')+'min="0" step=".01"'):'')+
      '<label class="field inv-line-notes"><span>تفاصيل المادة</span><input type="text" name="description_'+i+'" maxlength="1500" value="'+E(r.description||'')+'"></label>'+
      '</div>'+
      '<small class="inv-availability">'+(origin?
@@ -499,7 +499,11 @@ global.RaafatInventory=function(ctx){
      if(!outstandingRow||base>outstandingRow.remaining)throw Error('المادة غير قابلة للاسترجاع أو الكمية أكبر من المتبقي.');
     }
     entries.push({id:unique('line'),document_id:u,item_id:it.id,item_name:it.name,
-     quantity:ln.quantity,unit,factor,base_qty:base,unit_price:ln.unit_price||it.price,
+     quantity:ln.quantity,unit,factor,base_qty:base,unit_price:kind==='return'?(source?.unit_price??it.price):
+       kind==='out'?(it.unit==='carton'&&unit==='piece'?
+        Number((it.price/Math.max(1,value(it.pieces_per_carton))).toFixed(2)):it.price):
+        (ln.unit_price??it.price),
+     currency:kind==='return'?(source?.currency||it.currency):it.currency,
      description:ln.description||'',source_line_id:ln.source_line_id||null,created_at:now});
    }
    state.documents.unshift(document);
