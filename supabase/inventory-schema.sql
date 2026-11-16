@@ -257,7 +257,12 @@ begin
      raise exception 'عدد القطع والكارتونات لازم يكون عدداً صحيحاً.';
     end if;
     v_base:=v_qty*v_factor;
-    v_price:=coalesce(nullif(v_line->>'unit_price','')::numeric,v_item.price);
+    -- Outgoing cost is the saved product price. Only incoming invoices may
+    -- override the unit cost; warehouse workers cannot alter outbound prices.
+    v_price:=case when v_kind='out' then
+       case when v_item.unit='carton' and v_unit='piece'
+        then round(v_item.price/v_item.pieces_per_carton,2) else v_item.price end
+      else coalesce(nullif(v_line->>'unit_price','')::numeric,v_item.price) end;
     if v_price<0 then raise exception 'سعر المادة غير صالح.';end if;
     if v_kind='out' then
      select coalesce(sum(ln.base_qty),0) into v_reserved
