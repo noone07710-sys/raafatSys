@@ -5,6 +5,9 @@ const fmt=(n)=>new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(N
 const money=(n,c)=>fmt(n)+' '+(c==='USD'?'$':'د.ع');
 const today=()=>new Date().toISOString().slice(0,10);
 const uid=()=>crypto.randomUUID();
+// Internal @raafat aliases map to reserved, non-deliverable account identifiers.
+function toAuthEmail(value){const login=String(value||'').trim().toLowerCase();return /^[a-z][a-z0-9._-]{0,62}@raafat$/.test(login)&&!login.includes('..')&&!/[._-]@raafat$/.test(login)?login+'.example':login;}
+function displayStaffLogin(email){return String(email||'').replace(/@raafat\.example$/i,'@raafat');}
 const PUBLIC_CONFIG={url:'https://gxredstctzkuwgsegykd.supabase.co',key:'sb_publishable_UtbrZOAMhrbBq3eeNaXf2Q_lrRT4K1s'};
 const keys=['customers','packages','package_rates','landlords','properties','ad_sites','campaigns','campaign_sites','leases','lease_installments','campaign_payments','customer_contracts','company_expenses','employees','payroll_payments'];
 
@@ -534,7 +537,7 @@ function demo(){
  inventory.resetDemo();s.view='dashboard';s.activityLogs=[];s.error='';render();
 }
 async function connect(){
- const url=$('#url').value.trim(),key=$('#key').value.trim(),email=$('#email').value.trim(),password=$('#password').value;
+ const url=$('#url').value.trim(),key=$('#key').value.trim(),email=toAuthEmail($('#email').value),password=$('#password').value;
  if(!url.startsWith('https://')||!key){toast('أدخل رابط Supabase ومفتاح publishable الصحيح',true);return}
  try{
  s.client=createClient(url,key);s.config={url,key};localStorage.setItem('raafat-config',JSON.stringify(s.config));
@@ -560,13 +563,14 @@ async function bootstrap(){
  }else render();
 }
 function passwordResetRequestPage(){
- return '<div class="welcome"><div class="authbox"><h1>استعادة كلمة المرور</h1><p class="muted">نرسل رابطاً إلى بريد الحساب لتختار كلمة مرور جديدة بنفسك، بدون مشاركتها مع أحد.</p><form id="passwordResetRequestForm"><label class="field"><span>البريد الإلكتروني</span><input id="recoverEmail" type="email" autocomplete="email" required></label><button class="btn" type="submit">إرسال رابط الاستعادة</button></form><hr><button class="btn secondary" style="width:100%" data-action="cancelPasswordReset">العودة إلى تسجيل الدخول</button></div></div>';
+ return '<div class="welcome"><div class="authbox"><h1>استعادة كلمة المرور</h1><p class="muted">الحسابات الداخلية @raafat يتولى المدير الرئيسي تغيير رمزها من لوحة الحسابات. الاستعادة عبر البريد للحسابات الحقيقية فقط.</p><form id="passwordResetRequestForm"><label class="field"><span>البريد الإلكتروني</span><input id="recoverEmail" type="email" autocomplete="email" required></label><button class="btn" type="submit">إرسال رابط الاستعادة</button></form><hr><button class="btn secondary" style="width:100%" data-action="cancelPasswordReset">العودة إلى تسجيل الدخول</button></div></div>';
 }
 function passwordRecoveryPage(){
  return '<div class="welcome"><div class="authbox"><h1>إنشاء كلمة مرور جديدة</h1><p class="muted">استعمل كلمة قوية من 12 حرفاً على الأقل. لن تُرسل الكلمة إلى GitHub ولا تُعرض في المحادثة.</p>'+(s.session?'<form id="passwordChangeForm"><label class="field"><span>كلمة المرور الجديدة</span><input id="newPassword" type="password" minlength="12" required autocomplete="new-password"></label><label class="field"><span>تأكيد كلمة المرور</span><input id="confirmPassword" type="password" minlength="12" required autocomplete="new-password"></label><button class="btn" type="submit">حفظ كلمة المرور الجديدة</button></form>':'<div class="error">رابط الاستعادة غير صالح أو انتهت صلاحيته. ارجع إلى شاشة الدخول واطلب رابطاً جديداً.</div><button class="btn secondary" data-action="cancelPasswordReset">العودة إلى الدخول</button>')+'</div></div>';
 }
 async function sendPasswordReset(){
  const email=$('#recoverEmail')?.value?.trim();
+ if(/@raafat(?:\.example)?$/i.test(email||''))return toast('تغيير رمز حسابات @raafat يتم من لوحة المدير الرئيسي.',true);
  if(!email||!s.client)return;
  try{
   const {error}=await s.client.auth.resetPasswordForEmail(email,{
@@ -592,7 +596,7 @@ async function saveNewPassword(){
  }catch(e){toast(e.message,true)}
 }
 function authPage(){return '<div class="welcome"><div class="authbox"><h1>رأفت</h1><p class="muted">نظام الإدارة المتكامل للدعاية والإعلان</p><p class="subtle">ربط قاعدة البيانات الخاصة بالشركة وتسجيل دخول الموظفين</p>'+ (s.error?'<div class="error">'+E(s.error)+'</div>':'')+
- '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>البريد الإلكتروني</span><input id="email" type="email" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><button class="linkbtn" data-action="forgotPassword" type="button">نسيت كلمة المرور؟</button><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
+ '<form id="connectForm"><input type="hidden" id="url" value="'+E(s.config?.url||'')+'"><input type="hidden" id="key" value="'+E(s.config?.key||'')+'"><label class="field"><span>اسم الدخول أو البريد الإلكتروني</span><input id="email" type="text" placeholder="ahmed@raafat" autocomplete="username" required></label><label class="field"><span>كلمة المرور</span><input id="password" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">دخول النظام</button></form><button class="linkbtn" data-action="forgotPassword" type="button">نسيت كلمة المرور؟</button><hr><button class="btn secondary" style="width:100%" data-action="demo">تجربة الواجهة بدون حفظ البيانات</button><p class="subtle" style="margin-top:14px">المعاينة مؤقتة وتُمحى بياناتها بمجرد تحديث الصفحة. لا تدخل معلومات حقيقية فيها.</p></div></div>';}
 
 
 // Consistent inline outline SVG icons — no external icon fonts or CDN.
@@ -1533,12 +1537,12 @@ function staffAdminView(){
  const rows=s.managedStaff||[];
  return '<div class="staff-admin-page">'+
  '<section class="box staff-admin-intro"><div><h2>إدارة الحسابات وصلاحيات المدراء</h2>'+
- '<p class="subtle">أنشئ مديراً ببريد إلكتروني ودعوة رسمية. تحدد الأقسام المسموح له بعرضها أو تعديلها؛ صلاحيات الوصول مطبّقة على قاعدة البيانات، مو على الأزرار فقط.</p></div>'+
- '<div class="inline"><button type="button" class="btn" data-staff-new>'+uiIcon('user',16)+' دعوة مدير بصلاحيات مخصصة</button>'+
+ '<p class="subtle">أنشئ أدمن داخلياً مثل ahmed@raafat برمز سري تحدده بنفسك، بدون بريد حقيقي أو رابط تفعيل. يمكنك تعديل الصلاحيات وتغيير الرمز وتعطيل الحساب.</p></div>'+
+ '<div class="inline"><button type="button" class="btn" data-staff-new>'+uiIcon('user',16)+' إضافة أدمن جديد</button>'+
  '<button type="button" class="btn secondary" data-staff-refresh>'+uiIcon('refresh',15)+' تحديث الحسابات</button></div></section>'+
  '<div class="box tablewrap"><table class="table"><thead><tr><th>الاسم والبريد</th><th>الدور</th><th>الحالة</th><th>الصلاحيات</th><th>الإجراء</th></tr></thead><tbody>'+
  (rows.length?rows.map(row=>'<tr><td><strong>'+E(row.display_name||'—')+'</strong>'+
-  '<small class="subtle hr-phone">'+E(row.email||'بريد غير مسجل')+'</small></td>'+
+  '<small class="subtle hr-phone">'+E(displayStaffLogin(row.email)||'بريد غير مسجل')+'</small></td>'+
   '<td>'+E(adminRoleLabel(row.role))+'</td>'+
   '<td>'+E(row.active?'نشط':'معطّل')+'</td>'+
   '<td class="staff-permission-pills">'+(row.role==='admin'?'<span class="staff-permission-chip">صلاحيات كاملة</span>':
@@ -1547,7 +1551,7 @@ function staffAdminView(){
    ' — '+(key.endsWith('.edit')?'تعديل':'عرض')+'</span>').join('')+
    (row.permissions.length>4?'<small>و'+(row.permissions.length-4)+' أخرى</small>':''):'<span>بدون صلاحيات خاصة</span>')+'</td>'+
   '<td>'+(row.role==='custom_admin'?'<button type="button" class="linkbtn" data-staff-edit="'+E(row.user_id)+'">'+
-    uiIcon('pencil',15)+' تعديل الصلاحيات</button>':'<small class="subtle">حساب محمي</small>')+
+    uiIcon('pencil',15)+' إدارة الصلاحيات والرمز</button>':'<small class="subtle">حساب محمي</small>')+
   '</td></tr>').join(''):'<tr><td colspan="5" class="empty">اضغط «تحديث الحسابات» لعرض المستخدمين.</td></tr>')+
  '</tbody></table></div>'+
  '<p class="subtle">الدور «مدير رئيسي» يبقى كامل الصلاحيات. المدير المخصص لا يقدر إنشاء أو منح حساب مدير رئيسي.</p>'+
@@ -1560,7 +1564,7 @@ function openStaffRoleEditor(userId=''){
  s.modal={kind:'staffRoleEditor',data:{
   userId:current?.user_id||'',email:current?.email||'',
   displayName:current?.display_name||'',active:current?.active!==false,
-  permissions:current?.permissions||[]
+  permissions:current?.permissions||ACCESS_SECTIONS.flatMap(([key])=>[key+'.read',key+'.edit'])
  }};render();
 }
 function staffRoleEditorHtml(){
@@ -1572,19 +1576,20 @@ function staffRoleEditorHtml(){
   '<label class="staff-permission-toggle"><input type="checkbox" name="permission" value="'+E(key)+'.edit"'+
    (v.permissions.includes(key+'.edit')?' checked':'')+'> إضافة وتعديل</label></div>').join('');
  return '<div class="overlay"><div class="modal staff-role-editor" role="dialog" aria-modal="true">'+
- '<div class="modalhead"><div><h2>'+(editing?'تعديل صلاحيات المدير':'دعوة مدير جديد')+'</h2>'+
+ '<div class="modalhead"><div><h2>'+(editing?'تعديل صلاحيات ورمز الحساب':'إنشاء أدمن جديد')+'</h2>'+
  '<p class="subtle">اختر الصلاحيات المناسبة لكل قسم. لا تُمنح صلاحية إدارة حسابات الآخرين للمدير المخصص.</p></div>'+
  '<button class="close" type="button" data-action="close">'+uiIcon('x',18)+'</button></div>'+
  '<form id="staffRoleForm">'+
  '<div class="formgrid">'+
- '<label class="field"><span>اسم المدير بالعربي *</span><input name="displayName" required minlength="2" maxlength="100" value="'+E(v.displayName)+'"></label>'+
- '<label class="field"><span>البريد الإلكتروني للدعوة *</span><input type="email" name="email" required value="'+E(v.email)+'"'+(editing?' readonly':'')+'></label>'+
+ '<label class="field"><span>الاسم الظاهر (اختياري)</span><input name="displayName" maxlength="100" value="'+E(v.displayName)+'"></label>'+
+ '<label class="field"><span>اسم الدخول الداخلي * (مثال: ahmed@raafat)</span><input type="text" name="email" dir="ltr" placeholder="ahmed@raafat" required value="'+E(displayStaffLogin(v.email))+'"'+(editing?' readonly':'')+'></label>'+
+ '<label class="field full"><span>'+(editing?'رمز سري جديد (اتركه فارغاً إذا لا تريد تغييره)':'الرمز السري *')+'</span><input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128"'+(editing?'':' required')+' placeholder="12 حرفاً على الأقل"></label>'+
  (editing?'<label class="field full"><span>حالة الحساب</span><select name="active">'+
    '<option value="true"'+(v.active?' selected':'')+'>نشط</option>'+
    '<option value="false"'+(!v.active?' selected':'')+'>معطّل</option></select></label>':'')+
  '</div><div class="staff-permissions"><h3>الصلاحيات التفصيلية</h3><p class="subtle">«عرض» يسمح بالاطلاع فقط. «إضافة وتعديل» يسمح بالعمل داخل القسم وفق صلاحيات قاعدة البيانات. الحذف النهائي يبقى للمدير الرئيسي.</p>'+
  '<div class="staff-permission-list">'+choices+'</div></div>'+
- '<div class="actions"><button type="submit" class="btn">'+(editing?'حفظ الصلاحيات':'إرسال دعوة وإنشاء الحساب')+'</button>'+
+ '<div class="actions"><button type="submit" class="btn">'+(editing?'حفظ الصلاحيات والرمز':'إنشاء الحساب فوراً')+'</button>'+
  '<button class="btn secondary" data-action="close" type="button">إلغاء</button></div></form></div></div>';
 }
 async function requestStaffAdmin(body){
@@ -1607,25 +1612,33 @@ async function saveStaffRole(form){
  if(s.savingStaff)return;
  if(!s.demo&&s.staff?.role!=='admin')return toast('غير مصرح بإدارة الحسابات.',true);
  const values=new FormData(form),permissions=[...new Set(values.getAll('permission'))].map(String);
- const name=String(values.get('displayName')||'').trim(),email=String(values.get('email')||'').trim();
- if(name.length<2)return toast('أدخل الاسم بالعربي.',true);
- if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return toast('أدخل بريد إلكتروني صحيحاً.',true);
+ const email=String(values.get('email')||'').trim().toLowerCase();
+ const name=String(values.get('displayName')||'').trim()||email.split('@')[0];
+ const password=String(values.get('password')||'');
+ const creating=!s.modal?.data?.userId;
+ if(creating&&(!/^[a-z][a-z0-9._-]{0,62}@raafat$/.test(email)||email.includes('..')||/[._-]@raafat$/.test(email)))
+  return toast('اكتب اسم الدخول مثل ahmed@raafat بحروف إنكليزية.',true);
+ if(creating&&!password)return toast('اكتب الرمز السري أولاً.',true);
+ if(password&&(password.length<12||password.length>128))return toast('الرمز السري يجب أن يكون 12 حرفاً على الأقل.',true);
  if(!permissions.length)return toast('اختر صلاحية واحدة على الأقل.',true);
  const current=s.modal?.data;
- const body={action:current.userId?'update':'invite',
+ const body={action:current.userId?'update':'create_internal',
   displayName:name,permissions,email,
-  ...(current.userId?{userId:current.userId,active:values.get('active')!=='false'}:{})};
+  ...(current.userId?{userId:current.userId,active:values.get('active')!=='false'}:{password})};
  s.savingStaff=true;
  const button=form.querySelector?.('[type="submit"]');if(button)button.disabled=true;
  try{
   if(s.demo){
-   const row={user_id:current.userId||uid(),email,display_name:name,
+   const row={user_id:current.userId||uid(),email:toAuthEmail(email),display_name:name,
     role:'custom_admin',active:body.active!==false,permissions};
    s.managedStaff=[...(s.managedStaff||[]).filter(x=>x.user_id!==row.user_id),row];
-  }else await requestStaffAdmin(body);
+  }else{
+   await requestStaffAdmin(body);
+   if(current.userId&&password)await requestStaffAdmin({action:'set_password',userId:current.userId,password});
+  }
   s.modal=null;
   await refreshManagedStaff();
-  toast(body.action==='invite'?'تم إنشاء الحساب وإرسال الدعوة إلى البريد الإلكتروني.':'تم حفظ صلاحيات المدير.');
+  toast(body.action==='create_internal'?'تم إنشاء الحساب '+email+' وهو جاهز للدخول فوراً.':'تم تحديث الصلاحيات والرمز إن تم إدخاله.');
  }catch(e){toast('تعذر حفظ الصلاحيات: '+(e.message||String(e)),true);if(button)button.disabled=false}
  finally{s.savingStaff=false}
 }
