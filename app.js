@@ -77,6 +77,12 @@ function companyLogoHtml(kind='sidebar'){
 
 const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_CONFIG,demo:false,resetRequest:false,passwordRecovery:false,view:localStorage.getItem('raafat-last-view')||'dashboard',navExpanded:null,activityLogs:[],data:Object.fromEntries(keys.map(k=>[k,[]])),settings:{...COMPANY_DEFAULTS,usd_iqd:1500},displayCurrency:localStorage.getItem('raafat-display-currency')==='USD'?'USD':'IQD',search:'',filter:'all',expenseCategory:'',alertFilter:'all',editing:null,modal:null,formStep:0,error:'',loading:false};
 
+// Warehouse workflow is isolated so older modules and test harnesses stay intact.
+const inventory=(typeof window!=='undefined'&&typeof window.RaafatInventory==='function')?
+ window.RaafatInventory({s,E,fmt,money,uiIcon,toast,render,canAccess,today}):
+ {page:()=>'<div class="notice">تعذر تحميل وحدة المخازن.</div>',bind:()=>{},reload:async()=>{},
+  resetDemo:()=>{},startPolling:()=>{},stopPolling:()=>{},alertCount:()=>0,
+  alertHtml:()=>'',printSheet:()=>'',setTab:()=>{}};
 // Demo data matches the official price matrix; real staff load rows from Supabase.
 const OFFICIAL_PACKAGES=[
  {code:'A',name:'الباقة A',package_type:'cabin',pricing_mode:'fixed_term',width_m:1.2,height_m:2,sides:2,default_months:3,price:280,months:{3:280,6:430,12:670}},
@@ -519,12 +525,13 @@ async function load(){
   s.error=requests[keys.length+1].error&&canAccess('activity_logs','read')?
     'تعذر تحميل سجل الحركات: '+requests[keys.length+1].error.message:'';
   subscribeToExchangeRate();
+  if(canAccess('inventory','read')){await inventory.reload({silent:true});inventory.startPolling();}
  }catch(e){s.error=e.message||String(e)}
  s.loading=false;render();
 }
 function demo(){
  s.demo=true;s.session=null;s.staff={role:'admin'};s.config=PUBLIC_CONFIG;if(s.demoLogoUrl){URL.revokeObjectURL(s.demoLogoUrl);s.demoLogoUrl=null;}s.data=Object.fromEntries(keys.map(k=>[k,[]]));s.data.packages=seededDemoPackages();s.data.package_rates=seededDemoRates();s.settings={...COMPANY_DEFAULTS,usd_iqd:1500};
- s.view='dashboard';s.activityLogs=[];s.error='';render();
+ inventory.resetDemo();s.view='dashboard';s.activityLogs=[];s.error='';render();
 }
 async function connect(){
  const url=$('#url').value.trim(),key=$('#key').value.trim(),email=$('#email').value.trim(),password=$('#password').value;
@@ -644,6 +651,9 @@ const NAV_GROUPS=[
   ['leases','عقود مالكي الأسطح','file'],
   ['lease_installments','دفعات إيجار الأسطح','receipt']
  ]},
+ {id:'inventory',title:'المخازن والعهد',subtitle:'إدخال وإخراج واسترجاع وجرد',icon:'layers',items:[
+  ['inventory','إدارة المخازن','layers']
+ ]},
  {id:'finance',title:'المالية',subtitle:'إدارة الفواتير والمصروفات',icon:'wallet',items:[
   ['company_expenses','الفواتير والمصروفات','receipt'],
   ['employees','الموظفون والرواتب','users']
@@ -690,8 +700,8 @@ function bindNav(){
 }
 function shell(content){
  return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='alerts'?'التنبيهات':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':
- s.view==='activity_logs'?'سجل الحركات':s.view==='staff_admin'?'إدارة الحسابات والصلاحيات':
-  defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length?'<span>'+E(alertsList().length>99?'99+':alertsList().length)+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
+ s.view==='activity_logs'?'سجل الحركات':s.view==='staff_admin'?'إدارة الحسابات والصلاحيات':s.view==='inventory'?'إدارة المخازن والعهد':
+  defs[s.view]?.title||'النظام')+'</h1><small>'+E(companyValue('company_name'))+'</small></div><div class="inline"><button type="button" class="reminder-bell" data-alerts-nav aria-label="فتح التنبيهات" title="التنبيهات">'+uiIcon('bell',19)+(alertsList().length+inventory.alertCount()?'<span>'+E(Math.min(99,alertsList().length+inventory.alertCount()))+'</span>':'')+'</button><label class="currency-switch">عرض الأسعار <select id="globalCurrency"><option value="IQD" '+(s.displayCurrency==='IQD'?'selected':'')+'>IQD — دينار</option><option value="USD" '+(s.displayCurrency==='USD'?'selected':'')+'>USD — دولار</option></select></label><span class="pill">'+(s.demo?'تجريبي':'متصل')+'</span><button class="btn secondary mini" data-action="logout">'+uiIcon('logout',16)+(s.demo?'خروج':'تسجيل خروج')+'</button></div></header><section class="content">'+(s.error?'<div class="error">'+E(s.error)+'</div>':'')+(s.demo?'<div class="notice">وضع تجربة مؤقت — بيانات المعاينة غير محفوظة. لا تدخل معلومات حساسة هنا.</div>':'')+(s.loading?'<p>جارٍ تحميل البيانات...</p>':content)+'</section></main></div>';
 }
 // Alerts are derived from live balances and contracts; they do not mutate records.
 function alertsLocalDate(){
@@ -804,7 +814,7 @@ function alertsView(){
   '<button type="button" data-reminder-filter="'+value+'" class="reminder-filter '+(value===filter?'selected':'')+'">'+title+'</button>').join('')+'</div>'+
   '<div class="reminders-list">'+(cards||'<div class="reminders-empty">'+uiIcon('check',23)+
   '<strong>ماكو تنبيهات بهذا التصنيف</strong><small>تظهر المواعيد قبل 30 يوم.</small></div>')+
-  '</div><p class="reminders-footnote">الدفعات المتأخرة تبقى ظاهرة حتى التسديد. انتهاء العقود يظهر قبل 30 يوماً وبعده لمدة 30 يوماً. لا تُرسل رسائل تلقائياً.</p></section>';
+  '</div>'+inventory.alertHtml()+'<p class="reminders-footnote">الدفعات المتأخرة تبقى ظاهرة حتى التسديد. انتهاء العقود يظهر قبل 30 يوماً وبعده لمدة 30 يوماً. لا تُرسل رسائل تلقائياً.</p></section>';
 }
 function reminderMessageDialog(){
  const item=alertsList().find(a=>a.key===s.modal?.alertKey);
@@ -867,6 +877,7 @@ const ACCESS_SECTIONS=[
  ['expenses','المصروفات والفواتير'],
  ['employees','سجلات الموظفين'],
  ['payroll','صرف الرواتب وسنداتها'],
+ ['inventory','المخازن والعهد'],
  ['reports','التقارير'],
  ['activity_logs','سجل الحركات'],
  ['settings','إعدادات الشركة']
@@ -876,7 +887,7 @@ const TABLE_ACCESS={
  campaigns:'campaigns',campaign_sites:'campaigns',customer_contracts:'customer_contracts',
  ad_sites:'ad_sites',campaign_payments:'campaign_payments',landlords:'landlords',
  properties:'landlords',leases:'leases',lease_installments:'leases',
- company_expenses:'expenses',employees:'employees',payroll_payments:'payroll'
+ company_expenses:'expenses',employees:'employees',payroll_payments:'payroll',inventory:'inventory'
 };
 function canAccess(module,action='read'){
  if(s.demo||s.staff?.role==='admin')return true;
@@ -1954,7 +1965,7 @@ function settings(){
 function accessDenied(){return '<div class="welcome"><div class="authbox"><h1>الصلاحية غير مفعلة</h1><p class="muted">تم تسجيل الدخول، لكن حسابك غير مضاف إلى موظفي نظام رأفت.</p><div class="notice">يجب إضافة معرّف حسابك إلى جدول staff_members من لوحة Supabase بدور admin أو staff، ثم تسجيل الدخول مجدداً.</div><button class="btn" data-action="logout">تسجيل خروج</button></div></div>'}
 function render(){
  closeAppSelectPopup();
- if(![...keys,'dashboard','reports','settings','alerts','activity_logs','staff_admin'].includes(s.view))s.view='dashboard';
+ if(![...keys,'dashboard','reports','settings','alerts','activity_logs','staff_admin','inventory'].includes(s.view))s.view='dashboard';
  if(s.staff&&s.view==='staff_admin'&&s.staff.role!=='admin')s.view='dashboard';
  if(s.staff&&s.view!=='dashboard'&&s.view!=='alerts'&&s.view!=='staff_admin'&&
     !canAccess(TABLE_ACCESS[s.view]||s.view,'read'))s.view='dashboard';
@@ -1963,12 +1974,12 @@ function render(){
  if(typeof document!=='undefined')document.title=companyValue('company_short_name')+' | نظام الإدارة';
  let content=s.view==='dashboard'?dashboard():s.view==='alerts'?alertsView():s.view==='reports'?reports():s.view==='settings'?settings():
   s.view==='activity_logs'?activityLogsView():s.view==='staff_admin'?staffAdminView():
-   s.view==='employees'?employeesOverview():listing(s.view);
+   s.view==='employees'?employeesOverview():s.view==='inventory'?inventory.page():listing(s.view);
  if(s.passwordRecovery){target.innerHTML=passwordRecoveryPage();}
  else if(s.resetRequest){target.innerHTML=passwordResetRequestPage();}
  else if(!s.demo&&!s.session){target.innerHTML=authPage();}
  else if(!s.demo&&!s.staff&&!s.loading){target.innerHTML=accessDenied();}
- else{target.innerHTML=shell(content)+(s.modal?modalHtml():'');}
+ else{target.innerHTML=shell(content)+(s.modal?modalHtml():'')+inventory.printSheet();}
  bind();
 }
 
@@ -3294,6 +3305,8 @@ function updateSettingsPreview(form){
 function bind(){
  bindNav();
  enhanceAppSelects();
+ inventory.bind();
+ document.querySelectorAll('[data-inv-open-alerts]').forEach(button=>button.onclick=()=>{s.modal=null;s.view='inventory';inventory.setTab('notices')});
 
  const alertNav=document.querySelector('[data-alerts-nav]');
  if(alertNav)alertNav.onclick=()=>{s.view='alerts';s.modal=null;s.alertFilter='all';render()};
@@ -4313,7 +4326,7 @@ function actions(a){
  if(a==='forgotPassword'){s.resetRequest=true;s.error='';return render()}
  if(a==='cancelPasswordReset'){s.resetRequest=false;s.passwordRecovery=false;return render()}
  if(a==='close'){s.modal=null;return render()}
- if(a==='logout'){if(s.client&&s.realtimeChannel)s.client.removeChannel(s.realtimeChannel);s.realtimeChannel=null;if(s.client)s.client.auth.signOut();s.session=null;s.staff=null;s.demo=false;s.modal=null;s.error='';return render()}
+ if(a==='logout'){inventory.stopPolling();if(s.client&&s.realtimeChannel)s.client.removeChannel(s.realtimeChannel);s.realtimeChannel=null;if(s.client)s.client.auth.signOut();s.session=null;s.staff=null;s.demo=false;s.modal=null;s.error='';return render()}
  if(a==='prevStep'){captureForm($('#recordForm'));s.formStep=Math.max(0,s.formStep-1);return render()}
  if(a==='print')return window.print();
  if(a==='exportCustomers')return exportCsv('customers');
