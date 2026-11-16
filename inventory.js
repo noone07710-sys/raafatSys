@@ -10,8 +10,15 @@ global.RaafatInventory=function(ctx){
  const statuses={posted:'مُرحّل للمخزون',pending:'ينتظر الموافقة',approved:'وافق المدير — جاهز للتسليم',rejected:'مرفوض',issued:'تم التسليم والخروج'};
  const state={tab:'overview',loaded:false,loading:false,error:'',busy:false,
   items:[],documents:[],lines:[],movements:[],notifications:[],draft:null,
-  itemDraft:null,confirm:null,printDocId:null,lastLoad:0,timer:null};
- const todayLocal=()=>String(today());
+  itemDraft:null,confirm:null,printDocId:null,lastLoad:0,timer:null,channel:null};
+ const todayLocal=()=>{
+  try{
+   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{
+    timeZone:'Asia/Baghdad',year:'numeric',month:'2-digit',day:'2-digit'
+   }).formatToParts(new Date()).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
+   return parts.year+'-'+parts.month+'-'+parts.day;
+  }catch(_){return String(today());}
+ };
  const actor=()=>s.staff?.display_name||s.staff?.email||s.session?.user?.email||'الموظف المسجل';
  const manager=()=>s.staff?.role==='admin';
  const canWrite=()=>s.demo||canAccess('inventory','create');
@@ -95,25 +102,47 @@ global.RaafatInventory=function(ctx){
   state.loading=true;
   if(!silent)render();
   try{
-   const queries=[
-    s.client.from('inventory_items').select('*').order('created_at',{ascending:false}).limit(1000),
-    s.client.from('inventory_documents').select('*').order('created_at',{ascending:false}).limit(1000),
-    s.client.from('inventory_document_lines').select('*').order('created_at',{ascending:false}).limit(5000),
-    s.client.from('inventory_movements').select('*').order('created_at',{ascending:false}).limit(2000),
+   const fetchRows=async(table,max=12000)=>{
+    const rows=[];
+    for(let start=0;start<max;start+=1000){
+     const response=await s.client.from(table).select('*')
+      .order('created_at',{ascending:false}).range(start,start+999);
+     if(response.error)throw response.error;
+     const batch=response.data||[];
+     rows.push(...batch);
+     if(batch.length<1000)return rows;
+    }
+    throw Error('سجلات '+table+' تجاوزت حد التحميل؛ يلزم عرض أرشيف الحركات على صفحات.');
+   };
+   const [items,documents,lines,movements,notes]=await Promise.all([
+    fetchRows('inventory_items'),fetchRows('inventory_documents'),
+    fetchRows('inventory_document_lines',40000),fetchRows('inventory_movements',10000),
     s.client.from('inventory_notifications').select('*').order('created_at',{ascending:false}).limit(250)
-   ];
-   const result=await Promise.all(queries);
-   for(const r of result)if(r.error)throw r.error;
-   [state.items,state.documents,state.lines,state.movements,state.notifications]=result.map(r=>r.data||[]);
+   ]);
+   if(notes.error)throw notes.error;
+   [state.items,state.documents,state.lines,state.movements,state.notifications]=
+     [items,documents,lines,movements,notes.data||[]];
    state.error='';state.loaded=true;state.lastLoad=Date.now();
   }catch(error){state.error='تعذّر تحميل المخزن: '+(error?.message||String(error));state.loaded=true;}
   finally{state.loading=false;if(s.view==='inventory'||!silent)render();}
  }
  function startPolling(){
-  if(s.demo||!s.session||!canAccess('inventory','read')||state.timer||typeof global.setInterval!=='function')return;
-  state.timer=global.setInterval(()=>{if(s.session&&!state.busy&&!state.loading)reload({silent:true})},45000);
+  if(s.demo||!s.session||!canAccess('inventory','read'))return;
+  if(!state.channel&&typeof s.client?.channel==='function'){
+   state.channel=s.client.channel('raafat-inventory-notifications')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'inventory_notifications'},()=>{
+     if(!state.busy&&!state.loading)reload({silent:true});
+    }).subscribe();
+  }
+  if(!state.timer&&typeof global.setInterval==='function')
+   state.timer=global.setInterval(()=>{if(s.session&&!state.busy&&!state.loading)reload({silent:true})},45000);
  }
- function stopPolling(){if(state.timer&&global.clearInterval)global.clearInterval(state.timer);state.timer=null;}
+ function stopPolling(){
+  if(state.timer&&global.clearInterval)global.clearInterval(state.timer);
+  state.timer=null;
+  if(state.channel&&s.client?.removeChannel)s.client.removeChannel(state.channel);
+  state.channel=null;
+ }
  function choice(options,selected=''){
   return options.map(([val,label])=>'<option value="'+E(val)+'"'+(String(selected)===String(val)?' selected':'')+'>'+E(label)+'</option>').join('');
  }
