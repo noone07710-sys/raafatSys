@@ -275,7 +275,9 @@ global.RaafatInventory=function(ctx){
     '<td>'+E(d.document_type==='out'?d.recipient_name||d.requested_by_name:d.requested_by_name)+'</td>'+
     '<td><span class="inv-status '+E(d.status)+'">'+E(statuses[d.status]||d.status)+'</span>'+
      (d.approved_by_name?'<small>المدير: '+E(d.approved_by_name)+'</small>':'')+'</td>'+
-    '<td>'+docLines(d.id).map(l=>E(l.item_name)+' × '+displayQty(l.quantity)+' '+E(units[l.unit]||l.unit)).join('<div class="inv-line-sep"></div>')+'</td>'+
+    '<td>'+docLines(d.id).map(l=>'<strong>'+E(l.item_name)+'</strong> × '+displayQty(l.quantity)+' '+E(units[l.unit]||l.unit)+
+     '<small>'+E(l.description||item(l.item_id)?.description||'')+' · سعر الوحدة: '+
+     E(money(l.unit_price,l.currency||item(l.item_id)?.currency||'IQD'))+'</small>').join('<div class="inv-line-sep"></div>')+'</td>'+
     '<td><div class="inv-doc-actions">'+
      (d.document_type==='out'&&d.status==='pending'&&manager()?
        '<button class="btn mini" data-inv-decision="approve" data-inv-id="'+E(d.id)+'">موافقة</button>'+
@@ -408,7 +410,6 @@ global.RaafatInventory=function(ctx){
   const statusAllowed=d.status==='issued'||d.status==='posted';
   if(!statusAllowed)return '';
   const title=docTypes[d.document_type]||'وصل مخزني';
-  const total=lines.reduce((n,x)=>n+value(x.quantity)*value(x.unit_price),0);
   return '<div class="inv-print-outer"><article class="inv-print-sheet" dir="rtl">'+
    '<header><small>شركة رأفت للدعاية والإعلان والتجارة العامة</small>'+
    '<h2>'+E(title)+'</h2><strong>رقم المستند: '+E(d.doc_number)+'</strong></header>'+
@@ -425,7 +426,7 @@ global.RaafatInventory=function(ctx){
     lines.map((ln,i)=>'<tr><td>'+(i+1)+'</td><td><strong>'+E(ln.item_name)+'</strong><small>'+E(ln.description||'')+'</small></td>'+
      '<td>'+E(displayQty(ln.quantity))+'</td><td>'+E(units[ln.unit]||ln.unit)+
       (ln.unit==='carton'?'<small>'+E(ln.factor)+' قطعة/كارتون</small>':'')+'</td>'+
-     '<td>'+E(displayQty(ln.unit_price))+'</td></tr>').join('')+'</tbody></table>'+
+     '<td>'+E(money(ln.unit_price,ln.currency||item(ln.item_id)?.currency||'IQD'))+'</td></tr>').join('')+'</tbody></table>'+
    '<div class="inv-receipt-note"><strong>ملاحظات:</strong> '+E(d.details||'—')+'</div>'+
    (d.return_due_date?'<p>موعد إعادة المواد الدائمية: '+E(d.return_due_date)+'</p>':'')+
    '<div class="inv-signatures"><span>توقيع مسؤول المخزن<br>______________</span>'+
