@@ -2,7 +2,7 @@
 (function(global){
 'use strict';
 global.RaafatInventory=function(ctx){
- const {s,E,fmt,money,uiIcon,toast,render,canAccess,today}=ctx;
+ const {s,E,fmt,money,uiIcon,toast,render,canAccess,today,updateInventoryAlertBadge}=ctx;
  const tabs=[['overview','نظرة عامة'],['items','تعريف المواد'],['receive','إدخال مخزني'],['out','إخراج وموافقات'],['return','استرجاع المواد'],['audit','الجرد'],['notices','إشعارات المخزن']];
  const units={piece:'قطعة',carton:'كارتون',meter:'متر',kg:'كيلوغرام'};
  const kinds={consumable:'استهلاكية',returnable:'دائمية — قابلة للإرجاع'};
@@ -124,7 +124,11 @@ global.RaafatInventory=function(ctx){
      [items,documents,lines,movements,notes.data||[]];
    state.error='';state.loaded=true;state.lastLoad=Date.now();
   }catch(error){state.error='تعذّر تحميل المخزن: '+(error?.message||String(error));state.loaded=true;}
-  finally{state.loading=false;if(s.view==='inventory'||!silent)render();}
+  finally{
+   state.loading=false;
+   if(s.view==='inventory'||(!silent&&!s.modal))render();
+   else if(typeof updateInventoryAlertBadge==='function')updateInventoryAlertBadge();
+  }
  }
  function startPolling(){
   if(s.demo||!s.session||!canAccess('inventory','read'))return;
