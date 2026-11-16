@@ -79,7 +79,7 @@ const s={client:null,session:null,staff:null,realtimeChannel:null,config:PUBLIC_
 
 // Warehouse workflow is isolated so older modules and test harnesses stay intact.
 const inventory=(typeof window!=='undefined'&&typeof window.RaafatInventory==='function')?
- window.RaafatInventory({s,E,fmt,money,uiIcon,toast,render,canAccess,today}):
+ window.RaafatInventory({s,E,fmt,money,uiIcon,toast,render,canAccess,today,updateInventoryAlertBadge}):
  {page:()=>'<div class="notice">تعذر تحميل وحدة المخازن.</div>',bind:()=>{},reload:async()=>{},
   resetDemo:()=>{},startPolling:()=>{},stopPolling:()=>{},alertCount:()=>0,
   alertHtml:()=>'',printSheet:()=>'',setTab:()=>{}};
@@ -697,6 +697,15 @@ function bindNav(){
   if(staffAdminRequested&&!s.managedStaff)refreshManagedStaff();
  });
  document.querySelectorAll('[data-nav-group]').forEach(x=>x.onclick=()=>changeNavGroup(x.dataset.navGroup));
+}
+function updateInventoryAlertBadge(){
+ const button=document?.querySelector?.('[data-alerts-nav]');
+ if(!button)return;
+ const n=alertsList().length+inventory.alertCount();
+ let bubble=button.querySelector?.('span');
+ if(n<=0){if(bubble)bubble.remove();return;}
+ if(!bubble){bubble=document.createElement('span');button.appendChild(bubble);}
+ bubble.textContent=String(n>99?'99+':n);
 }
 function shell(content){
  return '<div class="shell"><aside class="sidebar"><div class="brand brand-company"><div class="sidebar-logo-frame">'+companyLogoHtml('sidebar')+'</div><div class="brand-company-name"><strong>'+E(companyValue('company_short_name'))+'</strong><small>'+E(companyValue('company_tagline'))+'</small></div></div><div class="nav">'+nav()+'</div><div class="asidefoot">'+(s.demo?'وضع المعاينة — لا يتم حفظ أي معلومات':'اتصال آمن — حساب موظف')+'</div></aside><main class="main"><header class="top"><div><h1>'+E(s.view==='dashboard'?'لوحة التحكم':s.view==='alerts'?'التنبيهات':s.view==='reports'?'التقارير':s.view==='settings'?'الإعدادات':
