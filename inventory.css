@@ -125,7 +125,8 @@
 @media print{
  @page{size:A4;margin:13mm}
  html,body{background:white!important}
- #app,.shell,.nav,.overlay,.inv-page,.inv-print-buttons{display:none!important}
+ #app{display:block!important;margin:0!important;padding:0!important}
+ #app>.shell,.shell,.nav,.overlay,.inv-page,.inv-print-buttons{display:none!important}
  .inv-print-outer{display:block!important;position:static!important;inset:auto!important;background:white!important;overflow:visible!important;padding:0!important;margin:0!important}
  .inv-print-sheet{display:block!important;box-shadow:none!important;min-height:0!important;border:none!important;padding:0!important;width:100%!important;break-inside:avoid}
  .inv-print-sheet td,.inv-print-sheet th{font-size:10px}
