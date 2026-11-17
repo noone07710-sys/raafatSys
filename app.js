@@ -2356,16 +2356,26 @@ function updateSiteCodeInput(form){
 function leasePlanControls(v){
  if(s.modal?.table!=='leases')return '';
  if(v.id){
-  const rows=s.data.lease_installments.filter(r=>r.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date));
-  return '<section class="lease-custom-plan full"><h3>تعديل مواعيد الأقساط المسجّلة</h3>'+
-   '<p class="subtle">غيّر موعد أي قسط غير مسدّد؛ القسط الذي بدأ تسديده يبقى محميّاً.</p><div class="lease-custom-rows">'+
-   rows.map((r,i)=>'<div class="lease-custom-row"><b>القسط '+serial4(i+1)+'</b>'+
-    '<label class="field"><span>تاريخ الاستحقاق</span><input type="date" data-lease-saved-due="'+E(r.id)+'" value="'+E(r.due_date)+
-    '"'+(Number(r.paid_amount||0)>0?' disabled':'')+'></label>'+
-    '<span>المبلغ: <b>'+E(money(r.amount,v.currency))+'</b></span>'+
-    (Number(r.paid_amount||0)>0?'<small>قسط مدفوع — موعد محمي</small>':
-     '<button type="button" class="btn secondary mini" data-lease-save-due="'+E(r.id)+'">حفظ الموعد</button>')+
-    '</div>').join('')+'</div></section>';
+  const locked=s.data.lease_installments.filter(r=>r.lease_id===v.id&&Number(r.paid_amount||0)>0).sort((a,b)=>a.due_date.localeCompare(b.due_date));
+  const open=s.modal.leaseDraft||[];
+  const rows=[...locked.map(r=>({...r,locked:true})),...open.map(r=>({...r,locked:false}))].sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
+  const paidScheduled=locked.reduce((n,r)=>n+Number(r.amount||0),0);
+  const remaining=roundAmount(Number(v.rent_total||0)-Number(v.advance_amount||0)-paidScheduled);
+  const current=open.reduce((n,r)=>n+Number(r.amount||0),0);
+  return '<section class="lease-custom-plan full"><h3>تعديل جدول الأقساط مع العقد</h3>'+
+   '<p class="subtle">تگدر تعدّل تواريخ ومبالغ الأقساط غير المدفوعة وتضيف أو تحذف أقساطاً. الأقساط المسدّدة جزئياً أو كلياً تبقى ثابتة ومحمية. تحفظ كل تغييرات العقد والأقساط معاً.</p>'+
+   '<div class="notice">المتبقي المطلوب توزيعه على الأقساط المفتوحة: <b>'+E(money(remaining,v.currency))+
+    '</b> · المجموع الحالي: <b>'+E(money(current,v.currency))+'</b></div>'+
+   '<div class="lease-custom-rows">'+rows.map((r,i)=>'<div class="lease-custom-row"'+(r.locked?'':' data-lease-draft-row data-lease-saved-id="'+E(r.id||'')+'"')+'>'+
+    '<b>القسط '+serial4(i+1)+'</b>'+
+    '<label class="field"><span>تاريخ الاستحقاق</span><input type="date" '+(r.locked?'':'data-lease-due ')+'data-lease-saved-due="'+E(r.id||'')+'" value="'+E(r.due_date||'')+'"'+(r.locked?' disabled':'')+'></label>'+
+    '<label class="field"><span>مبلغ القسط</span><input type="number" '+(r.locked?'':'data-lease-amount ')+'min="0.01" step="0.01" value="'+E(r.amount||'')+'"'+(r.locked?' disabled':'')+'></label>'+
+    (r.locked?'<small>محمي — تم تسجيل تسديد</small>':
+     '<button class="linkbtn" type="button" data-lease-remove-row="'+open.findIndex(x=>x.id===r.id)+'" aria-label="حذف القسط غير المسدد">'+uiIcon('trash',15)+'</button>')+
+    '</div>').join('')+'</div>'+
+   '<div class="lease-custom-footer"><button class="btn secondary mini" type="button" data-lease-add-row>'+uiIcon('plus',15)+' إضافة قسط</button>'+
+   '<button class="btn secondary mini" type="button" data-lease-spread>توزيع المبلغ على الأقساط المفتوحة</button>'+
+   '<small>بعد تعديل مبلغ الإيجار أو المقدم، اضغط توزيع المبلغ أو عدّل الأقساط يدوياً ثم احفظ العقد.</small></div></section>';
  }
  const manual=s.modal.leasePlanMode==='manual';
  const plan=manual?s.modal.leaseDraft||[]:leaseInstallmentPlan(v);
@@ -2413,6 +2423,20 @@ async function saveLeaseDueDate(id,form){
  finally{s.leaseSavingDue=false}
 }
 function leasePlanSummary(v){
+ if(v.id){
+  const saved=s.data.lease_installments.filter(x=>x.lease_id===v.id);
+  const locked=saved.filter(x=>Number(x.paid_amount||0)>0);
+  const paid=locked.reduce((n,x)=>n+Number(x.amount||0),0);
+  const open=s.modal?.table==='leases'?s.modal.leaseDraft||[]:saved.filter(x=>!Number(x.paid_amount||0));
+  const due=roundAmount(Number(v.rent_total||0)-Number(v.advance_amount||0)-paid);
+  const planned=roundAmount(open.reduce((n,x)=>n+Number(x.amount||0),0));
+  return '<div class="lease-plan-preview full"><strong>ملخّص تعديل أقساط عقد السطح</strong>'+
+   '<div class="lease-plan-values"><span>الإيجار الجديد: <b>'+E(money(v.rent_total,v.currency))+'</b></span>'+
+   '<span>المقدم: <b>'+E(money(v.advance_amount,v.currency))+'</b></span>'+
+   '<span>الأقساط المدفوعة (محميّة): <b>'+E(money(paid,v.currency))+'</b></span>'+
+   '<span>المتبقي لتوزيعه: <b>'+E(money(due,v.currency))+'</b></span>'+
+   '<span>الأقساط غير المدفوعة: <b>'+E(money(planned,v.currency))+'</b></span></div></div>';
+ }
  if(!v.start_date||!v.end_date)return '<div class="lease-plan-preview full"><strong>جدول الأقساط المتوقع</strong><small>حدد تاريخ بداية ونهاية العقد حتى تظهر الأقساط بدقة قبل الحفظ.</small></div>';
  const rows=s.modal?.table==='leases'&&s.modal.leasePlanMode==='manual'&&!v.id?
   (s.modal.leaseDraft||[]).map(r=>({due_date:r.due_date,amount:Number(r.amount)||0})):leaseInstallmentPlan(v);
@@ -3524,6 +3548,23 @@ function bind(){
    input.addEventListener('input',()=>captureLeasePlan(form));
   });
   document.querySelectorAll('[data-lease-save-due]').forEach(button=>button.onclick=()=>saveLeaseDueDate(button.dataset.leaseSaveDue,form));
+  const distribute=document.querySelector('[data-lease-spread]');
+  if(distribute)distribute.onclick=()=>{
+   captureForm(form);
+   const lease=s.modal.data,open=s.modal.leaseDraft||[];
+   const locked=s.data.lease_installments.filter(x=>x.lease_id===lease.id&&Number(x.paid_amount||0)>0);
+   const lockedAmount=locked.reduce((n,x)=>n+Number(x.amount||0),0);
+   const total=Math.round((Number(lease.rent_total||0)-Number(lease.advance_amount||0)-lockedAmount)*100);
+   if(!Number.isSafeInteger(total)||total<0)return toast('المقدم أو الأقساط المسددة أكبر من قيمة العقد الجديدة.',true);
+   if(!open.length&&total>0)open.push({due_date:lease.start_date||today(),amount:0});
+   if(total===0)s.modal.leaseDraft=[];
+   else {
+    const count=open.length,each=Math.floor(total/count),extra=total-each*count;
+    s.modal.leaseDraft=open.map((row,i)=>({...row,amount:(each+(i===count-1?extra:0))/100}));
+    if(s.modal.leaseDraft.some(row=>Number(row.amount)<=0))return toast('المبلغ المتبقي صغير بالنسبة لعدد الأقساط المفتوحة. احذف بعض الأقساط.',true);
+   }
+   render();
+  };
  }
  for(const name of ['width_m','height_m','quantity']){
   const el=form.elements.namedItem(name);
@@ -3765,7 +3806,7 @@ function openForm(k,row){
  const drafts={};
  if(k==='packages')packageRates(data).forEach(rate=>{drafts[rate.months]=roundAmount(convert(rate.usd_price,'USD',data.currency||'USD'));});
  s.modal={kind:'edit',table:k,data,siteIds:[...ids],roofs:k==='landlords'&&!data.id?[{}]:[],autoPrice:k==='campaigns'&&!data.id,rateDraft:drafts,rateChanged:new Set(),contractCustomerFilter:k==='customer_contracts'&&!data.id?(row?.customer_id||null):null,
- leasePlanMode:'auto',leaseDraft:[],contractSiteIds:k==='customer_contracts'&&data.id?(Array.isArray(data.campaign_sites_snapshot)?data.campaign_sites_snapshot.map(site=>site.id).filter(Boolean):[]):[]};
+ leasePlanMode:k==='leases'&&data.id?'manual':'auto',leaseDraft:k==='leases'&&data.id?s.data.lease_installments.filter(x=>x.lease_id===data.id&&!(Number(x.paid_amount)>0)).sort((a,b)=>a.due_date.localeCompare(b.due_date)).map(x=>({id:x.id,due_date:x.due_date,amount:x.amount})):[],contractSiteIds:k==='customer_contracts'&&data.id?(Array.isArray(data.campaign_sites_snapshot)?data.campaign_sites_snapshot.map(site=>site.id).filter(Boolean):[]):[]};
  if(k==='company_expenses'){
   s.modal.expenseItems=row?.id?expenseLineItems(row):[{description:'',category:'',department:'',quantity:1,unit_price:''}];
   s.modal.data.status=row?.id?expensePaymentStatus(row):'paid';
@@ -3882,7 +3923,7 @@ function formValidate(k,v){
   if(!Number.isFinite(Number(v.rent_total))||Number(v.rent_total)<0)throw Error('إجمالي الإيجار غير صالح');
   if(!Number.isFinite(Number(v.advance_amount||0))||Number(v.advance_amount||0)<0||Number(v.advance_amount||0)>Number(v.rent_total))throw Error('المبلغ المقدم يجب أن يكون من صفر إلى إجمالي الإيجار');
   const old=lookup('leases',v.id);
-  if(old&&s.data.lease_installments.some(x=>x.lease_id===v.id)&&['rent_total','advance_amount','currency','start_date','end_date','grace_days','payment_frequency'].some(field=>String(old[field])!==String(v[field])))throw Error('العقد له أقساط مرتبطة؛ استخدم تجديد العقد للشروط المالية الجديدة.');
+  if(old&&!s.demo&&s.staff?.role!=='admin'&&['rent_total','advance_amount','currency','start_date','end_date','grace_days','payment_frequency'].some(field=>String(old[field])!==String(v[field])))throw Error('تغيير شروط عقد السطح المالية أو مدة العقد مع الأقساط يتطلب حساب المدير الرئيسي.');
  }
  if(k==='lease_installments'){
   if(!lookup('leases',v.lease_id))throw Error('اختر عقداً مسجلاً أولاً');
@@ -3974,7 +4015,7 @@ function validateManualLeasePlan(lease,rows){
      new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date)
    throw Error('حدد تاريخاً صحيحاً للقسط '+serial4(i+1));
   if(!raw||!Number.isSafeInteger(cents)||cents<=0)throw Error('راجع مبلغ القسط '+serial4(i+1));
-  return {due_date:date,amount:cents/100};
+  return {...(r.id?{id:r.id}:{}),due_date:date,amount:cents/100};
  });
  const sum=plan.reduce((n,r)=>n+Math.round(r.amount*100),0);
  if(sum!==due)throw Error('مجموع الأقساط ('+money(sum/100,lease.currency)+
@@ -3982,8 +4023,9 @@ function validateManualLeasePlan(lease,rows){
  return plan.sort((a,b)=>a.due_date.localeCompare(b.due_date));
 }
 function captureLeasePlan(form){
- if(s.modal?.table!=='leases'||s.modal?.data?.id||s.modal.leasePlanMode!=='manual')return;
+ if(s.modal?.table!=='leases'||s.modal.leasePlanMode!=='manual')return;
  s.modal.leaseDraft=[...(form?.querySelectorAll?.('[data-lease-draft-row]')||[])].map(row=>({
+  ...(row.dataset?.leaseSavedId?{id:row.dataset.leaseSavedId}:{}),
   due_date:row.querySelector('[data-lease-due]')?.value||'',
   amount:row.querySelector('[data-lease-amount]')?.value??''
  }));
@@ -4218,7 +4260,38 @@ async function saveForm(form){
    }
   }
   const wasNew=!v.id;
-  const saved=await persist(k,o,v.id);
+  let saved;
+  if(k==='leases'&&v.id&&(s.demo||s.staff?.role==='admin')){
+   const previous=lookup('leases',v.id),all=s.data.lease_installments.filter(x=>x.lease_id===v.id);
+   const locked=all.filter(x=>Number(x.paid_amount||0)>0);
+   const paidScheduled=locked.reduce((sum,row)=>sum+Number(row.amount||0),0);
+   const prepared=validateManualLeasePlan({...normalized,advance_amount:Number(normalized.advance_amount||0)+paidScheduled},m.leaseDraft||[]);
+   const previousOpen=all.filter(x=>!Number(x.paid_amount||0));
+   const changedSchedule=prepared.length!==previousOpen.length||prepared.some(row=>{
+    const old=previousOpen.find(x=>x.id===row.id);
+    return !old||old.due_date!==row.due_date||Math.round(Number(old.amount)*100)!==Math.round(Number(row.amount)*100);
+   });
+   const changedTerms=['rent_total','advance_amount','currency','start_date','end_date','grace_days','payment_frequency'].some(
+    field=>String(previous?.[field]??'')!==String(normalized[field]??''));
+   const plan=changedSchedule||changedTerms?prepared:null;
+   if(!s.demo){
+    const {data,error}=await s.client.rpc('raafat_save_lease_amendment',{
+     p_lease_id:v.id,p_values:o,p_schedule:plan
+    });
+    if(error||!data?.updated)throw Error(error?.message||'تعذر تأكيد تعديل عقد السطح وأقساطه.');
+    saved={...previous,...o,id:v.id};
+   }else{
+    saved=await persist(k,o,v.id);
+    if(plan){
+     s.data.lease_installments=s.data.lease_installments.filter(x=>
+      x.lease_id!==v.id||Number(x.paid_amount||0)>0);
+     for(const row of plan)s.data.lease_installments.push({
+      ...(previousOpen.find(x=>x.id===row.id)||{}),id:row.id||uid(),lease_id:v.id,
+      due_date:row.due_date,amount:row.amount,paid_amount:0
+     });
+    }
+   }
+  }else saved=await persist(k,o,v.id);
   if(k==='packages'){
    m.data.id=saved.id;
    for(const month of m.rateChanged||[]){
