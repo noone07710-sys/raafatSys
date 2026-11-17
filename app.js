@@ -1887,13 +1887,63 @@ async function refreshActivityLogs(){
 }
 function openSalaryExpense(employeeId){return openPayrollPayment(employeeId)}
 
+
+function contractDeleteAction(table,row){
+ if(!row?.id||(!s.demo&&s.staff?.role!=='admin'))return '';
+ return '<button type="button" class="lease-row-action customer-delete-link" data-delete-contract="'+E(table+':'+row.id)+'">'+uiIcon('trash',15)+'<span>حذف العقد</span></button>';
+}
+function openContractDelete(table,id){
+ if(!['leases','customer_contracts'].includes(table))return;
+ if(!s.demo&&s.staff?.role!=='admin')return toast('حذف العقود متاح للمدير الرئيسي فقط.',true);
+ const row=lookup(table,id);
+ if(!row)return toast('هذا العقد غير موجود.',true);
+ s.modal={kind:'deleteContract',table,data:{...row}};render();
+}
+function contractDeleteDialog(){
+ const m=s.modal,lease=m.table==='leases',row=m.data;
+ const installments=lease?s.data.lease_installments.filter(x=>x.lease_id===row.id):[];
+ const paid=installments.reduce((sum,x)=>sum+Number(x.paid_amount||0),0);
+ return '<div class="overlay"><div class="modal" role="dialog" aria-modal="true">'+
+ '<div class="modalhead"><h2>حذف العقد نهائياً — '+E(numberedContract(row.contract_number))+'</h2><button class="close" type="button" data-action="close">'+uiIcon('x',18)+'</button></div>'+
+ '<div class="error"><strong>تحذير: لا يمكن التراجع عن الحذف النهائي من داخل النظام.</strong></div>'+
+ (lease?'<p>سيُحذف عقد السطح وجميع أقساطه المرتبطة به فقط، بدون حذف المالك أو السطح أو العقود الأخرى.</p>'+
+ '<div class="notice">عدد الأقساط: '+installments.length+' · المسدّد: '+E(money(paid,row.currency))+'. احتفظ بوصولاتك والنسخة الاحتياطية قبل الحذف.</div>':
+ '<p>سيُحذف عقد الزبون فقط. بيانات الزبون والحملة ودفعاتها والعقود الأخرى لن تُحذف.</p>')+
+ '<form id="deleteContractForm"><label class="field"><span>اكتب «حذف» للتأكيد *</span><input id="deleteContractConfirmation" autocomplete="off" required></label>'+
+ '<div class="actions"><button id="deleteContractSubmit" class="btn danger" type="submit" disabled>'+uiIcon('trash',16)+' حذف نهائي</button><button type="button" class="btn secondary" data-action="close">إلغاء</button></div></form></div></div>';
+}
+async function deleteContractConfirmed(form){
+ if(s.deletingContract||s.modal?.kind!=='deleteContract')return;
+ if(!s.demo&&s.staff?.role!=='admin')return toast('الحذف متاح للمدير الرئيسي فقط.',true);
+ if(form.querySelector('#deleteContractConfirmation')?.value?.trim()!=='حذف')return toast('اكتب كلمة حذف للتأكيد.',true);
+ const table=s.modal.table,row=s.modal.data;
+ s.deletingContract=true;
+ const button=form.querySelector('[type="submit"]');if(button)button.disabled=true;
+ try{
+  if(s.demo){
+   s.data[table]=s.data[table].filter(x=>x.id!==row.id);
+   if(table==='leases'){
+    s.data.lease_installments=s.data.lease_installments.filter(x=>x.lease_id!==row.id);
+    s.data.leases=s.data.leases.map(x=>x.renewed_from===row.id?{...x,renewed_from:null}:x);
+   }
+  }else{
+   const {data,error}=await s.client.from(table).delete().eq('id',row.id).select('id').single();
+   if(error||!data)throw Error(error?.message||'قاعدة البيانات لم تؤكد حذف العقد.');
+  }
+  s.modal=null;s.view=table;s.search='';
+  if(s.demo)render();else await load();
+  toast('تم حذف العقد '+numberedContract(row.contract_number)+' بنجاح.');
+ }catch(e){toast('تعذر حذف العقد: '+(e.message||String(e)),true);if(button)button.disabled=false}
+ finally{s.deletingContract=false}
+}
+
 function leaseRowActions(row){
  const id=E(row.id),number=E(numberedContract(row.contract_number));
  return '<div class="lease-row-actions" role="group" aria-label="إجراءات عقد '+number+'">'+
   '<button type="button" class="lease-row-action" data-preview="'+id+'">'+uiIcon('file',15)+'<span>التفاصيل</span></button>'+
   '<button type="button" class="lease-row-action" data-edit="leases:'+id+'">'+uiIcon('pencil',15)+'<span>تعديل العقد</span></button>'+
   '<button type="button" class="lease-row-action lease-row-action-primary" data-landlord-pdf="'+id+'" data-pdf-mode="preview">'+uiIcon('printer',15)+'<span>مراجعة وطباعة</span></button>'+
-  '<button type="button" class="lease-row-action" data-lease-payments="'+id+'">'+uiIcon('receipt',15)+'<span>الأقساط والدفعات</span></button>'+
+  '<button type="button" class="lease-row-action" data-lease-payments="'+id+'">'+uiIcon('receipt',15)+'<span>الأقساط والدفعات</span></button>'+contractDeleteAction('leases',row)+
  '</div>';
 }
 function customerContractPaymentAction(row){
@@ -1912,7 +1962,7 @@ function customerContractRowActions(row){
   '<button type="button" class="lease-row-action" data-customer-preview="'+id+'">'+uiIcon('file',15)+'<span>التفاصيل</span></button>'+
   '<button type="button" class="lease-row-action" data-edit="customer_contracts:'+id+'">'+uiIcon('pencil',15)+'<span>تعديل العقد</span></button>'+
   '<button type="button" class="lease-row-action lease-row-action-primary" data-customer-pdf="'+id+'" data-pdf-mode="preview">'+uiIcon('printer',15)+'<span>مراجعة وطباعة</span></button>'+
-  customerContractPaymentAction(row)+'</div>';
+  customerContractPaymentAction(row)+contractDeleteAction('customer_contracts',row)+'</div>';
 }
 function customerContractEditTools(row){
  const id=E(row.id);
@@ -1921,7 +1971,7 @@ function customerContractEditTools(row){
   '</div><div class="lease-row-actions lease-row-actions-modal">'+
   '<button type="button" class="lease-row-action" data-customer-preview="'+id+'">'+uiIcon('file',15)+' التفاصيل</button>'+
   '<button type="button" class="lease-row-action lease-row-action-primary" data-customer-pdf="'+id+'" data-pdf-mode="preview">'+uiIcon('printer',15)+' مراجعة وطباعة العقد</button>'+
-  customerContractPaymentAction(row)+'</div></section>';
+  customerContractPaymentAction(row)+contractDeleteAction('customer_contracts',row)+'</div></section>';
 }
 function listing(k){
  if(k==='campaign_payments')return campaignPaymentOverview();
@@ -2689,6 +2739,7 @@ function modalHtml(){
  if(m.kind==='deleteLandlord')return landlordDeleteDialog(v);
  if(m.kind==='deleteExpense')return expenseDeleteDialog(v);
  if(m.kind==='deleteSite')return deleteSiteDialog(v);
+ if(m.kind==='deleteContract')return contractDeleteDialog();
  let fields=meta.fields;
  if(k==='company_expenses')return expenseInvoiceForm(v);
  if(k==='campaigns'){
@@ -2729,7 +2780,7 @@ function modalHtml(){
  '<button type="button" class="lease-row-action" data-preview="'+E(v.id)+'">'+uiIcon('file',15)+' التفاصيل</button>'+
  '<button type="button" class="lease-row-action lease-row-action-primary" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('printer',15)+' مراجعة وطباعة العقد</button>'+
  '<button type="button" class="lease-row-action" data-lease-payments="'+E(v.id)+'">'+uiIcon('receipt',15)+' الأقساط والدفعات</button>'+
- '<button type="button" class="lease-row-action" data-renew="'+E(v.id)+'">'+uiIcon('refresh',15)+' تجديد العقد</button>'+
+ '<button type="button" class="lease-row-action" data-renew="'+E(v.id)+'">'+uiIcon('refresh',15)+' تجديد العقد</button>'+contractDeleteAction('leases',v)+
  '</div></section>':'')+relatedDetails(k,v)+'</div></div>';
  }
 
@@ -3422,6 +3473,7 @@ function bind(){
  document.querySelectorAll('[data-delete-landlord]').forEach(x=>x.onclick=()=>openLandlordDelete(x.dataset.deleteLandlord));
  document.querySelectorAll('[data-delete-expense]').forEach(x=>x.onclick=()=>openExpenseDelete(x.dataset.deleteExpense));
  document.querySelectorAll('[data-delete-site]').forEach(x=>x.onclick=()=>openSiteDelete(x.dataset.deleteSite));
+ document.querySelectorAll('[data-delete-contract]').forEach(x=>x.onclick=()=>{const [table,id]=x.dataset.deleteContract.split(':');openContractDelete(table,id)});
  document.querySelectorAll('[data-site-deactivate]').forEach(x=>x.onclick=()=>deactivateSite(x.dataset.siteDeactivate));
  document.querySelectorAll('[data-expense-proof]').forEach(x=>x.onclick=()=>showExpenseTransferProof(x.dataset.expenseProof));
  for(const [formId,inputId,buttonId,handler] of [
@@ -3434,6 +3486,11 @@ function bind(){
    input.oninput=()=>{button.disabled=input.value.trim()!=='حذف'};
    form.onsubmit=e=>{e.preventDefault();handler(form)};
   }
+ }
+ if($('#deleteContractForm')){
+  const form=$('#deleteContractForm'),entry=$('#deleteContractConfirmation'),button=$('#deleteContractSubmit');
+  entry.oninput=()=>{button.disabled=entry.value.trim()!=='حذف'||Boolean(s.deletingContract)};
+  form.onsubmit=event=>{event.preventDefault();deleteContractConfirmed(form)};
  }
  if($('#deleteCustomerForm')){
   const form=$('#deleteCustomerForm'),entry=$('#deleteCustomerConfirmation'),button=$('#deleteCustomerSubmit');
