@@ -2486,7 +2486,8 @@ function leasePlanSummary(v){
    '<span>الأقساط المدفوعة (محميّة): <b>'+E(money(paid,v.currency))+'</b></span>'+
    '<span>المتبقي لتوزيعه: <b>'+E(money(due,v.currency))+'</b></span>'+
    '<span>الأقساط غير المدفوعة: <b>'+E(money(planned,v.currency))+'</b></span>'+
-   '<span>عدد الأقساط: <b>'+E(open.length+locked.length)+'</b></span></div></div>';
+   '<span>عدد الأقساط: <b>'+E(open.length+locked.length)+'</b></span></div>'+
+   '<div class="lease-plan-dates">'+open.map((row,i)=>'<span>القسط '+serial4(i+1)+' · '+E(row.due_date||'—')+' · '+E(money(row.amount,v.currency))+'</span>').join('')+'</div></div>';
  }
  if(!v.start_date||!v.end_date)return '<div class="lease-plan-preview full"><strong>جدول الأقساط المتوقع</strong><small>حدد تاريخ بداية ونهاية العقد حتى تظهر الأقساط بدقة قبل الحفظ.</small></div>';
  const rows=s.modal?.table==='leases'&&s.modal.leasePlanMode==='manual'&&!v.id?
