@@ -34,7 +34,7 @@ function fixture(){
 test('customer contracts have the same four clearly separated buttons as rooftop contracts',()=>{
  const a=fixture(),html=a.listing('customer_contracts');
  const controls=a.customerContractRowActions(a.s.data.customer_contracts[0]);
- assert.equal((controls.match(/<button/g)||[]).length,4);
+ assert.equal((controls.match(/<button/g)||[]).length,5);
  for(const term of ['التفاصيل','تعديل العقد','مراجعة وطباعة','دفعات الحملة'])assert.match(controls,new RegExp(term));
  for(const tag of ['data-customer-preview="contract-new"','data-edit="customer_contracts:contract-new"',
   'data-customer-pdf="contract-new"','data-customer-payments="contract-new"'])assert.ok(controls.includes(tag),tag);
@@ -47,7 +47,7 @@ test('customer contracts have the same four clearly separated buttons as rooftop
 test('old contracts retain edit, details and PDF while unavailable campaign payments are safely disabled',()=>{
  const a=fixture(),old=a.s.data.customer_contracts[1];
  const controls=a.customerContractRowActions(old);
- assert.equal((controls.match(/<button/g)||[]).length,4);
+ assert.equal((controls.match(/<button/g)||[]).length,5);
  assert.match(controls,/data-customer-payments="contract-legacy" disabled/);
  assert.match(controls,/العقد غير مرتبط بحملة محفوظة/);
  a.s.modal={table:'customer_contracts',kind:'edit',data:old};
