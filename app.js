@@ -2408,7 +2408,7 @@ function leasePlanControls(v){
  if(v.id){
   const locked=s.data.lease_installments.filter(r=>r.lease_id===v.id&&Number(r.paid_amount||0)>0).sort((a,b)=>a.due_date.localeCompare(b.due_date));
   const open=s.modal.leaseDraft||[];
-  const rows=[...locked.map(r=>({...r,locked:true})),...open.map(r=>({...r,locked:false}))].sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
+  const rows=[...locked.map(r=>({...r,locked:true})),...open.map((r,draftIndex)=>({...r,locked:false,draftIndex}))].sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date)));
   const paidScheduled=locked.reduce((n,r)=>n+Number(r.amount||0),0);
   const remaining=roundAmount(Number(v.rent_total||0)-Number(v.advance_amount||0)-paidScheduled);
   const current=open.reduce((n,r)=>n+Number(r.amount||0),0);
@@ -2421,7 +2421,7 @@ function leasePlanControls(v){
     '<label class="field"><span>تاريخ الاستحقاق</span><input type="date" '+(r.locked?'':'data-lease-due ')+'data-lease-saved-due="'+E(r.id||'')+'" value="'+E(r.due_date||'')+'"'+(r.locked?' disabled':'')+'></label>'+
     '<label class="field"><span>مبلغ القسط</span><input type="number" '+(r.locked?'':'data-lease-amount ')+'min="0.01" step="0.01" value="'+E(r.amount||'')+'"'+(r.locked?' disabled':'')+'></label>'+
     (r.locked?'<small>محمي — تم تسجيل تسديد</small>':
-     '<button class="linkbtn" type="button" data-lease-remove-row="'+open.findIndex(x=>x.id===r.id)+'" aria-label="حذف القسط غير المسدد">'+uiIcon('trash',15)+'</button>')+
+     '<button class="linkbtn" type="button" data-lease-remove-row="'+r.draftIndex+'" aria-label="حذف القسط غير المسدد">'+uiIcon('trash',15)+'</button>')+
     '</div>').join('')+'</div>'+
    '<div class="lease-custom-footer"><button class="btn secondary mini" type="button" data-lease-add-row>'+uiIcon('plus',15)+' إضافة قسط</button>'+
    '<button class="btn secondary mini" type="button" data-lease-spread>توزيع المبلغ على الأقساط المفتوحة</button>'+
@@ -2485,7 +2485,8 @@ function leasePlanSummary(v){
    '<span>المقدم: <b>'+E(money(v.advance_amount,v.currency))+'</b></span>'+
    '<span>الأقساط المدفوعة (محميّة): <b>'+E(money(paid,v.currency))+'</b></span>'+
    '<span>المتبقي لتوزيعه: <b>'+E(money(due,v.currency))+'</b></span>'+
-   '<span>الأقساط غير المدفوعة: <b>'+E(money(planned,v.currency))+'</b></span></div></div>';
+   '<span>الأقساط غير المدفوعة: <b>'+E(money(planned,v.currency))+'</b></span>'+
+   '<span>عدد الأقساط: <b>'+E(open.length+locked.length)+'</b></span></div></div>';
  }
  if(!v.start_date||!v.end_date)return '<div class="lease-plan-preview full"><strong>جدول الأقساط المتوقع</strong><small>حدد تاريخ بداية ونهاية العقد حتى تظهر الأقساط بدقة قبل الحفظ.</small></div>';
  const rows=s.modal?.table==='leases'&&s.modal.leasePlanMode==='manual'&&!v.id?
@@ -4300,8 +4301,15 @@ async function saveForm(form){
   }
   let o=clean(k,normalized);
   if(k==='customer_contracts'&&v.id){
+   if(o.campaign_quantity_snapshot===undefined||o.campaign_quantity_snapshot===null||o.campaign_quantity_snapshot==='')o.campaign_quantity_snapshot=Math.max(1,(m.contractSiteIds||[]).length);
    if(!Number.isInteger(Number(o.campaign_quantity_snapshot))||Number(o.campaign_quantity_snapshot)<1)throw Error('عدد القطع يجب أن يكون واحداً على الأقل');
-   o.campaign_sites_snapshot=(m.contractSiteIds||[]).map(id=>lookup('ad_sites',id)).filter(Boolean).map(site=>({id:site.id,code:site.code,name:site.name,address:site.address,governorate:site.governorate,site_type:site.site_type}));
+   const previousIds=(Array.isArray(lookup('customer_contracts',v.id)?.campaign_sites_snapshot)?lookup('customer_contracts',v.id).campaign_sites_snapshot:[]).map(row=>row.id).filter(Boolean);
+   const currentIds=m.contractSiteIds||[];
+   if(currentIds.length!==previousIds.length||currentIds.some((id,i)=>id!==previousIds[i])){
+    o.campaign_sites_snapshot=currentIds.map(id=>lookup('ad_sites',id)).filter(Boolean).map(site=>({
+     id:site.id,code:site.code,name:site.name,address:site.address,governorate:site.governorate,site_type:site.site_type
+    }));
+   }
   }
   if(k==='packages'&&v.pricing_mode==='sqm_month'){o.width_m=null;o.height_m=null;o.package_type='rooftop';}
   if(k==='leases'&&!v.id)o.contract_number='';
