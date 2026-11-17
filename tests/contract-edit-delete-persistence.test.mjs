@@ -66,7 +66,7 @@ test('contract deletion is displayed only for superadmin and identifies affected
  assert.match(app.leaseRowActions(app.s.data.leases[0]),/data-delete-contract="leases:lease"/);
  app.s.modal={kind:'deleteContract',table:'leases',data:app.s.data.leases[0]};
  const html=app.contractDeleteDialog();
- assert.match(html,/حذف نهائياً/);
+ assert.match(html,/حذف العقد نهائياً/);
  assert.match(html,/عدد الأقساط: 2/);
  assert.match(html,/data-action="close"/);
  app.s.demo=false;
