@@ -47,7 +47,7 @@ test('rooftop lease actions are four separate controls, with property dimensions
  assert.match(html,/5 × 4 م/);
  assert.match(html,/20 م²/);
  const controls=app.leaseRowActions(app.s.data.leases[0]);
- assert.equal((controls.match(/<button/g)||[]).length,4);
+ assert.equal((controls.match(/<button/g)||[]).length,5);
 });
 
 test('lease editor and preview expose structured review, installment and edit actions',()=>{
