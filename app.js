@@ -2894,7 +2894,8 @@ async function generateLandlordContractPdf(id,mode='download',editablePayload=nu
  s.generatingContractPdf=true;
  document.querySelectorAll('[data-landlord-pdf]').forEach(button=>{button.disabled=true});
  try{
-  const payload=editablePayload||landlordContractPdfPayload(lease);
+  const payload=editablePayload||{...landlordContractPdfPayload(lease),...(lease.print_overrides||{})};
+  payload.number=numberedContract(lease.contract_number);
   if(mode==='preview')await generator.preview(payload,win);
   else await generator.download(payload);
   toast(mode==='preview'?'تم إعداد معاينة عقد المالك بالقالب الأصلي':'تم تحميل عقد إيجار السطح بقالب رأفت');
@@ -2966,7 +2967,8 @@ async function generateCustomerContractPdf(id,mode='download',editablePayload=nu
  s.generatingContractPdf=true;
  document.querySelectorAll('[data-customer-pdf]').forEach(button=>{button.disabled=true});
  try{
-  const payload=editablePayload||customerContractPdfPayload(contract);
+  const payload=editablePayload||{...customerContractPdfPayload(contract),...(contract.print_overrides||{})};
+  payload.number=numberedContract(contract.contract_number);
   if(mode==='preview')await generator.preview(payload,win);
   else await generator.download(payload);
   toast(mode==='preview'?'تم إنشاء معاينة PDF باستخدام القالب الأصلي':'تم تنزيل عقد الزبون بالقالب الرسمي الأصلي');
@@ -2990,8 +2992,11 @@ function openLandlordPdfEditor(id,preferredMode='preview'){
  const payload=landlordContractPdfPayload(lease);
  payload.clauses=generator.defaultLandlordClauses(payload).map((clause,index)=>({...clause,number:String(index+1)}));
  payload._autoLandlordClauses=payload.clauses.map(item=>item.text);
+ const printBase=JSON.parse(JSON.stringify(payload));
+ if(lease.print_overrides&&typeof lease.print_overrides==='object')Object.assign(payload,lease.print_overrides);
+ payload.number=numberedContract(lease.contract_number);
  s.modal={kind:'landlordPdfEditor',table:'leases',data:lease,
-  printDraft:payload,preferredMode};
+  printDraft:payload,printBase,preferredMode};
  render();
 }
 function landlordPrintField(payload,[name,title,type='text']){
@@ -3024,7 +3029,7 @@ function landlordPdfEditorHtml(){
   '<strong>'+E(title)+'</strong>'+entries.map(field).join('')+'</div>';
  return '<div class="overlay"><div class="modal customer-pdf-editor landlord-pdf-editor" role="dialog" aria-modal="true" aria-labelledby="landlordPdfEditorTitle">'+
   '<div class="modalhead"><div><h2 id="landlordPdfEditorTitle">مراجعة وتحرير عقد إيجار السطح للطباعة</h2>'+
-  '<p class="subtle">صفحتان بقالب رأفت الأصلي: عقد السطح أولاً، ثم شروط الإيجار والتواقيع. التعديلات هنا تخص PDF فقط. لتغيير مواعيد الأقساط المحفوظة فعلياً افتح «تفاصيل / تعديل» عقد السطح؛ الشروط العشرة قابلة للتعديل والإضافة والحذف قبل الطباعة.</p></div>'+
+  '<p class="subtle">صفحتان بقالب رأفت الأصلي: عقد السطح أولاً، ثم شروط الإيجار والتواقيع. تگدر تحفظ بيانات وشروط نسخة العقد بعد تعديلها وتفتحها مرة ثانية بنفس التعديلات. لتغيير الأقساط المالية الفعلية استخدم «تعديل العقد»؛ تعديلات نسخة الطباعة وحدها لا تغيّر السجلات المالية.</p></div>'+
   '<button type="button" class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
   '<form id="landlordPdfEditorForm">'+
   '<section class="customer-print-section"><h3>رقم العقد</h3><div class="customer-print-fields">'+
@@ -3074,7 +3079,7 @@ function landlordPdfEditorHtml(){
      ['secondSignatureLabel','صفة المدير المفوض / الشركة'],['secondSignatureName','اسم المدير المفوض للتوقيع'],
      ['secondSignatureDate','تاريخ توقيع الشركة','date']])+
    '</div></section>'+
-  '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-preview>'+
+  '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-save>'+uiIcon('check',16)+' حفظ تعديلات نسخة العقد</button><button type="button" class="btn secondary" data-pdf-editor-preview>'+
    uiIcon('file',16)+' معاينة ملف PDF</button>'+
    '<button type="button" class="btn" data-pdf-editor-download>'+uiIcon('download',16)+' تنزيل نسخة الطباعة</button>'+
    '<button type="button" class="btn secondary" data-action="close">إغلاق</button></div>'+
@@ -3104,8 +3109,11 @@ function openCustomerPdfEditor(id,preferredMode='preview'){
  ].map(([,text],index)=>({number:String(index+1),text}));
  payload.clauses=(standard||fallback).map((item,index)=>({...item,number:String(index+1)}));
  payload._autoCustomerClauses=payload.clauses.map(item=>item.text);
+ const printBase=JSON.parse(JSON.stringify(payload));
+ if(contract.print_overrides&&typeof contract.print_overrides==='object')Object.assign(payload,contract.print_overrides);
+ payload.number=numberedContract(contract.contract_number);
  s.modal={kind:'customerPdfEditor',table:'customer_contracts',data:contract,
-  printDraft:payload,preferredMode};
+  printDraft:payload,printBase,preferredMode};
  render();
 }
 const CUSTOMER_PRINT_FIELDS=[
@@ -3139,7 +3147,7 @@ function customerPdfEditorHtml(){
   '</div></div>';
  return '<div class="overlay"><div class="modal customer-pdf-editor" role="dialog" aria-modal="true" aria-labelledby="customerPdfEditorTitle">'+
   '<div class="modalhead"><div><h2 id="customerPdfEditorTitle">مراجعة وتحرير نسخة العقد للطباعة</h2>'+
-  '<p class="subtle">صفحتان بالقالب الأصلي: العقد أولاً، ثم الشروط والتواقيع. تعديلات هذه النافذة خاصة بملف PDF ولا تغيّر البيانات المحفوظة.</p></div>'+
+  '<p class="subtle">صفحتان بالقالب الأصلي: العقد أولاً، ثم الشروط والتواقيع. تگدر تحفظ تعديلات نسخة الطباعة وتفتحها بنفس التفاصيل لاحقاً. لتعديل البيانات المالية الأصلية افتح «تعديل العقد»؛ نسخة الطباعة وحدها لا تغيّر دفعات الحملة.</p></div>'+
   '<button class="close" type="button" data-action="close">'+uiIcon('x',19)+'</button></div>'+
   '<form id="customerPdfEditorForm">'+
   '<section class="customer-print-section"><h3>بيانات العقد والأطراف — الصفحة الأولى</h3>'+
@@ -3180,7 +3188,7 @@ function customerPdfEditorHtml(){
      ['secondSignatureDate','تاريخ توقيع الطرف الثاني','date']
     ].map(field).join('')+'</div>'+
    '</div></section>'+
-  '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-preview>'+
+  '<div class="customer-print-actions"><button type="button" class="btn secondary" data-pdf-editor-save>'+uiIcon('check',16)+' حفظ تعديلات نسخة العقد</button><button type="button" class="btn secondary" data-pdf-editor-preview>'+
    uiIcon('file',16)+' معاينة ملف PDF</button><button type="button" class="btn" data-pdf-editor-download>'+
    uiIcon('download',16)+' تنزيل نسخة الطباعة</button>'+
    '<button type="button" class="btn secondary" data-action="close">إغلاق</button></div>'+
@@ -3271,9 +3279,51 @@ function captureCustomerPdfEditor(form){
  payload.amount=Number(payload.amount)||0;
  modal.printDraft=payload;
 }
+
+async function saveContractPdfDraft(form){
+ if(s.savingContractPrint||!['landlordPdfEditor','customerPdfEditor'].includes(s.modal?.kind))return;
+ const m=s.modal,table=m.table,record=lookup(table,m.data.id);
+ if(!record)return toast('هذا العقد لم يعد موجوداً.',true);
+ if(!canAccess(table,'edit'))return toast('ما عندك صلاحية حفظ تعديلات هذا العقد.',true);
+ try{captureCustomerPdfEditor(form)}catch(error){return toast('راجع بيانات نسخة الطباعة: '+(error?.message||error),true)}
+ const draft={...m.printDraft},base=m.printBase||{};
+ const expectedNumber=numberedContract(record.contract_number);
+ if(draft.number!==expectedNumber)return toast('رقم العقد رسمي وثابت، لا يمكن تغييره في نسخة الطباعة.',true);
+ if(!Array.isArray(draft.clauses)||draft.clauses.length<1||
+    draft.clauses.some(x=>!String(x?.text||'').trim()))
+  return toast('يجب وجود شرط واحد على الأقل، وبدون شروط فارغة.',true);
+ if(table==='leases'&&(!Number.isFinite(draft.rentTotal)||draft.rentTotal<0||
+    !Number.isFinite(draft.advanceAmount)||draft.advanceAmount<0||draft.advanceAmount>draft.rentTotal))
+  return toast('راجع قيمة الإيجار والمقدم في نسخة العقد.',true);
+ if(table==='customer_contracts'&&(!Number.isFinite(draft.amount)||draft.amount<0))
+  return toast('راجع قيمة العقد في نسخة الطباعة.',true);
+ const skip=new Set(['number','kind','exchangeRate','_autoCustomerClauses','_autoLandlordClauses']);
+ const overrides={};
+ for(const [key,value] of Object.entries(draft)){
+  if(skip.has(key))continue;
+  if(JSON.stringify(value)!==JSON.stringify(base[key]))overrides[key]=value;
+ }
+ s.savingContractPrint=true;
+ const button=form.querySelector('[data-pdf-editor-save]');if(button)button.disabled=true;
+ try{
+  if(s.demo)record.print_overrides=overrides;
+  else{
+   const {data,error}=await s.client.from(table).update({print_overrides:overrides})
+    .eq('id',record.id).select('id,print_overrides').single();
+   if(error||!data)throw Error(error?.message||'قاعدة البيانات لم تؤكد حفظ نسخة العقد.');
+   record.print_overrides=data.print_overrides;
+  }
+  m.data.print_overrides=record.print_overrides;
+  toast('تم حفظ نسخة العقد وشروطها وتواقيعها بشكل دائم. تقدر ترجع تفتحها وتطبعها لاحقاً.');
+ }catch(error){toast('تعذر حفظ تعديلات نسخة العقد: '+(error?.message||error),true)}
+ finally{s.savingContractPrint=false;if(button&&button.isConnected)button.disabled=false}
+}
+
 function bindCustomerPdfEditor(){
  const form=$('#customerPdfEditorForm')||$('#landlordPdfEditorForm');
  if(!form)return;
+ const saveButton=form.querySelector('[data-pdf-editor-save]');
+ if(saveButton)saveButton.onclick=()=>saveContractPdfDraft(form);
  document.querySelectorAll('[data-pdf-editor-preview],[data-pdf-editor-download]').forEach(button=>button.onclick=async()=>{
   captureCustomerPdfEditor(form);
   const m=s.modal,mode=button.hasAttribute('data-pdf-editor-preview')?'preview':'download';
