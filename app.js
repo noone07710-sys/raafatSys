@@ -2848,6 +2848,11 @@ function review(v){
 // PDF data are taken from the saved customer contract snapshots and their
 // originating campaign; company branding is supplied by the exact PDF template,
 // NOT dynamically inserted from the settings page.
+function leasePaidFullyInCash(v,installments){
+ const total=Number(v?.rent_total),advance=Number(v?.advance_amount||0);
+ return Number.isFinite(total)&&total>0&&Number.isFinite(advance)&&Math.abs(total-advance)<0.005&&
+  (!Array.isArray(installments)||installments.length===0);
+}
 function landlordContractPdfPayload(v){
  if(!v?.id)throw Error('احفظ عقد المالك أولاً حتى تقدر تحمّل PDF الرسمي');
  const landlord=lookup('landlords',v.landlord_id),property=lookup('properties',v.property_id);
@@ -2860,6 +2865,7 @@ function landlordContractPdfPayload(v){
  return {
   kind:'landlord',number:numberedContract(v.contract_number),
   landlordName:landlord?.name||'—',landlordPhone:landlord?.phone||'—',
+  landlordNationalId:landlord?.national_id||'',
   landlordAddress:[landlord?.governorate,landlord?.residential_address].filter(Boolean).join('، ')||'—',
   governorate:landlord?.governorate||'—',
   companyRepresentative:v.company_representative||'—',
@@ -2895,7 +2901,11 @@ async function generateLandlordContractPdf(id,mode='download',editablePayload=nu
  s.generatingContractPdf=true;
  document.querySelectorAll('[data-landlord-pdf]').forEach(button=>{button.disabled=true});
  try{
-  const payload=editablePayload||{...landlordContractPdfPayload(lease),...(lease.print_overrides||{})};
+  const base=landlordContractPdfPayload(lease);
+  const payload=editablePayload?{...editablePayload}:{...base,...(lease.print_overrides||{})};
+  // A past print-only override must not reintroduce an installment schedule
+  // after all real installments were removed from this lease.
+  if(!base.installments.length)payload.installments=[];
   payload.number=numberedContract(lease.contract_number);
   if(mode==='preview')await generator.preview(payload,win);
   else await generator.download(payload);
@@ -2991,10 +3001,12 @@ function openLandlordPdfEditor(id,preferredMode='preview'){
  if(typeof generator?.defaultLandlordClauses!=='function')
   return toast('مكوّن شروط الإيجار لم يكتمل تحميله. حدّث الصفحة وحاول مجدداً.',true);
  const payload=landlordContractPdfPayload(lease);
+ const hasRecordedInstallments=payload.installments.length>0;
  payload.clauses=generator.defaultLandlordClauses(payload).map((clause,index)=>({...clause,number:String(index+1)}));
  payload._autoLandlordClauses=payload.clauses.map(item=>item.text);
  const printBase=JSON.parse(JSON.stringify(payload));
  if(lease.print_overrides&&typeof lease.print_overrides==='object')Object.assign(payload,lease.print_overrides);
+ if(!hasRecordedInstallments)payload.installments=[];
  payload.number=numberedContract(lease.contract_number);
  s.modal={kind:'landlordPdfEditor',table:'leases',data:lease,
   printDraft:payload,printBase,preferredMode};
@@ -3039,6 +3051,7 @@ function landlordPdfEditorHtml(){
     '<div class="customer-signature-parties">'+
      party(true,'الطرف الأول — يمين: المؤجر (مالك السطح)',[
       ['landlordName','اسم مالك السطح'],['landlordPhone','هاتف المالك'],
+      ['landlordNationalId','رقم البطاقة الوطنية للمالك'],
       ['landlordRepresentative','ممثل المالك'],['landlordAddress','عنوان المالك']])+
      party(false,'الطرف الثاني — يسار: المستأجر (شركة رأفت)',[
       ['companyRepresentative','اسم المدير المفوض'],['companyPhones','أرقام هواتف الشركة']])+
@@ -3060,9 +3073,10 @@ function landlordPdfEditorHtml(){
    '<div class="landlord-print-fx-note" role="note">'+
     'سعر الصرف المعتمد: 1 دولار = '+E(Number(s.settings?.usd_iqd||0).toLocaleString('en-US'))+
     ' دينار عراقي. عند تغيير عملة نسخة الطباعة تُحوَّل كل مبالغ العقد والأقساط؛ ويمكنك كتابة القيمة المطلوبة بالدينار يدوياً بعد التحويل. <strong>العقد الأصلي لا يتغير.</strong></div>'+
-   '<div class="customer-print-section-head"><h3>الأقساط الواردة في نسخة العقد</h3>'+
+   (Array.isArray(v.installments)&&v.installments.length?
+    '<div class="customer-print-section-head"><h3>الأقساط الواردة في نسخة العقد</h3>'+
     '<button type="button" class="btn secondary mini" data-print-installment-add>'+uiIcon('plus',15)+' إضافة قسط</button></div>'+
-   '<div class="landlord-print-installments">'+installments+'</div></section>'+
+    '<div class="landlord-print-installments">'+installments+'</div>':'')+'</section>'+
   '<section class="customer-print-section"><h3>شروط عقد السطح — الصفحة الثانية</h3>'+
    '<div class="customer-print-section-head"><p class="subtle">عشرة شروط أساسية قابلة للتعديل والإضافة والحذف، مع ترقيم متسلسل تلقائي.</p>'+
     '<button class="btn secondary mini" type="button" data-print-clause-add>'+uiIcon('plus',15)+' إضافة شرط</button></div>'+
@@ -3421,11 +3435,40 @@ function customerContractPreview(v){
 }
 
 function previewHtml(v){
- let p=nameOf('properties',v.property_id),l=nameOf('landlords',v.landlord_id);
- let rows=s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date));
- return '<div class="overlay"><div class="modal"><div class="modalhead noprint"><h2>معاينة العقد</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div><article class="contract"><h3 style="text-align:center">معاينة بيانات عقد إيجار سطح بين الشركة ومالك البناية — '+E(numberedContract(v.contract_number))+'</h3><div class="summary"><div><small>اسم المالك</small>'+E(l)+'</div><div><small>هاتف المالك</small>'+E(lookup('landlords',v.landlord_id)?.phone||'—')+'</div><div><small>المحافظة وعنوان السكن</small>'+E([lookup('landlords',v.landlord_id)?.governorate,lookup('landlords',v.landlord_id)?.residential_address].filter(Boolean).join(' — ')||'—')+'</div><div><small>العقار</small>'+E(p)+'</div><div><small>قياسات السطح</small>'+E(lookup('properties',v.property_id)?.dimensions||'—')+'</div><div><small>بداية العقد</small>'+E(v.start_date)+'</div><div><small>نهاية العقد</small>'+E(v.end_date)+'</div><div><small>الأجرة الإجمالية</small>'+E(money(v.rent_total,v.currency))+'</div><div><small>المقدم</small>'+E(money(leaseAdvance(v),v.currency))+'</div><div><small>المتبقي بعد المقدم</small>'+E(money(Math.max(0,Number(v.rent_total||0)-leaseAdvance(v)),v.currency))+'</div><div><small>المعادل بسعر الصرف الحالي — للاطلاع فقط</small>'+E(money(equivalent(v.rent_total,v.currency),s.displayCurrency))+'</div><div><small>الدورية</small>'+E(labels[v.payment_frequency])+'</div><div><small>فترة السماح</small>'+E(v.grace_days)+' يوم</div><div><small>المدير المفوض / ممثل المالك</small>'+E(v.company_representative||'—')+' / '+E(v.landlord_representative||'—')+'</div></div><p style="margin-top:18px">ملاحظات وشروط: '+E(v.notes||'لا توجد')+'</p><h3>جدول الدفعات</h3><table><thead><tr><th>تاريخ الاستحقاق</th><th>المبلغ</th><th>المدفوع</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+E(x.due_date)+'</td><td>'+E(money(x.amount,v.currency))+'</td><td>'+E(money(x.paid_amount,v.currency))+'</td></tr>').join('')+'</tbody></table><div style="display:flex;justify-content:space-between;margin-top:55px"><span>توقيع المدير المفوض: ___________</span><span>توقيع ممثل المالك: ___________</span></div><p class="subtle" style="margin-top:25px">هذه معاينة للبيانات المسجلة وليست بديلاً عن نص عقد قانوني معتمد.</p></article><div class="lease-preview-actions noprint"><button type="button" class="btn" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('printer',16)+' مراجعة البنود وتجهيز PDF</button><button type="button" class="btn secondary" data-edit="leases:'+E(v.id)+'">'+uiIcon('pencil',16)+' تعديل بيانات العقد</button><button type="button" class="btn secondary" data-lease-payments="'+E(v.id)+'">'+uiIcon('receipt',16)+' الأقساط والدفعات</button><button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
+ const landlord=lookup('landlords',v.landlord_id),property=lookup('properties',v.property_id);
+ const rows=s.data.lease_installments.filter(x=>x.lease_id===v.id).sort((a,b)=>a.due_date.localeCompare(b.due_date));
+ const paidCash=leasePaidFullyInCash(v,rows);
+ const item=(key,value)=>'<div><small>'+E(key)+'</small>'+E(value??'—')+'</div>';
+ return '<div class="overlay"><div class="modal"><div class="modalhead noprint">'+
+  '<h2>معاينة عقد استئجار أسطح بنايات إعلانية</h2><button class="close" data-action="close">'+uiIcon('x',19)+'</button></div>'+
+  '<article class="contract"><h3 style="text-align:center">عقد استئجار أسطح بنايات إعلانية — '+E(numberedContract(v.contract_number))+'</h3>'+
+  '<div class="summary">'+
+   item('اسم المالك',landlord?.name||'—')+
+   item('هاتف المالك',landlord?.phone||'—')+
+   item('رقم البطاقة الوطنية للمالك',landlord?.national_id||'غير مسجل')+
+   item('المحافظة وعنوان السكن',[landlord?.governorate,landlord?.residential_address].filter(Boolean).join(' — ')||'—')+
+   item('العقار',property?.title||'—')+
+   item('قياسات السطح',property?.dimensions||(property?.width_m&&property?.height_m?property.width_m+' × '+property.height_m+' م':'—'))+
+   item('بداية العقد',v.start_date)+item('نهاية العقد',v.end_date)+
+   item('الأجرة الإجمالية',money(v.rent_total,v.currency))+
+   (paidCash?item('حالة التسديد','مدفوع نقداً'):
+    item('المقدم',money(leaseAdvance(v),v.currency))+
+    item('المتبقي بعد المقدم',money(Math.max(0,Number(v.rent_total||0)-leaseAdvance(v)),v.currency)))+
+   item('المعادل بسعر الصرف الحالي — للاطلاع فقط',money(equivalent(v.rent_total,v.currency),s.displayCurrency))+
+   (rows.length?item('دورية دفع الإيجار',labels[v.payment_frequency]||v.payment_frequency):'')+
+   item('فترة السماح',v.grace_days+' يوم')+
+   item('المدير المفوض / ممثل المالك',(v.company_representative||'—')+' / '+(v.landlord_representative||'—'))+
+  '</div><p style="margin-top:18px">ملاحظات وشروط: '+E(v.notes||'لا توجد')+'</p>'+
+  (rows.length?'<h3>جدول أقساط الإيجار</h3><table><thead><tr><th>تاريخ الاستحقاق</th><th>المبلغ</th><th>المدفوع</th></tr></thead><tbody>'+
+   rows.map(x=>'<tr><td>'+E(x.due_date)+'</td><td>'+E(money(x.amount,v.currency))+'</td><td>'+E(money(x.paid_amount,v.currency))+'</td></tr>').join('')+
+   '</tbody></table>':'')+
+  '<div style="display:flex;justify-content:space-between;margin-top:55px"><span>توقيع المدير المفوض: ___________</span><span>توقيع ممثل المالك: ___________</span></div>'+
+  '<p class="subtle" style="margin-top:25px">هذه معاينة للبيانات المسجلة وليست بديلاً عن نص عقد قانوني معتمد.</p></article>'+
+  '<div class="lease-preview-actions noprint"><button type="button" class="btn" data-landlord-pdf="'+E(v.id)+'" data-pdf-mode="preview">'+uiIcon('printer',16)+' مراجعة البنود وتجهيز PDF</button>'+
+  '<button type="button" class="btn secondary" data-edit="leases:'+E(v.id)+'">'+uiIcon('pencil',16)+' تعديل بيانات العقد</button>'+
+  '<button type="button" class="btn secondary" data-lease-payments="'+E(v.id)+'">'+uiIcon('receipt',16)+' الأقساط والدفعات</button>'+contractDeleteAction('leases',v)+
+  '<button class="btn secondary" data-action="close">إغلاق</button></div></div></div>';
 }
-
 function updateMoneyHints(){
  const form=$('#recordForm');if(!form||!s.modal)return;
  const k=s.modal.table,v={...s.modal.data};
