@@ -37,7 +37,7 @@ function model(){
  return {app,s,root,win,doc};
 }
 
-test('landlord contract payload maps only saved lease and roof values, excluding identity card number',()=>{
+test('landlord contract payload maps saved lease, roof and the landlord national ID only',()=>{
  const {app,s}=model();
  const original=s.data.leases[0];
  const payload=app.landlordContractPdfPayload(original);
@@ -58,8 +58,8 @@ test('landlord contract payload maps only saved lease and roof values, excluding
  ]);
  assert.equal(payload.notes,'ينفذ استئجار السطح وفق الاتفاق المسجل');
  assert.equal(Object.hasOwn(payload,'national_id'),false);
- assert.equal(Object.hasOwn(payload,'landlordNationalId'),false);
- assert.doesNotMatch(JSON.stringify(payload),/111111111111/);
+ assert.equal(payload.landlordNationalId,'111111111111');
+ assert.match(JSON.stringify(payload),/111111111111/);
  const dialog=app.previewHtml(original);
  assert.match(dialog,/data-landlord-pdf="lease"/);
  assert.match(dialog,/data-edit="leases:lease"/);
@@ -121,12 +121,13 @@ test('landlord PDF draws lease on first Photoshop A4 and ten numbered lease term
  assert.equal(trace.backgrounds,2);
  assert.equal(trace.overlays,2);
  assert.match(trace.title,/RA-0007/);
- assert.match(trace.subject,/عقد إيجار سطح/);
- for(const expected of ['عقد استئجار سطح إعلاني','مالك السطح','سطح عمارة الرافدين',
+ assert.match(trace.subject,/عقد استئجار أسطح بنايات إعلانية/);
+ for(const expected of ['عقد استئجار أسطح بنايات إعلانية','مالك السطح','سطح عمارة الرافدين',
   '1,200','200','1,000','2026-11-19','2027-05-19','شروط العقد كالتالي',
   'الطرف الأول — المؤجر (مالك السطح)','المدير المفوض — شركة رأفت (الطرف الثاني)'])
   assert.ok(trace.text.some(x=>x.includes(expected)),expected);
- assert.ok(!trace.text.some(x=>x.includes('111111111111')||x.includes('البطاقة الموحدة')));
+ assert.ok(trace.text.some(x=>x.includes('111111111111')));
+ assert.ok(trace.text.some(x=>x.includes('رقم البطاقة الوطنية للمالك')));
  assert.equal(trace.text.filter(x=>x==='RA-0007').length,4,'matching reference across both rendered and measurement sheets');
  const numbers=trace.draws.filter(d=>d.canvasId===3&&/^\d+\.$/.test(d.text)).map(d=>d.text);
  assert.deepEqual(numbers,['1.','2.','3.','4.','5.','6.','7.','8.','9.','10.']);
@@ -164,7 +165,7 @@ test('lease editor mirrors customer two-page review with editable ten conditions
  for(const item of ['landlordPdfEditorForm','data-print-clause-add','data-print-clause-remove',
   'data-pdf-editor-preview','data-pdf-editor-download','data-print-installment-add',
   'data-print-installment-remove','name="firstSignatureName"','name="secondSignatureName"',
-  'name="rentTotal"','name="graceDays"','name="propertyName"','name="landlordName"']){
+  'name="rentTotal"','name="graceDays"','name="propertyName"','name="landlordName"','name="landlordNationalId"']){
   assert.ok(html.includes(item),'Missing edit affordance '+item);
  }
  assert.ok(html.indexOf('الطرف الأول — يمين: المؤجر')<html.indexOf('الطرف الثاني — يسار: المستأجر'),
