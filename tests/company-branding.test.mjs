@@ -75,7 +75,7 @@ test('company branding settings render and save together with FX',async()=>{
  assert.match(page.innerHTML,/شركة اختبار للدعاية/);
  const ownerContract={id:'lease1',property_id:'prop1',landlord_id:'owner1',rent_total:1000,currency:'USD',payment_frequency:'annual',grace_days:0,start_date:'2026-11-14',end_date:'2027-11-13'};
  assert.doesNotMatch(env.previewHtml(ownerContract),/شركة اختبار للدعاية/);
- assert.match(env.previewHtml(ownerContract),/بين الشركة ومالك البناية/);
+ assert.match(env.previewHtml(ownerContract),/عقد استئجار أسطح بنايات إعلانية/);
  const customerContract={id:'cc1',package_id:env.s.data.packages[0].id,customer_id:'unknown',contract_type:'cabin',duration_months:3,start_date:'2026-11-14',end_date:'2027-02-13',contract_number:'RC-1',amount:280,currency:'USD'};
  assert.doesNotMatch(env.customerContractPreview(customerContract),/شركة اختبار للدعاية/);
  assert.match(env.customerContractPreview(customerContract),/الطرف الأول<\/small><strong>الشركة/);
