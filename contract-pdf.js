@@ -1,7 +1,7 @@
 /* Raafat Sys — official customer contract PDF.
  * The uploaded Photoshop-designed PDF is copied unchanged as every page's
  * background. Only transparent, correctly shaped Arabic writing is overlaid
- * inside the white area. No customer identity-card numbers are exported.
+ * inside the white area. Only the landlord's national ID is included in rooftop leases; customer IDs are excluded.
  */
 (function (scope) {
  'use strict';
@@ -186,7 +186,7 @@
    page.y=AREA.top;
    const {ctx}=page;
    const onFirst=page.pageNumber===1;
-   print(ctx,payload.kind==='landlord'?'عقد استئجار سطح إعلاني':onFirst?'عقد حجز مساحات إعلانية':'تابع عقد حجز المساحات الإعلانية',
+   print(ctx,payload.kind==='landlord'?'عقد استئجار أسطح بنايات إعلانية':onFirst?'عقد حجز مساحات إعلانية':'تابع عقد حجز المساحات الإعلانية',
     AREA.right,page.y+15,onFirst?17:15,800,COLOR.navy);
    // The same contract reference is displayed at the top of both customer sheets.
    print(ctx,label(payload.number),AREA.left+10,page.y+15,11,800,COLOR.navy,'left');
@@ -387,14 +387,27 @@
   const months=Math.round(days/30.44);
   return months>0?months+' شهراً':'المدة المحددة في هذا العقد';
  }
+ function landlordHasInstallments(payload){
+  return Array.isArray(payload?.installments)&&payload.installments.length>0;
+ }
+ function landlordPaymentIsCash(payload){
+  const total=Number(payload?.rentTotal),advance=Number(payload?.advanceAmount);
+  return Number.isFinite(total)&&total>0&&Number.isFinite(advance)&&
+   Math.abs(total-advance)<0.005&&!landlordHasInstallments(payload);
+ }
  function landlordClauses(payload){
   const rent=amountInWords(payload.rentTotal,payload.currency);
   const days=Math.max(0,Number(payload.graceDays)||0);
   const grace=days===14?'أسبوعان':days===7?'أسبوع واحد':days+' يوماً';
   const start=label(payload.startDate).replace(/-/g,'/');
   const end=label(payload.endDate).replace(/-/g,'/');
+  const payment=landlordPaymentIsCash(payload)?
+   'يقر الطرف الأول باستلام كامل بدل الإيجار المتفق عليه وقدره '+rent+'، مدفوع نقداً بالكامل.':
+   landlordHasInstallments(payload)?
+   'يلتزم الطرف الثاني بدفع بدل الإيجار المتفق عليه وقدره '+rent+' وفق جدول الدفعات المثبت في العقد.':
+   'يلتزم الطرف الثاني بدفع بدل الإيجار المتفق عليه وقدره '+rent+' وفق الاتفاق المثبت في العقد.';
   return [
-   {number:'1',text:'يلتزم الطرف الثاني بدفع بدل الإيجار المتفق عليه وقدره '+rent+' وفق جدول الدفعات المثبت في العقد.'},
+   {number:'1',text:payment},
    {number:'2',text:'مدة العقد خمس سنوات قابلة للتجديد، ويدفع الطرف الثاني إيجار كل سنة مقدماً للطرف الأول.'},
    {number:'3',text:'يقدم الطرف الأول فترة سماح مدتها '+grace+' للمواد الإعلانية ويبدأ الإيجار بتاريخ '+start+' إلى '+end+'.'},
    {number:'4',text:'يتعهد الطرف الثاني في حالة اضطراره لفسخ العقد لظروف قاهرة بأن يزيل الإعلان على نفقته الخاصة.'},
@@ -413,8 +426,18 @@
    setFont(ctx,size,weight);ctx.textAlign=align;ctx.fillStyle=color;
    ctx.fillText(String(value??''),x,y);ctx.textAlign='right';
   };
-  const clauses=Array.isArray(payload.clauses)?payload.clauses:
+  const sourceClauses=Array.isArray(payload.clauses)?payload.clauses:
    payload.kind==='landlord'?landlordClauses(payload):customerClauses(payload);
+  const clauses=sourceClauses.map(clause=>({...clause}));
+  if(payload.kind==='landlord'&&!landlordHasInstallments(payload)){
+   const standard=landlordClauses(payload)[0].text;
+   for(const clause of clauses){
+    const oldText=String(clause.text||'');
+    if(oldText.startsWith('يلتزم الطرف الثاني بدفع بدل الإيجار المتفق عليه وقدره ')&&
+       oldText.endsWith(' وفق جدول الدفعات المثبت في العقد.'))
+     clause.text=standard;
+   }
+  }
   let y=AREA.top+10;
   // Exactly the same editable contract number as the page-one header.
   print('رقم العقد',AREA.left+10,AREA.top-1,9,600,COLOR.muted,'left');
@@ -479,14 +502,14 @@
    throw Error('أبعاد القالب اختلفت عن A4 الأصلي');
   const out=await PDFLib.PDFDocument.create();
   out.setTitle('عقد رأفت '+payload.number);
-  out.setSubject(payload.kind==='landlord'?'عقد إيجار سطح — '+label(payload.landlordName):'عقد إعلان — '+label(payload.customerName));
+  out.setSubject(payload.kind==='landlord'?'عقد استئجار أسطح بنايات إعلانية — '+label(payload.landlordName):'عقد إعلان — '+label(payload.customerName));
   out.setCreator('Raafat Sys');
   // Both customer and landlord agreements use two copies of the original
   // Photoshop template: agreement on page 1, numbered legal terms on page 2.
   function renderContent(painter){
    painter.begin();
    if(payload.kind==='landlord'){
-    painter.section('أطراف عقد إيجار السطح');
+    painter.section('أطراف عقد استئجار أسطح البنايات');
     painter.fields([
      {name:'الطرف الأول — المؤجر (المالك)',value:payload.landlordName},
      {name:'الطرف الثاني — المستأجر',value:'شركة رأفت للدعاية والإعلان والتجارة العامة'}
@@ -495,6 +518,7 @@
      {name:'هاتف المالك',value:payload.landlordPhone},
      {name:'هاتف الشركة',value:label(payload.companyPhones,'07766663304 - 07866663304')}
     ]);
+    painter.field('رقم البطاقة الوطنية للمالك',label(payload.landlordNationalId,'غير مسجل'));
     painter.fields([
      {name:'ممثل المالك',value:payload.landlordRepresentative},
      {name:'المدير المفوض',value:payload.companyRepresentative}
@@ -515,24 +539,35 @@
      {name:'تاريخ بداية الإيجار',value:payload.startDate},
      {name:'تاريخ نهاية الإيجار',value:payload.endDate}
     ]);
-    painter.fields([
-     {name:'دورية دفع الإيجار',value:payload.paymentFrequency},
-     {name:'فترة السماح',value:label(payload.graceDays)+' يوم'}
-    ]);
-    painter.fields([
-     {name:'الإيجار الإجمالي',value:amountInWords(payload.rentTotal,payload.currency)},
-     {name:'المبلغ المقدم',value:amount(payload.advanceAmount,payload.currency)}
-    ]);
-    painter.field('المبلغ المتبقي بعد المقدم',amountInWords(payload.remainingAfterAdvance,payload.currency));
-    painter.section('جدول أقساط الإيجار');
-    if(Array.isArray(payload.installments)&&payload.installments.length){
+    if(landlordHasInstallments(payload)){
+     painter.fields([
+      {name:'دورية دفع الإيجار',value:payload.paymentFrequency},
+      {name:'فترة السماح',value:label(payload.graceDays)+' يوم'}
+     ]);
+    }else{
+     painter.field('فترة السماح',label(payload.graceDays)+' يوم');
+    }
+    if(landlordPaymentIsCash(payload)){
+     painter.fields([
+      {name:'الإيجار الإجمالي',value:amountInWords(payload.rentTotal,payload.currency)},
+      {name:'حالة التسديد',value:'مدفوع نقداً'}
+     ]);
+    }else{
+     painter.fields([
+      {name:'الإيجار الإجمالي',value:amountInWords(payload.rentTotal,payload.currency)},
+      {name:'المبلغ المقدم',value:amount(payload.advanceAmount,payload.currency)}
+     ]);
+     painter.field('المبلغ المتبقي بعد المقدم',amountInWords(payload.remainingAfterAdvance,payload.currency));
+    }
+    if(landlordHasInstallments(payload)){
+     painter.section('جدول أقساط الإيجار');
      for(let i=0;i<payload.installments.length;i+=2){
       painter.fields(payload.installments.slice(i,i+2).map((item,j)=>({
        name:'القسط '+String(i+j+1).padStart(4,'0')+' — '+label(item.dueDate),
        value:amount(item.amount,payload.currency)
       })));
      }
-    }else painter.block('الأقساط','لا توجد أقساط مجدولة لهذا العقد.');
+    }
     // No notes, legal conditions or signatures on this agreement sheet.
     painter.end();
     return;
