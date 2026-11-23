@@ -149,6 +149,37 @@
     sheet('عقود الأسطح',[['ownerName','المالك'],['phone','رقم الهاتف'],['contractNumber','رقم العقد'],['propertyName','العقار'],['width','العرض م','number'],['height','الطول م','number'],['startDate','البداية'],['endDate','النهاية'],['rent','الإيجار الأصلي','number'],['advance','المقدم','number'],['paidInst','المدفوع من الأقساط','number'],['paid','إجمالي المدفوع','number'],['due','المتبقي','number'],['currency','العملة'],['notes','ملاحظات']],leases),
     sheet('أقساط الأسطح',[['ownerName','المالك'],['phone','الهاتف'],['contractNumber','العقد'],['propertyName','العقار'],['dueDate','تاريخ الاستحقاق'],['amount','القسط الأصلي','number'],['paid','المسدد','number'],['remaining','المتبقي','number'],['currency','العملة'],['status','الحالة']],installments)
    ];
+   // PDF is deliberately the compact third (properties) table only. Excel keeps
+   // the complete six-sheet workbook, without losing any original records.
+   const ownerPdfRows=[];
+   for(const owner of rows('landlords')){
+    const roofs=groupRows(ownerProperties,owner.id);
+    if(!roofs.length){
+     ownerPdfRows.push({ownerName:owner.name||'',phone:text(owner.phone),
+      propertyName:'لا يوجد عقار مسجل',dimensions:'',area:null,quantity:null,
+      siteSummary:'لا توجد قطع مرتبطة'});
+     continue;
+    }
+    for(const roof of roofs){
+     const boards=groupRows(propertySites,roof.id);
+     const boardText=boards.map(site=>{
+      const details=spec(site,null),size=details.width&&details.height?
+       text(details.width)+' × '+text(details.height)+' م':'القياس غير مسجل';
+      return text(site.code||site.name||'بدون رمز')+' ('+size+')';
+     }).join('، ');
+     ownerPdfRows.push({
+      ownerName:owner.name||'',phone:text(owner.phone),propertyName:roof.title||'',
+      dimensions:dimension(roof),area:number(roof.area_m2)||money(number(roof.width_m)*number(roof.height_m))||null,
+      quantity:number(roof.quantity)||null,
+      siteSummary:boardText||'لا توجد قطع مرتبطة'
+     });
+    }
+   }
+   S.pdfSheets=[sheet('العقارات والقطع حسب المالك',[
+    ['ownerName','اسم المالك'],['phone','رقم الهاتف'],['propertyName','العقار / السطح'],
+    ['dimensions','قياس السطح'],['area','مساحة السطح م²','number'],
+    ['quantity','العدد','number'],['siteSummary','القطع وقياس الإعلان']
+   ],ownerPdfRows)];
    S.counts={owners:owners.length,properties:properties.length,sites:sites.length,leases:leases.length};
   }else if(type==='customers'){
    const customers=rows('customers').map(c=>{
@@ -221,6 +252,116 @@
     sheet('عقود الزبائن',[['customerName','الزبون'],['phone','الهاتف'],['contractNumber','رقم العقد'],['campaignTitle','الحملة'],['packageName','الباقة'],['contractType','نوع العقد'],['startDate','البداية'],['endDate','النهاية'],['months','المدة بالأشهر','number'],['expectedCount','عدد القطع المتفق عليها','number'],['siteCodes','رموز القطع المحفوظة'],['locations','المواقع الإضافية'],['specs','مواصفات العقد'],['amount','المبلغ الأصلي','number'],['currency','العملة'],['notes','ملاحظات']],contracts),
     sheet('دفعات الزبائن',[['customerName','الزبون'],['phone','الهاتف'],['campaignTitle','الحملة'],['receiptNumber','رقم الوصل'],['paidAt','التاريخ'],['amount','المبلغ بعملة الحملة','number'],['currency','عملة الحملة'],['amountInView','المبلغ بعملة العرض','number'],['viewCurrency','عملة العرض'],['entryCurrency','عملة الإدخال'],['notes','ملاحظات']],payments)
    ];
+   // One compact tabular PDF rather than the six detailed Excel sheets.
+   // Include an empty-campaign row to ensure every customer remains represented.
+   const customerPdfRows=[];
+   for(const customer of rows('customers')){
+    const cs=groupRows(customerCampaigns,customer.id);
+    if(!cs.length){
+     customerPdfRows.push({customerName:customer.name||'',phone:text(customer.phone),
+      packageName:'',campaignTitle:'لا توجد حملة',siteSummary:'',
+      financeSummary:'',status:status(customer.status)});
+     continue;
+    }
+    for(const cam of cs){
+     const accounting=amountFromCampaign(cam),sites=countSitesForCampaign(cam);
+     const description=sites.map(id=>{
+      const site=get('ad_sites',id),details=spec(site,cam);
+      const size=details.width&&details.height?
+       text(details.width)+' × '+text(details.height)+' م':'القياس غير مسجل';
+      return text(site.code||site.name||'بدون رمز')+' ('+size+')';
+     }).join('، ');
+     const symbol=accounting.currency==='USD'?' 
+  }else{
+   const campaigns=rows('campaigns').map(cam=>{
+    const a=amountFromCampaign(cam);
+    return {campaignTitle:cam.title||'',customerName:name('customers',cam.customer_id),
+     packageName:name('packages',cam.package_id),siteCodes:countSitesForCampaign(cam).map(id=>text(get('ad_sites',id)?.code)).join('، '),
+     startDate:cam.start_date||'',months:number(cam.months)||null,original:a.price,paid:a.paid,
+     due:a.due,overpaid:a.overpaid,currency:a.currency,
+     originalView:transfer(a.price,a.currency),paidView:transfer(a.paid,a.currency),
+     dueView:transfer(a.due,a.currency),viewCurrency:view};
+   });
+   const payments=rows('campaign_payments').map(p=>{
+    const cam=get('campaigns',p.campaign_id);
+    return {campaignTitle:cam?.title||'',customerName:name('customers',cam?.customer_id),
+     receiptNumber:text(p.receipt_number),paidAt:p.paid_at||'',amount:money(p.amount),
+     currency:cam?.currency||'',amountView:cam?transfer(p.amount,cam.currency):null,
+     viewCurrency:view,notes:p.notes||''};
+   });
+   const leases=rows('leases').map(lease=>{
+    const p=get('properties',lease.property_id),a=amountFromLease(lease);
+    return {contractNumber:text(lease.contract_number),ownerName:name('landlords',lease.landlord_id),
+     propertyName:p?.title||'',startDate:lease.start_date||'',endDate:lease.end_date||'',
+     rent:a.rent,advance:a.advance,paidInstallments:a.paidInst,paid:a.paid,due:a.due,
+     currency:a.currency,rentView:transfer(a.rent,a.currency),dueView:transfer(a.due,a.currency),viewCurrency:view};
+   });
+   const installments=rows('lease_installments').map(inst=>{
+    const lease=get('leases',inst.lease_id);
+    const c=lease?.currency||'';
+    return {contractNumber:text(lease?.contract_number),ownerName:name('landlords',lease?.landlord_id),
+     dueDate:inst.due_date||'',amount:money(inst.amount),paid:money(inst.paid_amount),
+     due:money(Math.max(0,number(inst.amount)-number(inst.paid_amount))),
+     currency:c,dueView:c?transfer(Math.max(0,number(inst.amount)-number(inst.paid_amount)),c):null,viewCurrency:view};
+   });
+   const expenses=rows('company_expenses').map(exp=>{
+    const c=cur(exp.currency);if(!c)throw Error('عملة الفاتورة غير صحيحة');
+    return {receiptNumber:text(exp.receipt_number),expenseDate:exp.expense_date||'',title:exp.title||'',
+     category:exp.category||'',amount:money(exp.amount),paid:money(exp.paid_amount),
+     currency:c,amountView:transfer(exp.amount,c),viewCurrency:view,paidBy:exp.paid_by||'',notes:exp.notes||''};
+   });
+   const sumBy=(data,key)=>money(data.reduce((sum,r)=>sum+number(r[key]),0));
+   const totals={
+    received:sumBy(payments,'amountView'),
+    outstanding:sumBy(campaigns,'dueView'),
+    rentDue:sumBy(leases,'dueView'),
+    expenses:sumBy(expenses,'amountView'),
+    lateInstallments:installments.filter(x=>x.dueDate&&x.dueDate<=(opts.today||new Date().toISOString().slice(0,10))&&x.due>0).length
+   };
+   S.title='التقرير المالي المترابط';
+   S.totals=totals;
+   S.sheets=[
+    sheet('الملخص المالي',[['item','المؤشر'],['value','القيمة','number'],['currency','العملة']],[
+     {item:'الواصل من الحملات',value:totals.received,currency:view},
+     {item:'الذمم المتبقية على الزبائن',value:totals.outstanding,currency:view},
+     {item:'المتبقي من إيجار الأسطح',value:totals.rentDue,currency:view},
+     {item:'إجمالي المصروفات',value:totals.expenses,currency:view},
+     {item:'عدد الأقساط المستحقة غير المكتملة',value:totals.lateInstallments,currency:'عدد'}
+    ]),
+    sheet('الحملات والذمم',[['customerName','الزبون'],['campaignTitle','الحملة'],['packageName','الباقة'],['siteCodes','القطع'],['startDate','البداية'],['months','الأشهر','number'],['original','القيمة الأصلية','number'],['paid','المسدد الأصلي','number'],['due','المتبقي الأصلي','number'],['overpaid','الزيادة','number'],['currency','العملة الأصلية'],['originalView','القيمة بعملة العرض','number'],['paidView','المدفوع بعملة العرض','number'],['dueView','المتبقي بعملة العرض','number'],['viewCurrency','عملة العرض']],campaigns),
+    sheet('دفعات الحملات',[['customerName','الزبون'],['campaignTitle','الحملة'],['receiptNumber','رقم الوصل'],['paidAt','تاريخ الاستلام'],['amount','المبلغ المسجّل','number'],['currency','عملة الحملة الأصلية'],['amountView','المبلغ بعملة العرض','number'],['viewCurrency','عملة العرض'],['notes','ملاحظات']],payments),
+    sheet('عقود الإيجار',[['ownerName','المالك'],['propertyName','العقار'],['contractNumber','رقم العقد'],['startDate','بداية العقد'],['endDate','النهاية'],['rent','الإيجار الأصلي','number'],['advance','المقدم','number'],['paidInstallments','مسدّد الأقساط','number'],['paid','إجمالي المدفوع','number'],['due','المتبقي الأصلي','number'],['currency','العملة الأصلية'],['rentView','الإيجار بعملة العرض','number'],['dueView','المتبقي بعملة العرض','number'],['viewCurrency','عملة العرض']],leases),
+    sheet('أقساط الإيجار',[['ownerName','المالك'],['contractNumber','العقد'],['dueDate','تاريخ القسط'],['amount','القسط','number'],['paid','المسدّد','number'],['due','المتبقي','number'],['currency','العملة'],['dueView','المتبقي بعملة العرض','number'],['viewCurrency','عملة العرض']],installments),
+    sheet('المصروفات',[['receiptNumber','رقم الوصل'],['expenseDate','التاريخ'],['title','وصف الفاتورة'],['category','التصنيف'],['amount','المبلغ الأصلي','number'],['paid','المسدّد','number'],['currency','العملة الأصلية'],['amountView','المبلغ بعملة العرض','number'],['viewCurrency','عملة العرض'],['paidBy','المسؤول'],['notes','ملاحظات']],expenses)
+   ];
+   S.counts={campaigns:campaigns.length,payments:payments.length,leases:leases.length,installments:installments.length,expenses:expenses.length};
+  }
+  S.currency=view;
+  S.exchangeRate=fx;
+  S.generatedAt=opts.generatedAt||new Date().toISOString();
+  S.companyName=opts.companyName||'شركة رأفت للدعاية والإعلان والتجارة العامة';
+  S.source='قاعدة بيانات النظام — روابط حسب المعرّفات';
+  return S;
+ }
+ scope.RaafatReportData=Object.freeze({build,requiredTables:TABLES});
+})(window);
+:' د.ع';
+     customerPdfRows.push({
+      customerName:customer.name||'',phone:text(customer.phone),
+      campaignTitle:cam.title||'',packageName:name('packages',cam.package_id),
+      siteSummary:description||text(cam.locations)||'لا توجد قطع مرتبطة',
+      financeSummary:'القيمة '+text(accounting.price)+symbol+
+       ' | الواصل '+text(accounting.paid)+symbol+
+       ' | المتبقي '+text(accounting.due)+symbol,
+      status:status(customer.status)
+     });
+    }
+   }
+   S.pdfSheets=[sheet('ملخص الزبائن والحملات',[
+    ['customerName','اسم الزبون'],['phone','رقم الهاتف'],
+    ['campaignTitle','الحملة'],['packageName','الباقة'],
+    ['siteSummary','القطع والقياسات'],['financeSummary','القيمة / الواصل / المتبقي']
+   ],customerPdfRows)];
    S.counts={customers:customers.length,campaigns:campaigns.length,sites:campaignSites.length,contracts:contracts.length};
   }else{
    const campaigns=rows('campaigns').map(cam=>{
