@@ -271,7 +271,26 @@
        text(details.width)+' × '+text(details.height)+' م':'القياس غير مسجل';
       return text(site.code||site.name||'بدون رمز')+' ('+size+')';
      }).join('، ');
-     const symbol=accounting.currency==='USD'?' 
+     const symbol=accounting.currency==='USD'?
+      ' '+String.fromCharCode(36):' د.ع';
+     customerPdfRows.push({
+      customerName:customer.name||'',phone:text(customer.phone),
+      campaignTitle:cam.title||'',packageName:name('packages',cam.package_id),
+      siteSummary:description||text(cam.locations)||'لا توجد قطع مرتبطة',
+      financeSummary:'القيمة '+text(accounting.price)+symbol+
+       ' | الواصل '+text(accounting.paid)+symbol+
+       ' | المتبقي '+text(accounting.due)+symbol,
+      status:status(customer.status)
+     });
+    }
+   }
+   S.pdfSheets=[sheet('ملخص الزبائن والحملات',[
+    ['customerName','اسم الزبون'],['phone','رقم الهاتف'],
+    ['campaignTitle','الحملة'],['packageName','الباقة'],
+    ['siteSummary','القطع والقياسات'],
+    ['financeSummary','القيمة / الواصل / المتبقي']
+   ],customerPdfRows)];
+   S.counts={customers:customers.length,campaigns:campaigns.length,sites:campaignSites.length,contracts:contracts.length};
   }else{
    const campaigns=rows('campaigns').map(cam=>{
     const a=amountFromCampaign(cam);
