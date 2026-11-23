@@ -149,7 +149,7 @@ const roundAmount=(n)=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 const equivalent=(n,source,to=s.displayCurrency)=>roundAmount(convert(n,source,to));
 const displayMoneyText=(n,source)=>money(equivalent(n,source),s.displayCurrency)+(s.displayCurrency!==source?' (الأصل '+money(n,source)+')':'');
 const displayMoney=(n,source)=>'<strong class="amount">'+E(money(equivalent(n,source),s.displayCurrency))+'</strong>'+(s.displayCurrency!==source?'<small class="original-amount">الأصل: '+E(money(n,source))+'</small>':'');
-const originalCurrency=(k,v)=>v?.currency||((k==='lease_installments')?lookup('leases',v?.lease_id)?.currency:(k==='campaign_payments')?lookup('campaigns',v?.campaign_id)?.currency:null)||'IQD';
+const originalCurrency=(k,v)=>((k==='lease_installments')?lookup('leases',v?.lease_id)?.currency:(k==='campaign_payments')?lookup('campaigns',v?.campaign_id)?.currency:v?.currency)||v?.currency||'IQD';
 const linkedSites=(campaignId)=>s.data.campaign_sites.filter(x=>x.campaign_id===campaignId).map(x=>lookup('ad_sites',x.site_id)).filter(Boolean);
 
 // A campaign reserves each site only during its agreed dates. Bookings
@@ -1989,15 +1989,67 @@ function listing(k){
  (k==='ad_sites'&&(s.demo||s.staff?.role==='admin')?'<button type="button" class="linkbtn customer-delete-link" data-delete-site="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف الموقع</button>':'')+(k==='customers'?'<button class="linkbtn" data-new-linked="campaigns|customer_id|'+row.id+'">'+uiIcon('plus',14)+' حملة</button>'+(s.staff?.role==='admin'?'<button type="button" class="linkbtn customer-delete-link" data-delete-customer="'+E(row.id)+'">'+uiIcon('trash',14)+' حذف</button>':''):'')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">لا توجد سجلات مطابقة</td></tr>')+'</tbody></table></div><p class="subtle" style="margin-top:13px">عدد السجلات الظاهرة: '+rows.length+'. يتم تحميل كل السجلات الموجودة حالياً بالقاعدة.</p>';
 }
 
-function reports(){
- const counts=[['جميع العملاء',s.data.customers.length],['فعال',s.data.customers.filter(x=>x.status==='active').length],['غير فعال',s.data.customers.filter(x=>x.status==='inactive').length],['استفسار',s.data.customers.filter(x=>x.status==='inquiry').length]];
- const receipts=s.data.campaign_payments.reduce((total,p)=>total+convert(p.amount,originalCurrency('campaign_payments',p),s.displayCurrency),0);
- const outstanding=s.data.campaigns.reduce((total,v)=>total+convert(campaignBalance(v),v.currency,s.displayCurrency),0);
- const rents=s.data.lease_installments.reduce((total,v)=>total+convert(Math.max(0,Number(v.amount)-Number(v.paid_amount)),originalCurrency('lease_installments',v),s.displayCurrency),0);
- const late=s.data.lease_installments.filter(x=>x.due_date<=today()&&Number(x.paid_amount)<Number(x.amount));
- return '<div class="cards">'+counts.map(([a,b])=>'<div class="box stat"><small>'+a+'</small><b>'+b+'</b></div>').join('')+'</div><div class="box"><h2>التقرير المالي المترابط</h2><div class="summary"><div><small>الدفعات المستلمة من الحملات</small><b>'+E(money(receipts,s.displayCurrency))+'</b></div><div><small>الذمم المتبقية على العملاء</small><b>'+E(money(outstanding,s.displayCurrency))+'</b></div><div><small>أقساط الإيجار غير المسددة</small><b>'+E(money(rents,s.displayCurrency))+'</b></div><div><small>أقساط إيجار مستحقة حتى اليوم</small><b>'+late.length+'</b></div></div><p class="subtle" style="margin-top:12px">التقرير يعرض بالعملة المختارة بالأعلى وبسعر الصرف المحدد في الإعدادات؛ العقود والدفعات تبقى بعملتها الأصلية.</p><hr><h2>تقرير العملاء</h2><p class="muted">تصدير CSV يتضمن بيانات هوية حساسة — احفظ التقرير بشكل آمن.</p><button class="btn" data-action="exportCustomers" >'+uiIcon('download',16)+' تصدير العملاء CSV</button><hr><h2>التقارير المالية</h2><div class="inline"><button class="btn secondary" data-action="exportCampaigns" >'+uiIcon('download',16)+' تصدير الحملات</button><button class="btn secondary" data-action="exportInstallments" >'+uiIcon('download',16)+' تصدير أقساط الإيجار</button></div></div>';
+function reportPermissions(kind){
+ const source=typeof window!=='undefined'?window.RaafatReportData:null;
+ const tables=source?.requiredTables?.[kind];
+ if(!tables)return false;
+ return canAccess('reports','read')&&tables.every(table=>canAccess(TABLE_ACCESS[table]||table,'read'));
 }
-
+function financialStats(){
+ const module=typeof window!=='undefined'?window.RaafatReportData:null;
+ if(module&&reportPermissions('finance')){
+  try{return module.build('finance',s.data,{
+   exchangeRate:s.settings.usd_iqd,currency:s.displayCurrency,today:alertsLocalDate()
+  }).totals}catch(error){return {error:error?.message||String(error)}}
+ }
+ // For restricted report-only accounts, show only the figures visible to them.
+ const receipts=s.data.campaign_payments.reduce((sum,p)=>sum+convert(Number(p.amount||0),
+  originalCurrency('campaign_payments',p),s.displayCurrency),0);
+ const outstanding=s.data.campaigns.reduce((sum,c)=>sum+convert(campaignBalance(c),c.currency,s.displayCurrency),0);
+ const rentDue=s.data.leases.reduce((sum,l)=>sum+convert(leaseBalance(l),l.currency,s.displayCurrency),0);
+ const late=s.data.lease_installments.filter(i=>String(i.due_date||'')<=alertsLocalDate()&&
+  Number(i.paid_amount||0)<Number(i.amount||0)).length;
+ return {received:roundAmount(receipts),outstanding:roundAmount(outstanding),
+  rentDue:roundAmount(rentDue),lateInstallments:late};
+}
+function reportExportChoices(kind,label,description){
+ const permitted=reportPermissions(kind);
+ return '<section class="report-export-entry"><div><h3>'+E(label)+'</h3><p class="subtle">'+E(description)+'</p></div>'+
+ (permitted?'<div class="report-export-buttons">'+
+  '<button type="button" class="btn secondary" data-report-kind="'+kind+'" data-report-format="xlsx">'+uiIcon('download',16)+' Excel (.xlsx)</button>'+
+  '<button type="button" class="btn secondary" data-report-kind="'+kind+'" data-report-format="pdf">'+uiIcon('file',16)+' PDF</button></div>':
+  '<p class="notice">يتطلب هذا الكشف صلاحيات قراءة جميع الأقسام المرتبطة به، لحماية بيانات الأشخاص ومنع تصدير قوائم ناقصة.</p>')+
+ '</section>';
+}
+function reports(){
+ const counts=[['جميع الزبائن',s.data.customers.length],
+  ['فعّال',s.data.customers.filter(x=>x.status==='active').length],
+  ['غير فعّال',s.data.customers.filter(x=>x.status==='inactive').length],
+  ['استفسار',s.data.customers.filter(x=>x.status==='inquiry').length],
+  ['مالكو الأسطح',s.data.landlords.length],
+  ['العقارات',s.data.properties.length]];
+ const stats=financialStats();
+ return '<div class="cards">'+counts.map(([a,b])=>'<div class="box stat"><small>'+E(a)+'</small><b>'+E(b)+'</b></div>').join('')+'</div>'+
+  '<div class="box report-export-dashboard"><h2>التقرير المالي المترابط</h2>'+
+  (stats.error?'<div class="error">تعذّر احتساب تقرير مالي دقيق: '+E(stats.error)+'</div>':
+   '<div class="summary">'+[
+    ['الواصل من الحملات',stats.received],
+    ['الذمم المتبقية على الزبائن',stats.outstanding],
+    ['المتبقي من إيجارات الأسطح',stats.rentDue]
+   ].map(([title,n])=>'<div><small>'+E(title)+'</small><b>'+E(money(n,s.displayCurrency))+'</b></div>').join('')+
+   '<div><small>الأقساط المتأخرة غير المسددة</small><b>'+E(stats.lateInstallments)+'</b></div></div>')+
+  '<p class="subtle">الأرصدة تحسب بالعملة الأصلية لكل حملة وعقد، ثم تحول إلى '+E(s.displayCurrency)+
+  ' بسعر الصرف المحفوظ في إعدادات الشركة. دين المدين على السطح يشمل المتبقي حتى لو لم يُنشأ قسط بعد.</p>'+
+  '<hr><h2>استخراج البيانات والتقارير</h2>'+
+  '<div class="notice">تُقرأ بيانات التصدير مباشرةً من قاعدة البيانات عند الضغط، مع جلب جميع صفحات السجلات وربط كل قطعة بعقارها أو حملتها حسب المعرّف الصحيح. ملفات Excel تتضمن أوراق عمل تفصيلية، وPDF موزّع على صفحات عربية. أرقام الهواتف والبطاقات تبقى نصوصاً حتى لا تضيع الأصفار.</div>'+
+  reportExportChoices('landlords','مالكو الأسطح والعقارات والقطع',
+   'كشف شامل: الأسماء وأرقام الهواتف والبطاقات والعناوين، العقارات وأبعادها ومساحاتها وعددها، قطع الإعلان، عقود الأسطح والأقساط.')+
+  reportExportChoices('customers','الزبائن والحملات والقطع',
+   'كشف شامل: الأسماء وأرقام الهواتف، تفاصيل الحملات والقطع والقياسات، العقود والمبالغ الأصلية والمدفوعة والمتبقية.')+
+  reportExportChoices('finance','التقارير المالية التفصيلية',
+   'الحملات والذمم والدفعات وإيجارات الأسطح والأقساط والمصروفات، مع فصل العملات الأصلية عن عملة العرض.')+
+  '<p class="subtle">انتبه: هذه الملفات تتضمن معلومات شخصية ومالية. احفظها بمكان خاص ولا تشاركها خارج الموظفين المخوّلين.</p></div>';
+}
 function settings(){
  const editable=canAccess('settings','edit');
  const val=key=>E(s.settings?.[key]??COMPANY_DEFAULTS[key]??'');
@@ -3545,6 +3597,8 @@ function bind(){
  };
 
  document.querySelectorAll('[data-new]').forEach(x=>x.onclick=()=>openForm(x.dataset.new));
+ document.querySelectorAll('[data-report-kind][data-report-format]').forEach(button=>button.onclick=()=>
+  exportReport(button.dataset.reportKind,button.dataset.reportFormat));
  document.querySelectorAll('[data-clear-campaign-payment-focus]').forEach(button=>button.onclick=()=>{
   s.campaignPaymentFocusId=null;s.search='';render();
  });
@@ -4567,29 +4621,50 @@ async function showCard(v){if(!v?.card_image_path||s.demo)return;
  window.open(data.signedUrl,'_blank','noopener,noreferrer');
 }
 
-function exportCsv(k){
- const rows=s.data[k]||[];
- let headers=[],data=[];
- if(k==='customers'){
-  headers=['الاسم','الهاتف','الهاتف البديل','رقم البطاقة الموحدة','الحالة','الملاحظات'];
-  data=rows.map(x=>[x.name,x.phone,x.alternate_phone,x.national_id,labels[x.status]||x.status,x.notes]);
- }else if(k==='campaigns'){
-  headers=['الحملة','العميل','الباقة','المواقع','الأشهر','السعر الأصلي','العملة','السعر بالدينار','السعر بالدولار','المدفوع','المتبقي'];
-  data=rows.map(x=>[x.title,nameOf('customers',x.customer_id),nameOf('packages',x.package_id),linkedSites(x.id).map(s=>s.code+' '+s.name).join('، ')||x.locations,x.months,x.price,x.currency,roundAmount(convert(x.price,x.currency,'IQD')),roundAmount(convert(x.price,x.currency,'USD')),campaignPaid(x.id),campaignBalance(x)]);
- }else if(k==='lease_installments'){
-  headers=['العقد','المالك','تاريخ الاستحقاق','القسط الأصلي','المدفوع','العملة','القسط بالدينار','القسط بالدولار','المتبقي'];
-  data=rows.map(x=>{let lease=lookup('leases',x.lease_id),cur=lease?.currency||'IQD';return [lease?.contract_number,nameOf('landlords',lease?.landlord_id),x.due_date,x.amount,x.paid_amount,cur,roundAmount(convert(x.amount,cur,'IQD')),roundAmount(convert(x.amount,cur,'USD')),roundAmount(Number(x.amount)-Number(x.paid_amount))]});
- }else return;
- const escaped=(val)=>{
-  let value=String(val??'');
-  // Prevent spreadsheet formula evaluation if imported into a spreadsheet application.
-  if(/^[\s]*[=+\-@]/.test(value))value="'"+value;
-  return '"'+value.replace(/"/g,'""')+'"';
- };
- const csv='\ufeff'+[headers,...data].map(row=>row.map(escaped).join(',')).join('\r\n');
- const link=document.createElement('a'),url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
- link.href=url;link.download='raafat-'+k+'-'+today()+'.csv';link.click();URL.revokeObjectURL(url);
+async function exportReport(kind,format){
+ if(s.exportingReport)return toast('أكو تقرير آخر قيد الإنشاء، أكمل العملية الحالية أولاً.',true);
+ if(!reportPermissions(kind))return toast('ما عندك صلاحيات قراءة كاملة لهذا التقرير.',true);
+ if(!['xlsx','pdf'].includes(format))return toast('صيغة التصدير غير مدعومة.',true);
+ const builder=window.RaafatReportData,writer=window.RaafatReportFiles;
+ if(!builder||!writer)return toast('مكوّن التصدير لم يكتمل تحميله. حدّث الصفحة وأعد المحاولة.',true);
+ s.exportingReport=true;
+ const buttons=[...document.querySelectorAll('[data-report-kind]')];
+ for(const button of buttons)button.disabled=true;
+ try{
+  const snapshot={};
+  const tables=builder.requiredTables[kind];
+  if(s.demo){
+   for(const table of tables)snapshot[table]=(s.data[table]||[]).map(row=>({...row}));
+  }else{
+   if(!s.client||!s.session)throw Error('لا يوجد اتصال مصادق عليه بقاعدة البيانات.');
+   // Fetch directly at export time instead of trusting stale on-screen arrays.
+   // Stable ordering and pagination prevent silently losing rows above 1,000.
+   await Promise.all(tables.map(async table=>{
+    const all=[];
+    const limit=1000;
+    for(let start=0;start<200000;start+=limit){
+     const {data,error}=await s.client.from(table).select('*')
+      .order('id',{ascending:true}).range(start,start+limit-1);
+     if(error)throw Error('تعذر تحميل '+(defs[table]?.title||table)+': '+error.message);
+     all.push(...(data||[]));
+     if(!data||data.length<limit){snapshot[table]=all;return}
+    }
+    throw Error('تجاوز عدد السجلات في '+table+' حد 200 ألف. لم يُصدّر تقرير ناقص.');
+   }));
+  }
+  const report=builder.build(kind,snapshot,{
+   companyName:companyValue('company_name'),exchangeRate:s.settings.usd_iqd,
+   currency:s.displayCurrency,today:alertsLocalDate(),
+   generatedAt:new Date().toISOString()
+  });
+  const result=await writer.download(report,format);
+  toast('تم تصدير '+report.title+' بصيغة '+format.toUpperCase()+
+   '، مع '+report.sheets.length+' أقسام. الملف: '+result.filename);
+ }catch(error){toast('تعذر تصدير التقرير: '+(error?.message||String(error)),true)}
+ finally{s.exportingReport=false;for(const button of buttons)if(button.isConnected)button.disabled=false}
 }
+// Legacy action compatibility: use the same current, fully reconciled data model.
+function exportCsv(k){return exportReport(k==='customers'?'customers':'finance','xlsx')}
 
 function actions(a){
  if(a==='removeCompanyLogo'){
