@@ -329,7 +329,10 @@
    measureCtx.font='500 '+size+'px Cairo, Tahoma, Arial, sans-serif';
    return measureCtx.measureText(String(value||'')).width;
   };
-  for(const sheet of report.sheets){
+  // PDF may have a deliberately compact print view; Excel always uses full detail.
+  const printedSheets=Array.isArray(report.pdfSheets)&&report.pdfSheets.length?
+   report.pdfSheets:report.sheets;
+  for(const sheet of printedSheets){
    const panels=splitColumns(sheet,measure);
    for(let partIndex=0;partIndex<panels.length;partIndex++){
     const {columns,widths}=panels[partIndex];
