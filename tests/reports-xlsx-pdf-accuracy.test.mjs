@@ -209,7 +209,7 @@ test('customer PDF is one compact page for normal datasets without losing linked
  assert.equal(file.type,'application/pdf');
  assert.equal(r.pdfSheets.length,1);
  assert.equal(pages,1,'one summary table should not create all the Excel sheets as separate pages');
- for(const expected of ['شركة رأفت','زبون بعقدين','07701122334','A-01','500','ملخص الزبائن والحملات']){
+ for(const expected of ['شركة رأفت','زبون بعقدين','07701122334','000000012345','A-01','500','ملخص الزبائن والحملات']){
   assert.ok(trace.some(x=>x.includes(expected)),expected);
  }
 });
@@ -233,12 +233,17 @@ test('owner PDF uses the third property-style section only, including all board 
  const primary=section.rows.find(x=>x.propertyName==='سطح البناية الأولى');
  assert.equal(primary.ownerName,'صاحب عقارين');
  assert.equal(primary.phone,'07700000001');
+ assert.equal(primary.nationalId,'000012345678','owner national number must preserve leading zeros');
+ assert.ok(section.columns.some(c=>c.key==='nationalId'&&c.label==='رقم البطاقة الوطنية'));
  assert.equal(primary.dimensions,'8 × 12 متر');
  assert.equal(primary.area,96);
  assert.equal(primary.quantity,2);
  assert.match(primary.siteSummary,/A-01 \(2 × 3 م\)/,'package A board uses package dimensions');
  assert.match(primary.siteSummary,/E-02 \(8 × 12 م\)/,'rooftop E board uses its property dimensions');
  assert.ok(section.rows.some(x=>x.ownerName==='مالك بلا عقار'&&x.propertyName==='لا يوجد عقار مسجل'));
+ assert.ok(section.rows.some(x=>x.ownerName==='مالك بلا عقار'&&x.nationalId==='000000000021'));
+ assert.ok(section.rows.filter(x=>x.ownerName==='صاحب عقارين').every(x=>x.nationalId==='000012345678'),
+  'ID repeats accurately for every property of the same owner');
  assert.ok(!section.rows.some(x=>String(x.siteSummary).includes('B-03')),'orphan billboards are not attached to a landlord');
 });
 
@@ -250,10 +255,12 @@ test('customer PDF is one reconciled compact table with campaign rows, dimension
  assert.equal(section.name,'ملخص الزبائن والحملات');
  assert.equal(section.rows.length,3,'two campaigns plus customer with no campaign');
  assert.deepEqual(section.columns.map(x=>x.key),
-  ['customerName','phone','campaignTitle','packageName','siteSummary','financeSummary']);
+  ['customerName','phone','nationalId','campaignTitle','packageName','siteSummary','financeSummary']);
  const dollar=section.rows.find(x=>x.campaignTitle==='حملة الدولار');
  assert.equal(dollar.customerName,'زبون بعقدين');
  assert.equal(dollar.phone,'07701122334');
+ assert.equal(dollar.nationalId,'000000012345','customer national number must preserve leading zeros');
+ assert.ok(section.columns.some(c=>c.key==='nationalId'&&c.label==='رقم البطاقة الوطنية'));
  assert.match(dollar.siteSummary,/A-01 \(2 × 3 م\)/);
  assert.match(dollar.siteSummary,/E-02 \(8 × 12 م\)/);
  assert.match(dollar.financeSummary,/القيمة 600 \$/);
@@ -263,6 +270,8 @@ test('customer PDF is one reconciled compact table with campaign rows, dimension
  assert.equal(dinar.siteSummary,'مواقع إضافية مكتوبة');
  assert.match(dinar.financeSummary,/100000 د\.ع/);
  assert.ok(section.rows.some(x=>x.customerName==='زبون بلا حملة'&&x.campaignTitle==='لا توجد حملة'));
+ assert.ok(section.rows.some(x=>x.customerName==='زبون بلا حملة'&&x.nationalId===''),
+  'customers without a registered ID remain in the report');
 });
 
 test('owner and customer summary PDF datasets are kept separate from full Excel data',async()=>{
