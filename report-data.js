@@ -155,7 +155,7 @@
    for(const owner of rows('landlords')){
     const roofs=groupRows(ownerProperties,owner.id);
     if(!roofs.length){
-     ownerPdfRows.push({ownerName:owner.name||'',phone:text(owner.phone),
+     ownerPdfRows.push({ownerName:owner.name||'',phone:text(owner.phone),nationalId:text(owner.national_id),
       propertyName:'لا يوجد عقار مسجل',dimensions:'',area:null,quantity:null,
       siteSummary:'لا توجد قطع مرتبطة'});
      continue;
@@ -168,7 +168,7 @@
       return text(site.code||site.name||'بدون رمز')+' ('+size+')';
      }).join('، ');
      ownerPdfRows.push({
-      ownerName:owner.name||'',phone:text(owner.phone),propertyName:roof.title||'',
+      ownerName:owner.name||'',phone:text(owner.phone),nationalId:text(owner.national_id),propertyName:roof.title||'',
       dimensions:dimension(roof),area:number(roof.area_m2)||money(number(roof.width_m)*number(roof.height_m))||null,
       quantity:number(roof.quantity)||null,
       siteSummary:boardText||'لا توجد قطع مرتبطة'
@@ -176,7 +176,7 @@
     }
    }
    S.pdfSheets=[sheet('العقارات والقطع حسب المالك',[
-    ['ownerName','اسم المالك'],['phone','رقم الهاتف'],['propertyName','العقار / السطح'],
+    ['ownerName','اسم المالك'],['phone','رقم الهاتف'],['nationalId','رقم البطاقة الوطنية'],['propertyName','العقار / السطح'],
     ['dimensions','قياس السطح'],['area','مساحة السطح م²','number'],
     ['quantity','العدد','number'],['siteSummary','القطع وقياس الإعلان']
    ],ownerPdfRows)];
@@ -258,7 +258,7 @@
    for(const customer of rows('customers')){
     const cs=groupRows(customerCampaigns,customer.id);
     if(!cs.length){
-     customerPdfRows.push({customerName:customer.name||'',phone:text(customer.phone),
+     customerPdfRows.push({customerName:customer.name||'',phone:text(customer.phone),nationalId:text(customer.national_id),
       packageName:'',campaignTitle:'لا توجد حملة',siteSummary:'',
       financeSummary:'',status:status(customer.status)});
      continue;
@@ -274,7 +274,7 @@
      const symbol=accounting.currency==='USD'?
       ' '+String.fromCharCode(36):' د.ع';
      customerPdfRows.push({
-      customerName:customer.name||'',phone:text(customer.phone),
+      customerName:customer.name||'',phone:text(customer.phone),nationalId:text(customer.national_id),
       campaignTitle:cam.title||'',packageName:name('packages',cam.package_id),
       siteSummary:description||text(cam.locations)||'لا توجد قطع مرتبطة',
       financeSummary:'القيمة '+text(accounting.price)+symbol+
@@ -285,7 +285,7 @@
     }
    }
    S.pdfSheets=[sheet('ملخص الزبائن والحملات',[
-    ['customerName','اسم الزبون'],['phone','رقم الهاتف'],
+    ['customerName','اسم الزبون'],['phone','رقم الهاتف'],['nationalId','رقم البطاقة الوطنية'],
     ['campaignTitle','الحملة'],['packageName','الباقة'],
     ['siteSummary','القطع والقياسات'],
     ['financeSummary','القيمة / الواصل / المتبقي']
