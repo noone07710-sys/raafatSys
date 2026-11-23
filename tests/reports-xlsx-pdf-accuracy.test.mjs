@@ -255,7 +255,7 @@ test('customer PDF is one reconciled compact table with campaign rows, dimension
  assert.equal(section.name,'ملخص الزبائن والحملات');
  assert.equal(section.rows.length,3,'two campaigns plus customer with no campaign');
  assert.deepEqual(section.columns.map(x=>x.key),
-  ['customerName','phone','nationalId','campaignTitle','packageName','siteSummary','financeSummary']);
+  ['customerName','nationalId','phone','campaignTitle','packageName','siteSummary','financeSummary']);
  const dollar=section.rows.find(x=>x.campaignTitle==='حملة الدولار');
  assert.equal(dollar.customerName,'زبون بعقدين');
  assert.equal(dollar.phone,'07701122334');
