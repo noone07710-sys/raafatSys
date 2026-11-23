@@ -181,7 +181,7 @@ test('Excel personal input resembling a formula stays text, never a cell formula
  assert.doesNotMatch(xml,/<f(?:\s|>)/);
 });
 
-test('PDF contains Arabic data, all report sections and multiple pages without dropping entries',async()=>{
+test('customer PDF is one compact page for normal datasets without losing linked site and financial summary',async()=>{
  const r=build('customers',fixtures(),opts),trace=[];
  const doc={
   fonts:{load:async()=>[]},head:{appendChild(){}},body:{appendChild(){}},
@@ -207,8 +207,9 @@ test('PDF contains Arabic data, all report sections and multiple pages without d
  (window,doc,fetch,TextEncoder,Blob,URL,()=>{});
  const file=await window.RaafatReportFiles.pdf(r);
  assert.equal(file.type,'application/pdf');
- assert.ok(pages>=r.sheets.length);
- for(const expected of ['شركة رأفت','زبون بعقدين','07701122334','A-01','500','الحملات','عقود الزبائن']){
+ assert.equal(r.pdfSheets.length,1);
+ assert.equal(pages,1,'one summary table should not create all the Excel sheets as separate pages');
+ for(const expected of ['شركة رأفت','زبون بعقدين','07701122334','A-01','500','ملخص الزبائن والحملات']){
   assert.ok(trace.some(x=>x.includes(expected)),expected);
  }
 });
