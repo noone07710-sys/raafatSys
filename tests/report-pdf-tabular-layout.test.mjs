@@ -109,3 +109,49 @@ test('PDF repeats table headings on next page and continues long notes without t
    'header labels should be present on every continued page');
  }
 });
+
+
+test('compact owner and customer PDF both visibly show the national card on their first and only table panel',async()=>{
+ const samples=[
+  {name:'العقارات والقطع حسب المالك',
+   columns:[
+    {key:'ownerName',label:'اسم المالك'},
+    {key:'nationalId',label:'رقم البطاقة الوطنية'},
+    {key:'phone',label:'رقم الهاتف'},
+    {key:'propertyName',label:'العقار / السطح'},
+    {key:'dimensions',label:'قياس السطح'},
+    {key:'area',label:'مساحة السطح م²',kind:'number'},
+    {key:'quantity',label:'العدد',kind:'number'},
+    {key:'siteSummary',label:'القطع وقياس الإعلان'}
+   ],
+   row:{ownerName:'مالك العقار',nationalId:'000012345678',phone:'07700000001',
+    propertyName:'سطح بناية',dimensions:'8 × 12 متر',area:96,quantity:2,
+    siteSummary:'A-1 (2 × 3 م)'}},
+  {name:'ملخص الزبائن والحملات',
+   columns:[
+    {key:'customerName',label:'اسم الزبون'},
+    {key:'nationalId',label:'رقم البطاقة الوطنية'},
+    {key:'phone',label:'رقم الهاتف'},
+    {key:'campaignTitle',label:'الحملة'},
+    {key:'packageName',label:'الباقة'},
+    {key:'siteSummary',label:'القطع والقياسات'},
+    {key:'financeSummary',label:'القيمة / الواصل / المتبقي'}
+   ],
+   row:{customerName:'زبون شركة رأفت',nationalId:'000000012345',phone:'07701122334',
+    campaignTitle:'حملة اختبار',packageName:'باقة A',
+    siteSummary:'A-1 (2 × 3 م)',
+    financeSummary:'القيمة 600 $ | الواصل 100 $ | المتبقي 500 $'}}
+ ];
+ for(const sample of samples){
+  const env=renderer();
+  const report=env.report('تقرير رأفت',sample.columns,[sample.row]);
+  report.pdfSheets=[{name:sample.name,columns:sample.columns,rows:[sample.row]}];
+  await env.render(report);
+  assert.equal(env.pages(),1,sample.name+' should not split national card into a second PDF panel');
+  const texts=env.draws.filter(x=>x.canvas===1).map(x=>x.value);
+  assert.ok(texts.includes('رقم البطاقة الوطنية'),'missing visible national card heading in '+sample.name);
+  assert.ok(texts.includes(sample.row.nationalId),'missing visible complete card ID in '+sample.name);
+  assert.ok(texts.includes(sample.row.ownerName||sample.row.customerName),'missing person name beside card in '+sample.name);
+  assert.ok(!texts.some(t=>t.includes('جدول 2 من')),'second table panel must not exist');
+ }
+});
