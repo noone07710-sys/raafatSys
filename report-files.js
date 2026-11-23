@@ -180,9 +180,30 @@
   if(typeof value==='number')return new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(value);
   return String(value);
  }
+ // For the two condensed owner/customer PDF reports, every field must appear
+ // in ONE real table on the first page. In particular, national IDs must never
+ // be pushed onto a separate column panel that looks like a missing field.
+ const COMPACT_WIDTHS={
+  'العقارات والقطع حسب المالك':{
+   ownerName:136,nationalId:153,phone:116,propertyName:132,
+   dimensions:112,area:93,quantity:62,siteSummary:248
+  },
+  'ملخص الزبائن والحملات':{
+   customerName:136,nationalId:160,phone:116,campaignTitle:135,
+   packageName:108,siteSummary:237,financeSummary:184
+  }
+ };
  function splitColumns(sheet,measure){
   const all=sheet.columns||[];
   if(!all.length)return [{columns:[],widths:[]}];
+  const compact=COMPACT_WIDTHS[sheet.name];
+  if(compact&&all.every(col=>Number.isFinite(compact[col.key]))){
+   const widths=all.map(col=>compact[col.key]);
+   const available=W-40;
+   const sum=widths.reduce((n,w)=>n+w,0);
+   if(sum<=available)return [{columns:all,widths}];
+   throw Error('عرض جدول PDF المختصر لا يتسع لجميع الأعمدة المطلوبة.');
+  }
   const stable=['customerName','ownerName','contractNumber','receiptNumber','item','campaignTitle','propertyName'];
   const pinned=[];
   for(const key of stable){
