@@ -176,7 +176,7 @@
     }
    }
    S.pdfSheets=[sheet('العقارات والقطع حسب المالك',[
-    ['ownerName','اسم المالك'],['phone','رقم الهاتف'],['nationalId','رقم البطاقة الوطنية'],['propertyName','العقار / السطح'],
+    ['ownerName','اسم المالك'],['nationalId','رقم البطاقة الوطنية'],['phone','رقم الهاتف'],['propertyName','العقار / السطح'],
     ['dimensions','قياس السطح'],['area','مساحة السطح م²','number'],
     ['quantity','العدد','number'],['siteSummary','القطع وقياس الإعلان']
    ],ownerPdfRows)];
@@ -285,7 +285,7 @@
     }
    }
    S.pdfSheets=[sheet('ملخص الزبائن والحملات',[
-    ['customerName','اسم الزبون'],['phone','رقم الهاتف'],['nationalId','رقم البطاقة الوطنية'],
+    ['customerName','اسم الزبون'],['nationalId','رقم البطاقة الوطنية'],['phone','رقم الهاتف'],
     ['campaignTitle','الحملة'],['packageName','الباقة'],
     ['siteSummary','القطع والقياسات'],
     ['financeSummary','القيمة / الواصل / المتبقي']
