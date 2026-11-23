@@ -219,3 +219,59 @@ test('missing required table rejects export rather than generating a partial rep
  assert.throws(()=>build('customers',missing,opts),/مصدر البيانات ناقص/);
  assert.throws(()=>build('finance',fixtures(),{...opts,exchangeRate:0}),/سعر الصرف/);
 });
+
+
+test('owner PDF uses the third property-style section only, including all board dimensions linked to their owner',()=>{
+ const r=build('landlords',fixtures(),opts);
+ assert.equal(r.sheets.length,6,'Excel keeps all complete, detailed sections');
+ assert.equal(r.pdfSheets.length,1,'PDF contains one owner/property table only');
+ const section=r.pdfSheets[0];
+ assert.equal(section.name,'العقارات والقطع حسب المالك');
+ assert.equal(section.rows.length,3,'two properties and a separate property-less owner');
+ assert.ok(section.columns.some(x=>x.key==='dimensions'&&x.label==='قياس السطح'));
+ assert.ok(section.columns.some(x=>x.key==='siteSummary'&&x.label==='القطع وقياس الإعلان'));
+ const primary=section.rows.find(x=>x.propertyName==='سطح البناية الأولى');
+ assert.equal(primary.ownerName,'صاحب عقارين');
+ assert.equal(primary.phone,'07700000001');
+ assert.equal(primary.dimensions,'8 × 12 متر');
+ assert.equal(primary.area,96);
+ assert.equal(primary.quantity,2);
+ assert.match(primary.siteSummary,/A-01 \(2 × 3 م\)/,'package A board uses package dimensions');
+ assert.match(primary.siteSummary,/E-02 \(8 × 12 م\)/,'rooftop E board uses its property dimensions');
+ assert.ok(section.rows.some(x=>x.ownerName==='مالك بلا عقار'&&x.propertyName==='لا يوجد عقار مسجل'));
+ assert.ok(!section.rows.some(x=>String(x.siteSummary).includes('B-03')),'orphan billboards are not attached to a landlord');
+});
+
+test('customer PDF is one reconciled compact table with campaign rows, dimensions and original-currency balances',()=>{
+ const r=build('customers',fixtures(),opts);
+ assert.equal(r.sheets.length,6,'Excel remains unchanged with all six full sheets');
+ assert.equal(r.pdfSheets.length,1,'PDF uses one compact summary sheet');
+ const section=r.pdfSheets[0];
+ assert.equal(section.name,'ملخص الزبائن والحملات');
+ assert.equal(section.rows.length,3,'two campaigns plus customer with no campaign');
+ assert.deepEqual(section.columns.map(x=>x.key),
+  ['customerName','phone','campaignTitle','packageName','siteSummary','financeSummary']);
+ const dollar=section.rows.find(x=>x.campaignTitle==='حملة الدولار');
+ assert.equal(dollar.customerName,'زبون بعقدين');
+ assert.equal(dollar.phone,'07701122334');
+ assert.match(dollar.siteSummary,/A-01 \(2 × 3 م\)/);
+ assert.match(dollar.siteSummary,/E-02 \(8 × 12 م\)/);
+ assert.match(dollar.financeSummary,/القيمة 600 \$/);
+ assert.match(dollar.financeSummary,/الواصل 100 \$/);
+ assert.match(dollar.financeSummary,/المتبقي 500 \$/);
+ const dinar=section.rows.find(x=>x.campaignTitle==='حملة الدينار دون قطع');
+ assert.equal(dinar.siteSummary,'مواقع إضافية مكتوبة');
+ assert.match(dinar.financeSummary,/100000 د\.ع/);
+ assert.ok(section.rows.some(x=>x.customerName==='زبون بلا حملة'&&x.campaignTitle==='لا توجد حملة'));
+});
+
+test('owner and customer summary PDF datasets are kept separate from full Excel data',async()=>{
+ for(const kind of ['customers','landlords']){
+  const report=build(kind,fixtures(),opts);
+  const workbook=xlsx(report),bytes=new Uint8Array(await workbook.arrayBuffer());
+  const sheets=[...unzipStored(bytes).keys()].filter(x=>/^xl\/worksheets\/sheet\d+\.xml$/.test(x));
+  assert.equal(sheets.length,6,'Excel still downloads all six sections');
+  assert.equal(report.pdfSheets.length,1,'PDF renders a single clean table');
+  assert.ok(report.pdfSheets[0].rows.length>0);
+ }
+});
