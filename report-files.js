@@ -146,29 +146,85 @@
   })().catch(e=>{pdfLoader=null;throw e});
   return pdfLoader;
  }
- const PAGE={width:842,height:595,margin:37,top:100,bottom:548};
- function arabicLines(ctx,value,width,size=10){
-  const str=String(value??'—').replace(/\r/g,'').trim()||'—';
-  const result=[];
+ // A3 landscape gives Arabic financial reports usable column widths.
+ // Wide datasets are split into COLUMN PANELS, not one page per record.
+ const PAGE={width:1191,height:842,margin:34,top:112,bottom:788};
+ const W=PAGE.width-2*PAGE.margin;
+ const ROW_FONT=10.1,ROW_LINE=14.5,HEADER_FONT=10,HEADER_HEIGHT=49;
+ function arabicLines(ctx,value,width,size=ROW_FONT){
+  const str=String(value??'—').replace(/\r/g,'').trim()||'—',result=[];
   ctx.font='500 '+size+'px Cairo, Tahoma, Arial, sans-serif';
   for(const block of str.split('\n')){
+   if(!block.trim()){result.push('');continue}
    let line='';
-   for(const word of block.split(/\s+/)){
-    const next=line?line+' '+word:word;
-    if(ctx.measureText(next).width<=width){line=next;continue}
+   for(const word of block.trim().split(/\s+/)){
+    if(!word)continue;
+    const together=line?line+' '+word:word;
+    if(ctx.measureText(together).width<=width){line=together;continue}
     if(line){result.push(line);line=''}
     if(ctx.measureText(word).width<=width){line=word;continue}
-    let chunk='';
+    let partial='';
     for(const char of Array.from(word)){
-     if(chunk&&ctx.measureText(chunk+char).width>width){result.push(chunk);chunk=char}
-     else chunk+=char;
+     if(partial&&ctx.measureText(partial+char).width>width){
+      result.push(partial);partial=char;
+     }else partial+=char;
     }
-    line=chunk;
+    line=partial;
    }
    if(line)result.push(line);
-   if(!line&&!block)result.push('');
   }
   return result.length?result:['—'];
+ }
+ function showCell(value){
+  if(value===null||value===undefined||value==='')return '—';
+  if(typeof value==='number')return new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(value);
+  return String(value);
+ }
+ function splitColumns(sheet,measure){
+  const all=sheet.columns||[];
+  if(!all.length)return [{columns:[],widths:[]}];
+  const stable=['customerName','ownerName','contractNumber','receiptNumber','item','campaignTitle','propertyName'];
+  const pinned=[];
+  for(const key of stable){
+   const c=all.find(col=>col.key===key);
+   if(c&&pinned.length<2&&!(pinned.length&&['ownerName','customerName'].includes(c.key)))
+    pinned.push(c);
+  }
+  if(!pinned.length)pinned.push(all[0]);
+  const floating=all.filter(col=>!pinned.includes(col));
+  const estimate=(col)=>{
+   const samples=(sheet.rows||[]).slice(0,35);
+   const header=measure(col.label,HEADER_FONT)+21;
+   const ordered=samples.map(r=>measure(showCell(r[col.key]),ROW_FONT)+19).sort((a,b)=>a-b);
+   const typical=ordered.length?ordered[Math.floor(ordered.length*0.72)]:0;
+   const isMoney=col.kind==='number';
+   return Math.max(isMoney?96:101,
+    Math.min(col.key==='ownerName'||col.key==='customerName'?174:isMoney?133:205,
+     Math.max(header,typical)));
+  };
+  const serialWidth=40;
+  const pinnedWidths=pinned.map(estimate);
+  const pinnedTotal=pinnedWidths.reduce((a,b)=>a+b,0);
+  // Reserve useful space for at least two detail columns on large reports.
+  const maxPin=W-serialWidth-230;
+  if(pinnedTotal>maxPin){
+   const ratio=maxPin/pinnedTotal;
+   for(let i=0;i<pinnedWidths.length;i++)pinnedWidths[i]*=ratio;
+  }
+  if(!floating.length)return [{columns:pinned,widths:pinnedWidths}];
+  const pages=[];let group=[],width=serialWidth+pinnedWidths.reduce((a,b)=>a+b,0);
+  for(const col of floating){
+   const colWidth=Math.min(estimate(col),W-serialWidth-pinnedWidths.reduce((a,b)=>a+b,0));
+   if(group.length&&width+colWidth>W){
+    pages.push({columns:[...pinned,...group.map(x=>x.column)],
+     widths:[...pinnedWidths,...group.map(x=>x.width)]});
+    group=[];width=serialWidth+pinnedWidths.reduce((a,b)=>a+b,0);
+   }
+   group.push({column:col,width:colWidth});width+=colWidth;
+  }
+  if(group.length)pages.push({columns:[...pinned,...group.map(x=>x.column)],
+   widths:[...pinnedWidths,...group.map(x=>x.width)]});
+  return pages;
  }
  async function pdf(report){
   if(!report?.sheets?.length)throw Error('لا توجد بيانات لإنشاء التقرير');
@@ -176,106 +232,116 @@
   if(document.fonts?.load)await document.fonts.load('600 12px Cairo');
   const doc=await PDFLib.PDFDocument.create();
   doc.setTitle(report.title);doc.setAuthor(report.companyName||'Raafat Sys');
-  doc.setCreator('Raafat Sys — Reports');
-  let page=null,ctx=null,canvas=null,y=0,pageNo=0;
-  const text=(s,x,y,size=10,color='#192b33',bold=false)=>{
+  doc.setCreator('Raafat Sys — Tabular Reports');
+  let ctx=null,canvas=null,y=0,pageNo=0;
+  const text=(value,x,baseline,size=10,color='#1e3430',bold=false)=>{
    ctx.font=(bold?'700 ':'500 ')+size+'px Cairo, Tahoma, Arial, sans-serif';
-   ctx.textAlign='right';ctx.fillStyle=color;ctx.fillText(String(s??''),x,y);
+   ctx.textAlign='right';ctx.fillStyle=color;ctx.fillText(String(value??''),x,baseline);
   };
-  const border=(x,y,w,h,color='#d9e6df')=>{ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.strokeRect(x,y,w,h)};
-  const fill=(x,y,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(x,y,w,h)};
+  const fill=(x,at,width,height,color)=>{ctx.fillStyle=color;ctx.fillRect(x,at,width,height)};
+  const stroke=(x,at,width,height,color='#d5e4db')=>{
+   ctx.strokeStyle=color;ctx.lineWidth=.75;ctx.strokeRect(x,at,width,height);
+  };
   async function flush(){
    if(!canvas)return;
-   const bytes=canvas.toBlob?await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?blob.arrayBuffer().then(resolve,reject):reject(Error('تعذر رسم صفحة PDF')),'image/png')):
+   const bytes=canvas.toBlob?await new Promise((resolve,reject)=>
+    canvas.toBlob(blob=>blob?blob.arrayBuffer().then(resolve,reject):
+     reject(Error('تعذر رسم صفحة PDF')),'image/png')):
     await fetch(canvas.toDataURL('image/png')).then(r=>r.arrayBuffer());
    const image=await doc.embedPng(bytes),p=doc.addPage([PAGE.width,PAGE.height]);
    p.drawImage(image,{x:0,y:0,width:PAGE.width,height:PAGE.height});
    canvas=null;ctx=null;
   }
-  async function newPage(title,continued=false){
+  function paintHeader(sheet,part,partCount,cols,widths){
+   fill(0,0,PAGE.width,PAGE.height,'#ffffff');
+   fill(0,0,PAGE.width,9,'#164638');
+   text(report.companyName||'شركة رأفت',PAGE.width-PAGE.margin,32,12,'#285544',true);
+   text(report.title,PAGE.width-PAGE.margin,61,17,'#143c30',true);
+   text(sheet.name+' — جدول '+part+' من '+partCount,PAGE.width-PAGE.margin,86,12,'#48695d',true);
+   text('عدد السجلات: '+(sheet.rows||[]).length,PAGE.margin+135,82,10,'#536960');
+   fill(PAGE.margin,98,W,1,'#dce6e0');
+   fill(PAGE.margin,PAGE.height-39,W,1,'#dce6e0');
+   text('صفحة '+pageNo,PAGE.margin+79,PAGE.height-18,9,'#667875');
+   text('المصدر: بيانات النظام — '+String(report.generatedAt||'').slice(0,10),
+    PAGE.width-PAGE.margin,PAGE.height-18,9,'#667875');
+   y=PAGE.top;
+   const allWidths=[40,...widths],allCols=[{key:'_index',label:'#'},...cols];
+   let right=PAGE.width-PAGE.margin;
+   for(let c=0;c<allCols.length;c++){
+    const width=allWidths[c];
+    fill(right-width,y,width,HEADER_HEIGHT,'#164638');
+    stroke(right-width,y,width,HEADER_HEIGHT,'#4b806c');
+    const lines=arabicLines(ctx,allCols[c].label,width-12,HEADER_FONT);
+    const maxLines=Math.min(3,lines.length);
+    const baseline=y+14+Math.max(0,(3-maxLines)*5);
+    for(let j=0;j<maxLines;j++)text(lines[j],right-7,baseline+j*13,HEADER_FONT,'#ffffff',true);
+    right-=width;
+   }
+   y+=HEADER_HEIGHT;
+  }
+  async function startPage(sheet,part,partCount,cols,widths){
    await flush();
    pageNo++;
-   canvas=document.createElement('canvas');canvas.width=PAGE.width*2;canvas.height=PAGE.height*2;
+   canvas=document.createElement('canvas');
+   canvas.width=PAGE.width*1.65;canvas.height=PAGE.height*1.65;
    ctx=canvas.getContext('2d');
-   if(!ctx)throw Error('Canvas غير متوفر في المتصفح');
-   ctx.scale(2,2);ctx.direction='rtl';
-   fill(0,0,PAGE.width,PAGE.height,'#ffffff');
-   fill(0,0,PAGE.width,9,'#184b3a');
-   text(report.companyName||'شركة رأفت',PAGE.width-PAGE.margin,34,11,'#285544',true);
-   text(report.title,PAGE.width-PAGE.margin,61,17,'#143c30',true);
-   text(title+(continued?' (تابع)':''),PAGE.width-PAGE.margin,84,11,'#4d655f',true);
-   fill(PAGE.margin,90,PAGE.width-2*PAGE.margin,1,'#dce6e0');
-   fill(PAGE.margin,554,PAGE.width-2*PAGE.margin,1,'#dce6e0');
-   text('صفحة '+pageNo,90,573,9,'#667875');
-   text('المصدر: بيانات النظام — '+String(report.generatedAt||'').slice(0,10),
-    PAGE.width-PAGE.margin,573,9,'#667875');
-   y=PAGE.top+4;
+   if(!ctx)throw Error('تعذر تهيئة رسم صفحات PDF');
+   ctx.scale(1.65,1.65);ctx.direction='rtl';
+   paintHeader(sheet,part,partCount,cols,widths);
   }
-  function cardPairs(sheet,row){
-   return sheet.columns.map(col=>[col.label,row?.[col.key]]);
-  }
-  async function card(sheet,row,index){
-   const pairs=cardPairs(sheet,row),gap=18,
-    cellW=(PAGE.width-2*PAGE.margin-gap-28)/2,
-    contentX=PAGE.width-PAGE.margin-13,columns=2;
-   let segments=[];
-   for(let i=0;i<pairs.length;i+=columns){
-    let chunk=pairs.slice(i,i+columns);
-    const lineGroups=chunk.map(([label,value])=>({
-     label,
-     lines:arabicLines(ctx,typeof value==='number'?new Intl.NumberFormat('en-US',{maximumFractionDigits:2}).format(value):value,cellW-12,10)
-    }));
-    const height=Math.max(...lineGroups.map(x=>23+x.lines.length*14))+4;
-    segments.push({lineGroups,height});
-   }
-   let segmentIndex=0;
-   while(segmentIndex<segments.length){
-    if(y+35>PAGE.bottom)await newPage(sheet.name,true);
-    const top=y;
-    fill(PAGE.margin,top,PAGE.width-PAGE.margin*2,28,'#f1f7f3');
-    text('سجل '+String(index+1),PAGE.width-PAGE.margin-13,top+19,10,'#245b47',true);
-    y=top+34;
-    const rowStart=segmentIndex;
-    for(;segmentIndex<segments.length;segmentIndex++){
-     const segment=segments[segmentIndex],need=segment.height+5;
-     if(y+need>PAGE.bottom)break;
-     for(let ci=0;ci<segment.lineGroups.length;ci++){
-      const group=segment.lineGroups[ci];
-      const right=contentX-ci*(cellW+gap);
-      text(group.label,right,y+12,9,'#768781');
-      group.lines.forEach((line,lineIndex)=>text(line,right,y+28+14*lineIndex,10,'#1e3530',false));
+  async function drawRow(sheet,row,index,part,partCount,cols,widths){
+   const widthsAll=[40,...widths],fields=[{key:'_index'},...cols],rowData={...row,_index:index+1};
+   const cells=fields.map((col,ci)=>arabicLines(ctx,showCell(rowData[col.key]),widthsAll[ci]-13,ROW_FONT));
+   let offset=0,continued=false;
+   // Tall notes wrap naturally and continue in the NEXT TABLE ROW on a later page
+   // rather than losing text or forcing a single record to occupy its own page.
+   const longest=Math.max(1,...cells.map(lines=>lines.length));
+   while(offset<longest){
+    const available=PAGE.bottom-y-13;
+    const maxLines=Math.floor((available-13)/ROW_LINE);
+    if(maxLines<1){await startPage(sheet,part,partCount,cols,widths);continue}
+    const drawn=Math.min(longest-offset,maxLines);
+    const height=13+drawn*ROW_LINE;
+    const background=index%2===0?'#f1f6f3':'#ffffff';
+    let right=PAGE.width-PAGE.margin;
+    for(let ci=0;ci<fields.length;ci++){
+     const width=widthsAll[ci];
+     fill(right-width,y,width,height,background);
+     stroke(right-width,y,width,height);
+     const chunk=cells[ci].slice(offset,offset+drawn);
+     if(ci===0&&continued)text(String(index+1)+'…',right-7,y+16,ROW_FONT,'#4a655c',true);
+     else for(let li=0;li<chunk.length;li++){
+      const color=ci===0?'#275c44':'#192d2a';
+      text(chunk[li],right-7,y+17+li*ROW_LINE,ROW_FONT,color,ci===0);
      }
-     y+=need;
+     right-=width;
     }
-    if(segmentIndex===rowStart){
-     // At least one very long field must fit by splitting text; repeated
-     // row headers and smaller type keep all content represented.
-     const segment=segments[segmentIndex];
-     if(y+segment.height>PAGE.bottom){
-      const maxLines=Math.max(1,Math.floor((PAGE.bottom-y-40)/14));
-      const a=segment.lineGroups.map(g=>({...g,lines:g.lines.slice(0,maxLines)}));
-      for(let ci=0;ci<a.length;ci++){
-       const right=contentX-ci*(cellW+gap);
-       text(a[ci].label,right,y+12,9,'#768781');
-       a[ci].lines.forEach((line,i)=>text(line,right,y+28+14*i,10,'#1e3530'));
-      }
-      segment.lineGroups=segment.lineGroups.map(g=>({...g,lines:g.lines.slice(maxLines)}));
-      if(segment.lineGroups.every(g=>!g.lines.length))segmentIndex++;
-      await newPage(sheet.name,true);
-     }else segmentIndex++;
-    }else if(segmentIndex<segments.length)await newPage(sheet.name,true);
+    y+=height;
+    offset+=drawn;
+    continued=true;
+    if(offset<longest)await startPage(sheet,part,partCount,cols,widths);
    }
-   if(y+14<=PAGE.bottom){border(PAGE.margin,y-1,PAGE.width-2*PAGE.margin,1,'#e4ebe7');y+=9}
   }
+  const measureCanvas=document.createElement('canvas');
+  const measureCtx=measureCanvas.getContext('2d');
+  if(!measureCtx)throw Error('تعذر قياس أعمدة التقرير');
+  const measure=(value,size)=>{
+   measureCtx.font='500 '+size+'px Cairo, Tahoma, Arial, sans-serif';
+   return measureCtx.measureText(String(value||'')).width;
+  };
   for(const sheet of report.sheets){
-   await newPage(sheet.name,false);
-   text('إجمالي السجلات: '+sheet.rows.length,PAGE.width-PAGE.margin,y+12,10,'#526761');
-   y+=22;
-   if(!sheet.rows.length){
-    text('لا توجد بيانات محفوظة في هذا القسم.',PAGE.width-PAGE.margin,y+20,12,'#667875');
-    continue;
+   const panels=splitColumns(sheet,measure);
+   for(let partIndex=0;partIndex<panels.length;partIndex++){
+    const {columns,widths}=panels[partIndex];
+    await startPage(sheet,partIndex+1,panels.length,columns,widths);
+    if(!sheet.rows?.length){
+     text('لا توجد بيانات محفوظة في هذا القسم.',PAGE.width-PAGE.margin-14,y+28,13,'#677c72');
+    }else{
+     for(let ri=0;ri<sheet.rows.length;ri++){
+      await drawRow(sheet,sheet.rows[ri],ri,partIndex+1,panels.length,columns,widths);
+     }
+    }
    }
-   for(let i=0;i<sheet.rows.length;i++)await card(sheet,sheet.rows[i],i);
   }
   await flush();
   return new Blob([await doc.save({useObjectStreams:false})],{type:'application/pdf'});
